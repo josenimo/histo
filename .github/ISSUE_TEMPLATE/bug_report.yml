@@ -5,10 +5,10 @@ body:
   - type: markdown
     attributes:
       value: |
-        Before you post this issue, please check the documentation:
+        Before posting, please check:
 
-        - [nf-core website: troubleshooting](https://nf-co.re/usage/troubleshooting)
-        - [nf-core/sopa pipeline documentation](https://nf-co.re/sopa/usage)
+        - [ROADMAP.md](https://github.com/josenimo/histo/blob/main/ROADMAP.md) — the pipeline is at `0.1.0dev` and much of it is deliberately not built yet
+        - [Nextflow troubleshooting](https://www.nextflow.io/docs/latest/troubleshooting.html)
   - type: textarea
     id: description
     attributes:
@@ -44,6 +44,6 @@ body:
         * Nextflow version _(eg. 23.04.0)_
         * Hardware _(eg. HPC, Desktop, Cloud)_
         * Executor _(eg. slurm, local, awsbatch)_
-        * Container engine: _(e.g. Docker, Singularity, Conda, Podman, Shifter, Charliecloud, or Apptainer)_
-        * OS _(eg. CentOS Linux, macOS, Linux Mint)_
-        * Version of nf-core/sopa _(eg. 1.1, 1.5, 1.8.2)_
+        * Container engine: _(e.g. Apptainer, Singularity, Docker, Conda)_
+        * OS _(eg. Rocky Linux, macOS, Ubuntu)_
+        * Version of josenimo/histo _(eg. 0.1.0dev, or the commit SHA)_
