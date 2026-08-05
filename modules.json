@@ -1,6 +1,6 @@
 {
-    "name": "nf-core/sopa",
-    "homePage": "https://github.com/nf-core/sopa",
+    "name": "josenimo/histo",
+    "homePage": "https://github.com/josenimo/histo",
     "repos": {
         "https://github.com/nf-core/modules.git": {
             "modules": {
