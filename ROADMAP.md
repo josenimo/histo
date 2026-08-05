@@ -22,6 +22,9 @@ Revise this document when a **decision** changes, not when a task completes. If 
 resequenced or a decision in §1 is overturned, update it here and bump the revision number, then
 reconcile the affected issues.
 
+There is one scheduled exception: **at the end of each phase, add a summary to §12**. Once per phase,
+not per task. That is the cadence that keeps the record useful without turning this into a changelog.
+
 ---
 
 ## 1. Decisions settled
@@ -567,3 +570,36 @@ Never touch the shared `NXF_SINGULARITY_CACHEDIR`. Never run cleanup against `wo
 outside an assigned scratch. Show resolved paths before any `rm`. Prefer fixing at the producing step
 over post-module Python, but a documented post-hoc module is acceptable when the alternative is
 disproportionate.
+
+---
+
+## 12. Phase log
+
+One entry per phase, written when the phase closes. Not per task; the issues track tasks.
+
+The point of an entry is the gap between plan and reality. If a phase went exactly as written, the
+entry is two lines. If it did not, the entry is where a future reader finds out why, without having to
+reconstruct it from commit messages.
+
+Keep it short. A long entry nobody writes is worse than a short entry that gets written.
+
+### Template
+
+```
+### Phase N: <name>  (closed YYYY-MM-DD)
+
+Commits: <range or PR link>
+
+Built: one or two sentences on what now exists that did not before.
+
+Deviated: what differed from the plan in §3, and why. "Nothing" is a valid answer.
+
+Learned: anything that changes a later phase or overturns a decision in §1.
+         If this is non-empty, the affected section and issues need reconciling.
+
+Carried forward: what was deferred out of this phase, and to where.
+```
+
+### Entries
+
+Phase 0 is in progress. No entries yet.
