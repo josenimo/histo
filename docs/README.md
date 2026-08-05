@@ -1,10 +1,12 @@
-# nf-core/sopa: Documentation
+# josenimo/histo: Documentation
 
-The nf-core/sopa documentation is split into the following pages:
+- [Usage](usage.md) — how to run the pipeline and what the parameters mean.
+- [Output](output.md) — what the pipeline produces and how to read it.
 
-- [Usage](usage.md)
-  - An overview of how the pipeline works, how to run it and a description of all of the different command-line flags.
-- [Output](output.md)
-  - An overview of the different results produced by the pipeline and how to interpret them.
+For the plan, the reasoning behind it, and current progress, see [ROADMAP.md](../ROADMAP.md) and the
+[open issues](https://github.com/josenimo/histo/issues).
 
-You can find a lot more documentation about installing, configuring and running nf-core pipelines on the website: [https://nf-co.re](https://nf-co.re)
+This is not an nf-core pipeline. It uses the nf-core template and modules, so the
+[nf-core documentation](https://nf-co.re/docs) and the
+[Nextflow documentation](https://www.nextflow.io/docs/latest/) both apply to the mechanics of running
+it, but this pipeline is not listed on, supported by, or endorsed by nf-core.

@@ -1,4 +1,9 @@
-# nf-core/sopa: Output
+# josenimo/histo: Output
+
+> [!NOTE]
+> Describes the output of the downstream half, which is currently unmodified from nf-core/sopa.
+> Sections will be removed as out-of-scope features are dropped, and extended when the preprocessing
+> half is added. See [ROADMAP.md](../ROADMAP.md).
 
 ## Introduction
 
