@@ -340,6 +340,15 @@ Branch: `feat/tests`.
 3. Test data in a small repository of your own.
 4. `-stub` run in CI. `nf-test test tests/`.
 5. `check_qupath_paquo.py` wired in as an acceptance check on the TMA fixture.
+6. **Regenerate the inherited nf-test snapshots.** `tests/*.nf.test.snap` still record
+   `"nf-core/sopa": "v1.0.1"` from the import. They must not be hand-edited; regenerate with
+   `nf-test test --update-snapshot`, on the same CPU architecture as CI. This needs real containers,
+   so it is cluster work and it blocks the Phase 1 exit criterion until done.
+
+**Keep `.github/workflows/download_pipeline.yml`.** It counts container images before and after a
+stub run and fails if the count changed, which is a machine-check of the §6 rule that nothing may be
+pulled at launch time. It is the only automated guard on offline reproducibility in the repository, and
+it is easy to mistake for nf-core boilerplate and delete.
 
 ### Phase 7. QC report
 
@@ -596,6 +605,11 @@ Consequences, which together form the working model:
 - `git log`, `git show` and `git rev-parse` do not lock and are safe as-is.
 - Git writes may also leave orphaned `.git/objects/*/tmp_obj_*` blobs. Harmless, but they accumulate
   and only the user can remove them. `git fsck --connectivity-only` confirms no real damage.
+
+**Some paths are blocked from editing entirely**, not just from deletion. Attempting to edit
+`.devcontainer/setup.sh` returned `resolves to a protected location`. Dotfile directories appear to be
+protected regardless of the connected folder. If an edit is refused this way, either the user makes it
+or the file is removed; there is no agent-side workaround.
 
 **Commit identity** is set repository-locally to `Jose Nimo <nimojose@gmail.com>`, which is the address
 verified on GitHub. The two pre-existing commits use a hostname-derived address that GitHub cannot
