@@ -1,15 +1,46 @@
-# nf-core/sopa: Changelog
+# josenimo/histo: Changelog
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## v1.0.1 - [date]
+## v0.1.0dev - unreleased
 
-- Update the spaceranger module in #28
-- Ensure the tests can't silently fail in #29
-- Support the `image_scale` parameter in #30
-- Template update for nf-core/tools v4.0.2 in #23
+Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
 
-## v1.0.0 - [2026-07-15]
+### Added
 
-Initial release of nf-core/sopa, created with the [nf-core](https://nf-co.re/) template.
+- Project context (`AGENT_CONTEXT.md`), phased plan (`ROADMAP.md`), and proposed linting
+  configuration under `planning/`.
+- `create_issues.sh`, which publishes the roadmap as GitHub milestones and issues.
+- Copyright notice alongside the retained nf-core/sopa notice in `LICENSE`, as MIT requires for
+  derivative works.
+- MCMICRO, BaSiC, ASHLAR, background_subtraction and Cellpose to `CITATIONS.md`.
+
+### Changed
+
+- Imported the [nf-core/sopa](https://github.com/nf-core/sopa) `dev` tree at
+  `c2b4e5fe1f5291a3f079e55859cd2f42e588e324` as the starting point for the downstream half, on an
+  orphan branch with no inherited history. The import commit is deliberately unmodified so it can be
+  verified against upstream.
+- Rebranded to `josenimo/histo`: pipeline name, manifest, schema metadata, workflow identifiers
+  (`SOPA` to `HISTO`, `NFCORE_SOPA` to `HISTO_PIPELINE`), startup banner, email templates and README.
+- Reset the version to `0.1.0dev`. The previous history in this file described nf-core/sopa's
+  releases, which do not apply to this pipeline.
+
+### Removed
+
+- The nf-core Zenodo DOI from the manifest and README. It belongs to nf-core/sopa and retaining it
+  would have claimed another project's citation.
+- nf-core organisation files: code of conduct, RO-Crate provenance metadata, and logos.
+- nf-core organisation CI: AWS megatests, release announcements, and the triage, lint-fix, PR-comment
+  and template-version bots. Kept `nf-test.yml`, `linting.yml` and `download_pipeline.yml`.
+- The completion email's embedded logo, which was read from disk at runtime and would have thrown
+  after the logo files were deleted.
+- The `workflow.manifest.doi` interpolation from the citation footer, which called `.tokenize()`
+  unguarded on a field the manifest no longer defines.
+
+### Not yet done
+
+The preprocessing half does not exist. The downstream half still contains sopa's transcriptomics
+paths (baysor, comseg, proseg, stardist, Space Ranger, transcript patches) pending removal, and
+`docs/` and the GitHub issue templates still carry nf-core branding.
