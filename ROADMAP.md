@@ -565,11 +565,47 @@ replacement OME-XML into an OME-TIFF but requires an existing `ImageDescription`
 
 ## 11. Agent constraints reaffirmed
 
+### On the cluster
+
 Raw imaging data is read-only. Never `sbatch` or `srun`; propose commands only. Never `git push`.
 Never touch the shared `NXF_SINGULARITY_CACHEDIR`. Never run cleanup against `work/` directories
 outside an assigned scratch. Show resolved paths before any `rm`. Prefer fixing at the producing step
 over post-module Python, but a documented post-hoc module is acceptable when the alternative is
 disproportionate.
+
+### In the local agent session
+
+Established 05.08.2026. These are mechanical facts about the tooling, not preferences. A future
+session that ignores them will waste time rediscovering them.
+
+**The agent sandbox can write to the mounted repository but cannot delete from it.** Verified with a
+canary file: `cp` succeeds, `rm` returns `Operation not permitted`. Deletion requires the user to
+approve a specific path, which was declined for `.git/` and should stay declined.
+
+**Therefore the agent must not run git write commands.** `git add` and `git commit` create
+`.git/index.lock` and then fail to remove it. That stale lock blocks every subsequent git write, so
+one `git add` poisons the repository until the user deletes the lock by hand. This happened twice on
+05.08.2026 before the cause was understood.
+
+Consequences, which together form the working model:
+
+- The agent prepares files with its editing tools. **The user runs every `git add` and `git commit`.**
+  The agent supplies the exact command and commit message, and shows `git diff` first.
+- The agent uses `git --no-optional-locks` for **all** read operations (`status`, `diff`). Plain
+  `git status` takes the index lock to refresh its stat cache and will leave one behind.
+- `git log`, `git show` and `git rev-parse` do not lock and are safe as-is.
+- Git writes may also leave orphaned `.git/objects/*/tmp_obj_*` blobs. Harmless, but they accumulate
+  and only the user can remove them. `git fsck --connectivity-only` confirms no real damage.
+
+**Commit identity** is set repository-locally to `Jose Nimo <nimojose@gmail.com>`, which is the address
+verified on GitHub. The two pre-existing commits use a hostname-derived address that GitHub cannot
+attribute; that inconsistency is confined to the abandoned `legacy` branch and needs no fixing.
+
+**Issue management.** No GitHub MCP connector exists in the registry as of 05.08.2026. The agent
+generates `gh issue` commands and the user runs them, batched at phase boundaries. A fine-grained
+personal access token scoped to `Issues` on this repository alone would remove the friction, and was
+considered and deferred: the agent reads web content, so a token in its sandbox is a token exposed to
+prompt injection. Revisit if batching becomes a real cost, not before.
 
 ---
 
