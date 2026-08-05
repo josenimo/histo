@@ -1,0 +1,12 @@
+# Test Case 4: Exemplar-002 (Full TMA Pipeline: Illumination from scratch + Stitching + BackSub + Coreograph -> Master Merged Zarr)
+use_mcmicro: true
+input_cycle: "/fast/AG_Coscia/SOPA/testing/samplesheets/samplesheet_exemplar002_nodfp.csv"
+marker_sheet: "/fast/AG_Coscia/SOPA/testing/markersheets/markers_exemplar002_2cycles.csv"
+outdir: "./results_test_case4"
+use_basicpy: true
+use_backsub: true
+use_tma_dearray: true
+technology: "ome_tif"
+use_cellpose: true
+cellpose_channels: "0"
+cellpose_diameter: 35

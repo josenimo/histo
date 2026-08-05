@@ -1,0 +1,12 @@
+# Test Case 2: Exemplar-001 (BaSiC Illumination from scratch + Stitching + Registration -> SOPA Spatial)
+use_mcmicro: true
+input_cycle: "samplesheets/samplesheet_test1_nodfp.csv"
+marker_sheet: "samplesheets/markers_test1.csv"
+outdir: "./results_test_case2"
+use_basicpy: true
+use_backsub: false
+use_tma_dearray: false
+technology: "ome_tif"
+use_cellpose: true
+cellpose_channels: "0"
+cellpose_diameter: 35

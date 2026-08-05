@@ -1,0 +1,12 @@
+# Test Case 1: Exemplar-001 (Stitching + Registration -> SOPA Spatial Segmentation & Quant)
+use_mcmicro: true
+input_cycle: "samplesheets/samplesheet_test1.csv"
+marker_sheet: "samplesheets/markers_test1.csv"
+outdir: "./results_test_case1"
+use_basicpy: false
+use_backsub: false
+use_tma_dearray: false
+technology: "ome_tif"
+use_cellpose: true
+cellpose_channels: "0"
+cellpose_diameter: 35

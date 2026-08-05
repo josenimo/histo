@@ -1,0 +1,9 @@
+# Test Case 0: Direct Pre-Stitched Image Mode (Pure Default SOPA Mode)
+use_mcmicro: false
+input_image: "raw/exemplar-001/cycle-06.ome.tif"
+sample_id: "exemplar-001-direct"
+outdir: "./results_test_case0"
+technology: "ome_tif"
+use_cellpose: true
+cellpose_channels: "0"
+cellpose_diameter: 35

@@ -1,0 +1,14 @@
+.DS_Store
+._*
+
+# Python
+__pycache__/
+*.py[cod]
+
+# Nextflow
+.nextflow
+.nextflow.log*
+work/
+.nextflow/
+EOF
+

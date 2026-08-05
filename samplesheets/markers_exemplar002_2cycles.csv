@@ -1,0 +1,9 @@
+channel_number,cycle_number,marker_name,filter,excitation_wavelength,emission_wavelength,background,exposure,remove
+1,1,DNA_1,DAPI,395,431,,1,false
+2,1,AF488,FITC,485,525,A488_background,1,false
+3,1,AF555,Sytox,555,590,A555_background,1,false
+4,1,AF647,Cy5,640,690,A647_background,1,false
+5,2,DNA_2,DAPI,395,431,,1,false
+6,2,A488_background,FITC,485,525,,1,true
+7,2,A555_background,Sytox,555,590,,1,true
+8,2,A647_background,Cy5,640,690,,1,true
