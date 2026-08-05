@@ -8,26 +8,21 @@ lint:
     - assets/multiqc_config.yml
     - .github/workflows/linting_comment.yml
   files_unchanged:
-    - .github/CONTRIBUTING.md
     - assets/sendmail_template.txt
-    - assets/nf-core-sopa_logo_light.png
-    - docs/images/nf-core-sopa_logo_light.png
-    - docs/images/nf-core-sopa_logo_dark.png
-    - .github/workflows/branch.yml
     - .github/workflows/linting.yml
   multiqc_config: false
 nf_core_version: 4.0.3
 repository_type: pipeline
 template:
-  author: Quentin Blampey
-  description: Technology-invariant pipeline for spatial omics analysis that scales to millions of cells
+  author: Jose Nimo
+  description: Processing, segmentation and quantification of H&E and multiplex immunofluorescence images
   force: false
-  is_nfcore: true
-  name: sopa
-  org: nf-core
+  is_nfcore: false
+  name: histo
+  org: josenimo
   outdir: .
   skip_features:
     - igenomes
     - multiqc
     - fastqc
-  version: 1.0.1
+  version: 0.1.0dev

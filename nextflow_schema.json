@@ -1,8 +1,8 @@
 {
     "$schema": "https://json-schema.org/draft/2020-12/schema",
-    "$id": "https://raw.githubusercontent.com/nf-core/sopa/master/nextflow_schema.json",
-    "title": "nf-core/sopa pipeline parameters",
-    "description": "Technology-invariant pipeline for spatial omics analysis that scales to millions of cells",
+    "$id": "https://raw.githubusercontent.com/josenimo/histo/main/nextflow_schema.json",
+    "title": "josenimo/histo pipeline parameters",
+    "description": "Processing, segmentation and quantification of H&E and multiplex immunofluorescence images",
     "type": "object",
     "$defs": {
         "input_output_options": {
