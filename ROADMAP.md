@@ -5,6 +5,23 @@ expected a fork-and-diff archaeology step. That step does not apply: see "Why th
 
 Priorities remain, in order: transparency, robustness, troubleshootability.
 
+## Status of this document
+
+**GitHub issues are the tracker. This document is the frozen reasoning behind them.**
+
+The phases and steps below were published as 10 milestones and 57 issues on 2026-08-05 via
+`create_issues.sh`. Progress lives there, not here. Do not update this document to reflect what is
+done; check the issues instead.
+
+What this document is for: the *why*. The findings from the review of the prior tree, the decisions
+that were considered and rejected, the constraints that shaped the plan. An issue says "patch
+coreograph to 2.4.6"; this says why the nf-core module is a downgrade, why that matters, and what was
+verified. That reasoning does not go stale the way a checklist does.
+
+Revise this document when a **decision** changes, not when a task completes. If a phase gets
+resequenced or a decision in §1 is overturned, update it here and bump the revision number, then
+reconcile the affected issues.
+
 ---
 
 ## 1. Decisions settled
