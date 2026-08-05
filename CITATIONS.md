@@ -1,18 +1,65 @@
-# nf-core/sopa: Citations
+# josenimo/histo: Citations
 
-## [sopa](https://www.nature.com/articles/s41467-024-48981-z)
+This pipeline has no DOI of its own and should not be cited in place of the tools it wraps. If you
+use it, please cite the tools below.
 
-> Blampey, Q., Mulder, K., Gardet, M. et al. Sopa: a technology-invariant pipeline for analyses of image-based spatial omics. Nat Commun 15, 4981 (2024). https://doi.org/10.1038/s41467-024-48981-z
+> [!NOTE]
+> The pipeline is under construction. Entries marked **(planned)** are tools the design depends on
+> but which are not yet wired in. This file is maintained as modules are added, not retrofitted.
 
-## [nf-core](https://pubmed.ncbi.nlm.nih.gov/32055031/)
+## Pipelines this project is derived from
 
-> Ewels PA, Peltzer A, Fillinger S, Patel H, Alneberg J, Wilm A, Garcia MU, Di Tommaso P, Nahnsen S. The nf-core framework for community-curated bioinformatics pipelines. Nat Biotechnol. 2020 Mar;38(3):276-278. doi: 10.1038/s41587-020-0439-x. PubMed PMID: 32055031.
+Both are MIT licensed. This pipeline would not exist without them.
 
-## [Nextflow](https://pubmed.ncbi.nlm.nih.gov/28398311/)
+- [sopa](https://www.nature.com/articles/s41467-024-48981-z) — the entire downstream half is derived
+  from [nf-core/sopa](https://github.com/nf-core/sopa), and many modules are vendored from it.
 
-> Di Tommaso P, Chatzou M, Floden EW, Barja PP, Palumbo E, Notredame C. Nextflow enables reproducible computational workflows. Nat Biotechnol. 2017 Apr 11;35(4):316-319. doi: 10.1038/nbt.3820. PubMed PMID: 28398311.
+  > Blampey, Q., Mulder, K., Gardet, M. et al. Sopa: a technology-invariant pipeline for analyses of image-based spatial omics. Nat Commun 15, 4981 (2024). https://doi.org/10.1038/s41467-024-48981-z
 
-## Pipeline tools
+- [MCMICRO](https://www.nature.com/articles/s41592-021-01308-y) — the preprocessing half is derived
+  from [nf-core/mcmicro](https://github.com/nf-core/mcmicro). Also the source of the UNetCoreograph
+  TMA dearray tool, which has no separate publication.
+
+  > Schapiro, D., Sokolov, A., Yapp, C. et al. MCMICRO: a scalable, modular image-processing pipeline for multiplexed tissue imaging. Nat Methods 19, 311–315 (2022). https://doi.org/10.1038/s41592-021-01308-y
+
+## Frameworks
+
+- [nf-core](https://pubmed.ncbi.nlm.nih.gov/32055031/) — this is not an nf-core pipeline, but it uses
+  the nf-core template, modules and tooling.
+
+  > Ewels PA, Peltzer A, Fillinger S, Patel H, Alneberg J, Wilm A, Garcia MU, Di Tommaso P, Nahnsen S. The nf-core framework for community-curated bioinformatics pipelines. Nat Biotechnol. 2020 Mar;38(3):276-278. doi: 10.1038/s41587-020-0439-x. PubMed PMID: 32055031.
+
+- [Nextflow](https://pubmed.ncbi.nlm.nih.gov/28398311/)
+
+  > Di Tommaso P, Chatzou M, Floden EW, Barja PP, Palumbo E, Notredame C. Nextflow enables reproducible computational workflows. Nat Biotechnol. 2017 Apr 11;35(4):316-319. doi: 10.1038/nbt.3820. PubMed PMID: 28398311.
+
+## Preprocessing tools
+
+- [BaSiC / BaSiCPy](https://www.nature.com/articles/ncomms14836) — illumination correction **(planned)**
+
+  > Peng T, Thorn K, Schroeder T, Wang L, Theis FJ, Marr C, Navab N. A BaSiC tool for background and shading correction of optical microscopy images. Nat Commun 8, 14836 (2017). https://doi.org/10.1038/ncomms14836
+
+- [ASHLAR](https://academic.oup.com/bioinformatics/article/38/19/4613/6668278) — stitching and registration **(planned)**
+
+  > Muhlich JL, Chen YA, Yapp C, Russell D, Santagata S, Sorger PK. Stitching and registering highly multiplexed whole-slide images of tissues and tumors using ASHLAR. Bioinformatics. 2022 Sep 30;38(19):4613-4621. doi: 10.1093/bioinformatics/btac544.
+
+- [background_subtraction](https://github.com/SchapiroLabor/Background_subtraction) — pixel-level
+  background subtraction, from the Schapiro Lab **(planned)**
+
+  > No publication found. Cite the repository. TODO verify whether a paper now exists.
+
+## Segmentation, data structures and reporting
+
+- [Cellpose](https://www.nature.com/articles/s41592-020-01018-x) — cell segmentation
+
+  > Stringer C, Wang T, Michaelos M, Pachitariu M. Cellpose: a generalist algorithm for cellular segmentation. Nat Methods 18, 100–106 (2021). https://doi.org/10.1038/s41592-020-01018-x
+
+- [SpatialData](https://www.biorxiv.org/content/10.1101/2023.05.05.539647v1) — the Zarr-backed data
+  structure the whole downstream half is built on
+
+  > Marconato L, Palla G, Yamauchi K, Virshup I, Heidari E, Treis T, Toth M, Shrestha R, Vöhringer H, Huber W, Gerstung M, Moore J, Theis F, Stegle O. SpatialData: an open and universal data framework for spatial omics. bioRxiv 2023.05.05.539647; doi: https://doi.org/10.1101/2023.05.05.539647
+
+  > TODO this preprint may now be published; verify and update.
 
 - [AnnData](https://github.com/scverse/anndata)
 
@@ -22,15 +69,7 @@
 
   > Wolf F, Angerer P, Theis F. SCANPY: large-scale single-cell gene expression data analysis. Genome Biol 19, 15 (2018). doi: https://doi.org/10.1186/s13059-017-1382-0
 
-- [Space Ranger](https://www.10xgenomics.com/support/software/space-ranger)
-
-  > 10x Genomics Space Ranger 2.1.0 [Online]
-
-- [SpatialData](https://www.biorxiv.org/content/10.1101/2023.05.05.539647v1)
-
-  > Marconato L, Palla G, Yamauchi K, Virshup I, Heidari E, Treis T, Toth M, Shrestha R, Vöhringer H, Huber W, Gerstung M, Moore J, Theis F, Stegle O. SpatialData: an open and universal data framework for spatial omics. bioRxiv 2023.05.05.539647; doi: https://doi.org/10.1101/2023.05.05.539647
-
-## Software packaging/containerisation tools
+## Software packaging and containerisation
 
 - [Anaconda](https://anaconda.com)
 
@@ -48,6 +87,6 @@
 
   > Merkel, D. (2014). Docker: lightweight linux containers for consistent development and deployment. Linux Journal, 2014(239), 2. doi: 10.5555/2600239.2600241.
 
-- [Singularity](https://pubmed.ncbi.nlm.nih.gov/28494014/)
+- [Singularity / Apptainer](https://pubmed.ncbi.nlm.nih.gov/28494014/)
 
   > Kurtzer GM, Sochat V, Bauer MW. Singularity: Scientific containers for mobility of compute. PLoS One. 2017 May 11;12(5):e0177459. doi: 10.1371/journal.pone.0177459. eCollection 2017. PubMed PMID: 28494014; PubMed Central PMCID: PMC5426675.
