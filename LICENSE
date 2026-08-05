@@ -1,6 +1,12 @@
 MIT License
 
 Copyright (c) The nf-core/sopa team
+Copyright (c) 2026 Jose Nimo
+
+This project is derived from nf-core/sopa (https://github.com/nf-core/sopa),
+which is MIT licensed. The copyright notice above is retained as required by
+that licence. Portions of this project remain substantially the work of the
+nf-core/sopa authors; see CITATIONS.md for details.
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
