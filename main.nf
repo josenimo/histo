@@ -1,11 +1,12 @@
 #!/usr/bin/env nextflow
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    nf-core/sopa
+    josenimo/histo
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    Github : https://github.com/nf-core/sopa
-    Website: https://nf-co.re/sopa
-    Slack  : https://nfcore.slack.com/channels/sopa
+    Github : https://github.com/josenimo/histo
+
+    Downstream half derived from nf-core/sopa (MIT) at c2b4e5f.
+    Preprocessing half derived from nf-core/mcmicro (MIT). See CITATIONS.md.
 ----------------------------------------------------------------------------------------
 */
 
@@ -15,9 +16,9 @@
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-include { SOPA } from './workflows/sopa'
-include { PIPELINE_INITIALISATION } from './subworkflows/local/utils_nfcore_sopa_pipeline'
-include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfcore_sopa_pipeline'
+include { HISTO } from './workflows/histo'
+include { PIPELINE_INITIALISATION } from './subworkflows/local/utils_nfcore_histo_pipeline'
+include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfcore_histo_pipeline'
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     NAMED WORKFLOWS FOR PIPELINE
@@ -27,7 +28,7 @@ include { PIPELINE_COMPLETION     } from './subworkflows/local/utils_nfcore_sopa
 //
 // WORKFLOW: Run main analysis pipeline depending on type of input
 //
-workflow NFCORE_SOPA {
+workflow HISTO_PIPELINE {
 
     take:
     samplesheet // channel: samplesheet read in from --input
@@ -37,7 +38,7 @@ workflow NFCORE_SOPA {
     //
     // WORKFLOW: Run pipeline
     //
-    SOPA (
+    HISTO (
         samplesheet,
         params.outdir,
     )
@@ -67,7 +68,7 @@ workflow {
     //
     // WORKFLOW: Run main workflow
     //
-    NFCORE_SOPA(
+    HISTO_PIPELINE(
         PIPELINE_INITIALISATION.out.samplesheet
     )
     //

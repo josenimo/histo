@@ -5,7 +5,7 @@
 */
 include { paramsSummaryMap        } from 'plugin/nf-schema'
 include { softwareVersionsToYAML  } from '../subworkflows/nf-core/utils_nfcore_pipeline'
-include { methodsDescriptionText  } from '../subworkflows/local/utils_nfcore_sopa_pipeline'
+include { methodsDescriptionText  } from '../subworkflows/local/utils_nfcore_histo_pipeline'
 
 include { TO_SPATIALDATA          } from '../modules/local/to_spatialdata'
 include { MAKE_IMAGE_PATCHES      } from '../modules/local/make_image_patches'
@@ -34,7 +34,7 @@ include { extractOutsDir } from '../modules/local/utils'
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
-workflow SOPA {
+workflow HISTO {
     take:
     ch_samplesheet // channel: samplesheet read in from --input
     outdir
@@ -160,7 +160,7 @@ workflow SOPA {
         .mix(topic_versions_string)
         .collectFile(
             storeDir: "${outdir}/pipeline_info",
-            name: 'nf_core_'  +  'sopa_software_'  + 'versions.yml',
+            name: 'histo_software_versions.yml',
             sort: true,
             newLine: true
         )
