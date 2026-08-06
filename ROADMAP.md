@@ -25,6 +25,17 @@ reconcile the affected issues.
 There is one scheduled exception: **at the end of each phase, add a summary to §12**. Once per phase,
 not per task. That is the cadence that keeps the record useful without turning this into a changelog.
 
+**Run `nf-core pipelines lint` at the end of every phase**, before writing the §12 entry, and record
+the pass/fail/warning counts in it. The agent cannot run it: the sandbox has no network for PyPI and
+no Nextflow. Write the report to a file instead and the agent will read it directly:
+
+```
+nf-core pipelines lint --markdown histo_lint_results.md 2>&1 | tee histo_lint_results.txt
+```
+
+Both patterns are gitignored. Do not fix lint findings mid-phase if the phase will delete the files
+they concern; exemptions written against files that are about to disappear are wasted work.
+
 ---
 
 ## 1. Decisions settled
