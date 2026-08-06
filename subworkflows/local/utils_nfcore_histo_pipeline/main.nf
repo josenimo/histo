@@ -249,9 +249,14 @@ def validateParams(params) {
     }
 
     def STAINING_BASED_METHODS = ['use_stardist', 'use_cellpose']
+    def enabled = STAINING_BASED_METHODS.count { params[it] }
 
-    // check segmentation methods
-    assert STAINING_BASED_METHODS.count { params[it] } <= 1 : "Only one of ${STAINING_BASED_METHODS} may be used"
+    // Exactly one segmentation backend must be enabled. Both default to false, so
+    // running without a profile would otherwise leave ch_resolved unassigned and
+    // fail deep inside AGGREGATE with an unhelpful Groovy error.
+    assert enabled <= 1 : "Only one of ${STAINING_BASED_METHODS} may be used, but ${enabled} are enabled"
+    assert enabled >= 1 : "A segmentation backend is required: set one of ${STAINING_BASED_METHODS} to true, " +
+        "or use a profile that does (for example -profile test)"
 
     return params
 }
