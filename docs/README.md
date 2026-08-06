@@ -2,6 +2,7 @@
 
 - [Usage](usage.md) — how to run the pipeline and what the parameters mean.
 - [Output](output.md) — what the pipeline produces and how to read it.
+- [Containers](containers.md) — the image manifest, and pre-staging onto the cluster.
 
 For the plan, the reasoning behind it, and current progress, see [ROADMAP.md](../ROADMAP.md) and the
 [open issues](https://github.com/josenimo/histo/issues).
