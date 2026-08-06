@@ -43,6 +43,35 @@ done
 
 cd "$REPO_ROOT"
 
+# Check pass-through file arguments before doing any work. Without this, a typo
+# in a path fails inside the clone and gets reported as "the committed state does
+# not run", which sends you looking for a problem that is not there.
+prev=""
+for arg in "$@"; do
+    case "$prev" in
+        -params-file | -c | -config)
+            # Relative paths are rejected even when they exist. That is the point:
+            # a path that resolves here will resolve to something different, or to
+            # nothing, inside the clone. Existing-but-wrong is the dangerous case.
+            case "$arg" in
+                /*) ;;
+                *)
+                    echo "$prev: needs an absolute path, got: $arg" >&2
+                    echo "  The run happens inside the clone, so a relative path either" >&2
+                    echo "  fails there or silently resolves to a different file." >&2
+                    echo "  Try: $prev $REPO_ROOT/$arg" >&2
+                    exit 2
+                    ;;
+            esac
+            if [ ! -e "$arg" ]; then
+                echo "$prev: no such file: $arg" >&2
+                exit 2
+            fi
+            ;;
+    esac
+    prev="$arg"
+done
+
 echo "repo    : $REPO_ROOT"
 echo "branch  : $(git rev-parse --abbrev-ref HEAD)"
 echo "commit  : $(git rev-parse --short HEAD)"
