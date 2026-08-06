@@ -1,3 +1,21 @@
+//
+// Function library, not a process. Vendored from nf-core/sopa at c2b4e5f.
+//
+// argsCLI() maps the flat parameters in nextflow.config into command-line strings
+// for the sopa CLI, skipping nulls. extractSubArgs() defines which parameters
+// belong to which step. Adding a parameter to nextflow.config is not enough; it
+// must also be listed here or it will never reach the tool.
+//
+// ACCEPTED LINT WARNING: `local_component_structure` says this should live at
+// modules/local/utils/main.nf. It is deliberately left flat, because it contains
+// no process. Moving it would bring it into the scope of the module-has-stub and
+// module-emits-versions pre-commit hooks, which glob modules/local/*/main.nf, and
+// it would fail both: a function library has neither a stub block nor a version
+// to report. The flat file is more honest about what this is. The warning is
+// accepted rather than exempted, since exempting would disable the check for
+// every local module and hide a genuine violation later.
+//
+
 def stringifyItem(String key, value) {
     key = key.replace('_', '-')
 
