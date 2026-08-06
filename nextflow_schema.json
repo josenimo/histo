@@ -171,10 +171,7 @@
                 "technology": {
                     "type": "string",
                     "description": "Technology used for the spatial data, e.g., 'xenium', 'merscope', ...",
-                    "enum": [
-                        "ome_tif",
-                        "toy_dataset"
-                    ],
+                    "enum": ["ome_tif", "toy_dataset"],
                     "default": "ome_tif"
                 }
             },
@@ -236,13 +233,7 @@
             "properties": {
                 "min_area_pixels2": {
                     "type": "number",
-                    "description": "Cells with an area less than this value will be filtered. The unit is in pixels^2, and used by Stardist/Cellpose.",
-                    "default": 0.0
-                },
-                "min_area_microns2": {
-                    "type": "number",
-                    "description": "Cells with an area less than this value will be filtered. The unit is in microns^2, and used by Baysor/Comseg. Not used by Proseg.",
-                    "default": 0.0
+                    "description": "Cells with an area less than this value will be filtered. The unit is in pixels^2, and used by Stardist/Cellpose."
                 },
                 "min_transcripts": {
                     "type": "number",

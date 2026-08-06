@@ -58,6 +58,7 @@ def extractSubArgs(Map args, String group) {
             diameter: args.cellpose_diameter,
             channels: getChannels(args.cellpose_channels, false),
             flow_threshold: args.flow_threshold,
+            cellprob_threshold: args.cellprob_threshold,
             model_type: args.cellpose_model_type,
             pretrained_model: args.pretrained_model,
             gpu: args.cellpose_use_gpu,
