@@ -452,5 +452,17 @@
         {
             "$ref": "#/$defs/fluorescence_annotation"
         }
-    ]
+    ],
+    "properties": {
+        "input_cycle": {
+            "type": "string"
+        },
+        "marker_sheet": {
+            "type": "string"
+        },
+        "ashlar_args": {
+            "type": "string",
+            "default": "--maximum-shift 30"
+        }
+    }
 }
