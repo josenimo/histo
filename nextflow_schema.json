@@ -241,11 +241,14 @@
             "properties": {
                 "patch_width_pixel": {
                     "type": "number",
-                    "description": "Width (and height) of each patch in pixels"
+                    "description": "Width and height of each segmentation patch, in pixels. Choose it so the image yields roughly 16 to 200 patches: patch_width = sqrt(width * height / target_patches).",
+                    "help_text": "This parameter sets how segmentation parallelises, and it is not automatic. Tiled segmentation is the reason this pipeline scales, but only if the tiling suits the image.\n\nToo large and you get one patch and no parallelism at all: a 3138 x 2511 image at patch_width_pixel = 5000 produces a single task. Too small and you get thousands of tasks, each paying container startup and scheduler overhead; a 115000 x 115000 image at 2000 produces 3364 of them.\n\nMemory is not the constraint. A 5000 pixel patch of one channel is about 50 MB. Task count is the constraint, so aim for a few times your cluster's concurrency and no more.\n\nRough guide, patches = ceil(width/p) * ceil(height/p):\n  3k x 3k      -> 1000 gives 9,    2000 gives 4,    5000 gives 1\n  25k x 25k    -> 2000 gives 169,  5000 gives 25,   8000 gives 16\n  50k x 50k    -> 5000 gives 100,  8000 gives 49,   10000 gives 25\n  115k x 115k  -> 8000 gives 225,  10000 gives 144, 15000 gives 64\n\nGet the dimensions before running: scratch/inspect-ome.py on the stitched image, or showinf -nopix on a raw cycle and multiply by the tile grid.",
+                    "fa_icon": "fas fa-th-large"
                 },
                 "patch_overlap_pixel": {
                     "type": "number",
-                    "description": "Number of overlapping pixels between the patches. We advise to choose approximately twice the diameter of a cell"
+                    "description": "Number of overlapping pixels between the patches. We advise to choose approximately twice the diameter of a cell",
+                    "fa_icon": "fas fa-clone"
                 },
                 "image_scale": {
                     "type": "string",

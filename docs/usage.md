@@ -16,8 +16,45 @@ be worse than documenting nothing. The original is recoverable from commit `33e0
 - The parameters, which will be supplied with `-params-file params.yml` and validated against
   `nextflow_schema.json`. Parameter documentation is generated from that schema rather than
   maintained here by hand.
-- The size profiles (`small`, `medium`, `huge`) for inputs from 5 GB to 100 GB.
-- Container pre-staging, since the cluster cannot be relied on to pull images at runtime.
+- Container pre-staging, which now lives in [containers.md](containers.md).
+
+## Choosing `patch_width_pixel`
+
+This one parameter decides whether segmentation parallelises at all, and it is deliberately **not**
+computed for you. It affects results at patch boundaries as well as runtime, so an automatically
+chosen value would mean the same slide segmenting slightly differently on different hardware.
+
+Pick it so the image yields roughly **16 to 200 patches**:
+
+```
+patch_width_pixel = sqrt(width * height / target_patches)
+```
+
+| Stitched image | 2000 | 5000 | 8000 | 10000 |
+| -------------- | ---- | ---- | ---- | ----- |
+| 3k × 3k        | 4    | 1    | 1    | 1     |
+| 25k × 25k      | 169  | 25   | 16   | 9     |
+| 50k × 50k      | 625  | 100  | 49   | 25    |
+| 115k × 115k    | 3364 | 529  | 225  | 144   |
+
+Both ends of that table are failure modes. **One patch means no parallelism**, which discards the
+main reason this pipeline uses sopa — a 3138 × 2511 image at the default 5000 produces exactly one
+segmentation task. **Thousands of patches** means thousands of container starts and scheduler
+submissions, which on a busy queue costs more than the segmentation does.
+
+Memory is not the deciding factor. A 5000-pixel patch of one channel is about 50 MB, so patch size is
+a task-count decision, not a memory one. Aim for a few times your cluster's concurrency
+(`executor.queueSize`, currently 50) and no more.
+
+To get the dimensions before you run:
+
+```bash
+scratch/inspect-ome.py stitched.ome.tif          # on an existing stitched image
+showinf -nopix -omexml-only raw_cycle01.ome.tiff # on a raw cycle, then multiply by the tile grid
+```
+
+`patch_overlap_pixel` is a different question: set it to roughly twice the diameter of a cell, so
+that cells straddling a boundary appear whole in at least one patch.
 
 ## Meanwhile
 
