@@ -309,7 +309,18 @@ Branch: `feat/preprocess-images`.
 3. Build `subworkflows/local/preprocess_images`: illumination correction, then stitching and
    registration, then optional background subtraction, then optional TMA dearray.
 4. Fan `BASICPY` out per cycle rather than looping inside one task.
-5. Fix dfp/ffp ordering with an explicit cycle index and a length assertion.
+5. Fix dfp/ffp ordering. Largely inherited: the cycle samplesheet carries an explicit
+   `cycle_number`, and mcmicro's grouping sorts on it
+   (`groupTuple(sort: { a, b -> a[0] <=> b[0] })`), which is the fix for P0-5. Still to add:
+
+   - **`dfp` and `ffp` are all or nothing per sample.** JSON Schema cannot express "if present for one
+     cycle, required for all", so this needs a runtime check in `validateParams`. A half-populated
+     column would silently misalign illumination profiles against cycles, which is the same class of
+     bug as P0-5 and just as invisible.
+   - An assertion that the number of profiles matches the number of cycles before Ashlar is called.
+   - Optional improvement, not required: mcmicro's `groupTuple` has no `size`, so it blocks until the
+     channel completes. The samplesheet knows the cycle count per sample, so `groupKey` would release
+     each sample as soon as its cycles arrive. Their own code carries a `FIXME` about this.
 6. **Assert channel names survived conversion.** After `TO_SPATIALDATA`, fail the run if channel names
    are the integer fallback. sopa only logs a warning, which is not acceptable for unattended runs on
    colleagues' data. This is the cheap guard; actually fixing the names is bookmarked in §6.
@@ -421,10 +432,23 @@ Every nf-core module ships older than what you run.
 
 | Tool | nf-core module | Your version | Action |
 |---|---|---|---|
-| `basicpy` | `docker.io/labsyspharm/basicpy-docker-mcmicro:1.2.0-patch5` | identical | Install, no patch. |
-| `ashlar` | `biocontainers/ashlar:1.18.0--pyhdfd78af_0` | `josenimo/jose_ashlar:1.21.0`, code fork | Deferred. Keep the fork image, vendor to `modules/local/ashlar` with provenance documented. |
-| `backsub` | `ghcr.io/schapirolabor/background_subtraction:v0.4.1` | `v0.5.1` | Install, then `nf-core modules patch backsub`. |
-| `coreograph` | `docker.io/labsyspharm/unetcoreograph:2.2.9` | `2.4.6` | Install, then `nf-core modules patch coreograph`. |
+**Corrected 2026-08-06 after installing.** The original table was built from the SHAs *mcmicro* pins,
+not from current `nf-core/modules` master, and two of the four had moved.
+
+| Tool | nf-core module, as installed | Your version | Action |
+|---|---|---|---|
+| `basicpy` | `docker.io/labsyspharm/basicpy-docker-mcmicro:1.2.0-patch5` | identical | None. |
+| `ashlar` | `quay.io/biocontainers/ashlar:1.19.0--pyhdfd78af_0` | `josenimo/jose_ashlar:1.21.0`, code fork | Deferred. Baseline moved from 1.18.0 to 1.19.0; the rotation-correction fork is still a separate question. |
+| `backsub` | `ghcr.io/schapirolabor/background_subtraction:v0.5.1` | `v0.5.1` | **None. Already current; the planned patch is unnecessary.** |
+| `coreograph` | `docker.io/labsyspharm/unetcoreograph:2.2.9` | `2.4.6` | Install, then `nf-core modules patch coreograph`. Still the only patch needed. |
+
+All four emit versions through **topic channels** rather than `versions.yml`, and name their outputs
+with `emit:`. Callers therefore use `MODULE.out.<name>` and cannot hit the output-arity trap that
+adding `versions.yml` to the sopa modules caused. `workflows/histo.nf` already collects
+`channel.topic("versions")`, so this needs no extra wiring.
+
+`ashlar` stages its inputs as `image*/*`, `dfp*/*` and `ffp*/*`, one numbered directory each. That is
+the mechanism preserving positional correspondence between cycles and illumination profiles.
 
 Module SHAs pinned in mcmicro's `modules.json`: `ashlar c7c25b63`, `backsub 41dfa3f7`,
 `basicpy a46512fa`, `coreograph 41dfa3f7`.

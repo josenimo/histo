@@ -69,6 +69,7 @@
                 "meta": "remove"
             }
         },
-        "required": ["channel_number", "cycle_number", "marker_name"]
+        "required": ["channel_number", "cycle_number", "marker_name"],
+        "additionalProperties": false
     }
 }

@@ -46,6 +46,7 @@
                 "errorMessage": "ffp must be an existing file without spaces"
             }
         },
-        "required": ["sample", "cycle_number", "image_tiles"]
+        "required": ["sample", "cycle_number", "image_tiles"],
+        "additionalProperties": false
     }
 }
