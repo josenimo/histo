@@ -50,9 +50,10 @@ they concern; exemptions written against files that are about to disappear are w
 | **Post-module Python fixes** | **Undesired, but permitted as a pragmatic escape hatch.** Default to fixing at the producing step. Where going through the full module route is disproportionate, a post-hoc script is acceptable provided it is a named module with a stub, a version capture and a comment stating why the producer was not fixed. `bin/fix_core_ome_tiff.py` still goes, because a better tool exists (see §6). |
 | Containers | Restore upstream registry URIs. Pre-stage SIFs into the shared `NXF_SINGULARITY_CACHEDIR`. No launch-time pulls. |
 | Params interface | `-params-file params.yml` is the primary interface, validated by `nextflow_schema.json`. |
-| Segmentation | Cellpose only for 1.0.0. |
-| Scope in | `TISSUE_SEGMENTATION`, `conf/predefined` mIF presets (phenocycler, macsima, hyperion). |
-| Scope out | `STARDIST`, `SCANPY_PREPROCESS`, `FLUO_ANNOTATION`, `BAYSOR`, `COMSEG`, `PROSEG`, `SPACERANGER`, all transcript-patch paths. |
+| Segmentation | Cellpose is the primary backend for 1.0.0. StarDist retained alongside it. |
+| Scope in | `TISSUE_SEGMENTATION`, `CELLPOSE`, `STARDIST`, `FLUO_ANNOTATION`, `conf/predefined` mIF presets (phenocycler, macsima, hyperion). |
+| Scope out | `SCANPY_PREPROCESS`, `EXPLORER_RAW`, `BAYSOR`, `COMSEG`, `PROSEG`, `SPACERANGER`, the Visium HD path, all transcript-patch paths. |
+| Reader | `ome_tif` only, plus `toy_dataset` until the test fixtures are replaced in Phase 6. H&E support to be added deliberately later, not inherited. |
 | Ashlar fork | Deferred to nice-to-haves. Keep `josenimo/jose_ashlar:1.21.0` as-is for now. |
 | `min_intensity_ratio`, `expand_radius_ratio` | Deferred until the baseline runs. 1.0.0 quantification is therefore nuclear-only. |
 | Channel names and physical pixel size | Bookmarked. Route identified via mcmicro's bftools metadata stack, see §6. Not scheduled yet. |
@@ -260,14 +261,23 @@ Branch: `feat/scaffold`.
 
 1. Copy the `nf-core/sopa:dev` tree at `c2b4e5f`. Fresh `git init`, no sopa remote. Initial commit
    records source repository, SHA and retrieval date in the message body.
-2. Rebrand as one commit: rename the pipeline to `imagingpipeline` (lowercase, no separators, since
-   Nextflow uses the repo name), strip `NFCORE_SOPA`, `assets/nf-core-sopa_logo_*`, `docs/images/`,
-   `CODE_OF_CONDUCT.md`, `ro-crate-metadata.json`, nf-core org CI in `.github/`, and branding in
-   `README.md` and `utils_nfcore_sopa_pipeline`.
-3. Delete out-of-scope features, one commit per feature so each deletion is documented: `baysor`,
-   `comseg`, `proseg`, `stardist`, `spaceranger`, `scanpy_preprocess`, `fluo_annotation`,
-   `make_transcript_patches`, `explorer_raw`, and their `conf/predefined/*`, schema entries and
-   nf-tests.
+2. Rebrand: rename the pipeline to `histo` (lowercase, no separators, since Nextflow uses the repo
+   name), strip `NFCORE_SOPA`, the logos, `CODE_OF_CONDUCT.md`, `ro-crate-metadata.json`, nf-core org
+   CI in `.github/`, and branding in `README.md` and `utils_nfcore_sopa_pipeline`. Done across eight
+   commits rather than one, since it touched roughly 40 files across config, code, CI and docs.
+3. Delete out-of-scope features, grouped by reason for removal so each commit is one documented
+   decision: transcript-based segmentation (`baysor`, `comseg`, `proseg`, `make_transcript_patches`);
+   `explorer_raw` and `scanpy_preprocess`; the Visium HD path (`spaceranger`, `input_check`, `untar`).
+   Then restrict the technology enum to `ome_tif`.
+
+   **Ordering note:** feature removal should come *before* rebranding, not after. Roughly a quarter
+   of the branded files were deleted anyway, and lint exemptions written against files that are about
+   to disappear are wasted work. This was done in the wrong order.
+
+   **Scope changed mid-phase:** `stardist` and `fluo_annotation` were originally listed for removal
+   and are now retained, StarDist as a second segmentation backend better suited to H&E nuclei, and
+   fluorescence annotation for marker-based cell typing. Both must appear in at least one `-stub`
+   profile, since a feature kept but never exercised rots silently.
 4. Housekeeping: MIT `LICENSE` with attribution to sopa and mcmicro; `CITATIONS.md` crediting sopa,
    mcmicro and every underlying tool; `CHANGELOG.md`.
 5. Vendor the nf-core community `AGENTS.md` verbatim with source URL, SHA and retrieval date, plus
