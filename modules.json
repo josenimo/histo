@@ -3,6 +3,9 @@
     "homePage": "https://github.com/josenimo/histo",
     "repos": {
         "https://github.com/nf-core/modules.git": {
+            "modules": {
+                "nf-core": {}
+            },
             "subworkflows": {
                 "nf-core": {
                     "utils_nextflow_pipeline": {

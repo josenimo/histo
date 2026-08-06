@@ -13,4 +13,7 @@ samplesheets
 lint_*
 *lint_results*
 *lint_console*
+# scratch files written for the agent to read (lint reports, PR reviews)
+histo_*_review.txt
+histo_*.txt
 .nf-test*
