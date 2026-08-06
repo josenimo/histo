@@ -125,10 +125,25 @@ workflow PREPROCESS_IMAGES {
         // The core's identity comes from its filename, which the patched module
         // writes as {slide}_core001. meta.slide is retained so cores can be
         // grouped back to their slide later.
+        //
+        // The extension strip must handle both `.tif` (Coreograph 2.2.9) and
+        // `.ome.tif` (2.4.6). Matching only /\.tif$/ leaves a trailing ".ome" in
+        // the ID on 2.4.6, which is the version we run, and that ID goes on to
+        // become the sdata directory name and the prefix of every merged element.
         ch_images = COREOGRAPH.out.cores
             .transpose()
             .map { meta, core ->
-                [meta + [id: core.name.replaceFirst(/\.tif$/, ''), slide: meta.id], core]
+                def core_id = core.name.replaceFirst(/(?i)\.(ome\.)?tiff?$/, '')
+                // error(), not assert: an assertion thrown inside a channel
+                // operator closure is swallowed and the run carries on.
+                if (!(core_id ==~ /.+_core\d{3}/)) {
+                    error(
+                        "Core filename ${core.name} does not match the expected {slide}_core000 " +
+                        "pattern. The Coreograph module patch performs that rename; if the patch " +
+                        "was lost during an `nf-core modules update`, this is what it looks like."
+                    )
+                }
+                [meta + [id: core_id, slide: meta.id], core]
             }
     }
     else {
