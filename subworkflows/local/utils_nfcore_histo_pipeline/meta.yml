@@ -1,0 +1,54 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/yaml-schema.json
+name: "utils_nfcore_histo_pipeline"
+description: Initialisation and completion tasks specific to the josenimo/histo pipeline
+keywords:
+  - utility
+  - initialisation
+  - completion
+  - samplesheet
+components: []
+input:
+  - version:
+      type: boolean
+      description: Display the pipeline version and exit
+  - validate_params:
+      type: boolean
+      description: Validate parameters against the schema at runtime
+  - monochrome_logs:
+      type: boolean
+      description: Do not use coloured log output
+  - nextflow_cli_args:
+      type: list
+      description: Positional Nextflow CLI arguments
+  - outdir:
+      type: string
+      description: Output directory where results are saved
+  - input:
+      type: string
+      description: Path to the input samplesheet
+  - email:
+      type: string
+      description: Email address for the completion summary
+  - email_on_fail:
+      type: string
+      description: Email address used only when the pipeline fails
+  - plaintext_email:
+      type: boolean
+      description: Send a plain-text completion email instead of HTML
+output:
+  - samplesheet:
+      type: file
+      description: |
+        Channel of validated samplesheet entries, each a meta map carrying
+        sample, data_dir, sdata_dir and explorer_dir.
+        Structure: [ val(meta) ]
+  - versions:
+      type: file
+      description: |
+        Channel containing software versions.
+        Structure: [ path(versions.yml) ]
+authors:
+  - "@quentinblampey"
+  - "@josenimo"
+maintainers:
+  - "@josenimo"

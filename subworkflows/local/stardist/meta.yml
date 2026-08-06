@@ -1,0 +1,34 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/nf-core/modules/master/subworkflows/yaml-schema.json
+name: "stardist"
+description: Segment nuclei with StarDist, one task per image patch, then resolve boundaries across patch borders
+keywords:
+  - segmentation
+  - stardist
+  - nuclei
+  - imaging
+components:
+  - patch_segmentation_stardist
+  - resolve_stardist
+input:
+  - ch_patches:
+      type: file
+      description: |
+        Channel containing a SpatialData Zarr store and its image patches file.
+        Structure: [ val(meta), path(sdata_path), path(patches_file_image) ]
+output:
+  - ch_resolved:
+      type: file
+      description: |
+        Channel containing the SpatialData Zarr store with resolved nucleus boundaries
+        written to the stardist_boundaries shapes element.
+        Structure: [ val(meta), path(sdata_path) ]
+  - ch_versions:
+      type: file
+      description: |
+        Channel containing software versions.
+        Structure: [ path(versions.yml) ]
+authors:
+  - "@quentinblampey"
+  - "@josenimo"
+maintainers:
+  - "@josenimo"
