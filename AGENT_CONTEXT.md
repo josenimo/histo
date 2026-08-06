@@ -28,7 +28,7 @@ The pipeline must run **unattended on datasets from colleagues**, not just my ow
 Speed and elegance are secondary to the three above. Prefer boring, explicit, inspectable
 solutions over clever ones.
 
-**Scope note:** this is a **private, personal pipeline**. It is *not* an nf-core pipeline and
+**Scope note:** this is a **private, personal pipeline**. It is _not_ an nf-core pipeline and
 must not be branded as one. However, I want to follow every nf-core community guideline, because
 (a) the conventions genuinely help with the priorities above, and (b) I may eventually contribute
 modules or a pipeline upstream. Do not foreclose that option.
@@ -39,10 +39,10 @@ modules or a pipeline upstream. Do not foreclose that option.
 
 The pipeline combines two existing projects:
 
-| Source | What I take from it |
-|---|---|
+| Source              | What I take from it                                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | **nf-core/mcmicro** | Preprocessing: illumination correction, stitching & registration, background subtraction, TMA dearray (`coreograph`) |
-| **nf-core/sopa** | Everything from segmentation onward: SpatialData object, tiled segmentation, aggregation, QC |
+| **nf-core/sopa**    | Everything from segmentation onward: SpatialData object, tiled segmentation, aggregation, QC                         |
 
 **Step requirements:**
 
@@ -234,7 +234,7 @@ modules is ceremony.
 This is not a traditional file-in, file-out pipeline, and the nf-core stub convention assumes one.
 
 **Consequences to keep in mind, beyond testing:** Nextflow stages inputs as symlinks, so a process
-writing into `sdata_path` writes into the *previous* task's work directory. Tasks share mutable state
+writing into `sdata_path` writes into the _previous_ task's work directory. Tasks share mutable state
 and the DAG is not a pure dataflow graph. Expect this to matter for `-resume` correctness and for
 parallel safety; check `stageInMode` when something behaves oddly.
 
@@ -283,7 +283,7 @@ substitute for cluster testing; possibly useful for iterating on conversion and 
 Why this was wrong: it assumed every module produces new output files, so a stub would meaningfully
 fake something. It also assumed no faster loop existed, when sopa's `toy_dataset` profile runs the
 real code on synthetic data in minutes. The Mac constraint is real, but it makes `-stub` the only
-*local* loop, not the primary one overall.
+_local_ loop, not the primary one overall.
 
 </details>
 
@@ -363,7 +363,7 @@ against current documentation before building on any of these:
   accepting changes I did not understand.
 - **Small, single-concern commits with clear messages.** The git history is a primary deliverable,
   not a byproduct.
-- Explain *why*, not just *what*. If there is a simpler and a cleverer option, default to simpler.
+- Explain _why_, not just _what_. If there is a simpler and a cleverer option, default to simpler.
 - **Flag uncertainty explicitly** rather than guessing at API details, module names, or flags.
 - Nextflow/nf-core is not my native domain — I am a bioimage analyst. Do not assume familiarity with
   Groovy idioms or DSL2 subtleties; explain them briefly when they matter.

@@ -476,6 +476,9 @@
         "coreograph_args": {
             "type": "string",
             "default": "--downsampleFactor 5 --channel 0 --buffer 2"
+        },
+        "require_channel_names": {
+            "type": "boolean"
         }
     }
 }
