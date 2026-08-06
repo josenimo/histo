@@ -265,16 +265,10 @@ def validateParams(params) {
         error("You use a deprecated Sopa params format. We flattened all parameters to conform to the future nextflow 26.04 strict syntax check.\nSee the nf-core/sopa docs for more details on the new syntax usage: https://nf-co.re/sopa/docs/usage/.")
     }
 
-    def TRANSCRIPT_BASED_METHODS = ['use_proseg', 'use_baysor', 'use_comseg']
     def STAINING_BASED_METHODS = ['use_stardist', 'use_cellpose']
-    def NON_VALID_STARDIST_METHODS = ['use_baysor', 'use_comseg']
 
     // check segmentation methods
-    assert TRANSCRIPT_BASED_METHODS.count { params[it] } <= 1 : "Only one of ${TRANSCRIPT_BASED_METHODS} may be used"
     assert STAINING_BASED_METHODS.count { params[it] } <= 1 : "Only one of ${STAINING_BASED_METHODS} may be used"
-    if (params.use_stardist) {
-        assert NON_VALID_STARDIST_METHODS.every { !params[it] } : "'stardist' cannot be combined with transcript-based methods, except proseg."
-    }
 
     return params
 }

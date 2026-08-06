@@ -9,7 +9,6 @@ include { methodsDescriptionText  } from '../subworkflows/local/utils_nfcore_his
 
 include { TO_SPATIALDATA          } from '../modules/local/to_spatialdata'
 include { MAKE_IMAGE_PATCHES      } from '../modules/local/make_image_patches'
-include { MAKE_TRANSCRIPT_PATCHES } from '../modules/local/make_transcript_patches'
 include { TISSUE_SEGMENTATION     } from '../modules/local/tissue_segmentation'
 include { AGGREGATE               } from '../modules/local/aggregate'
 include { EXPLORER                } from '../modules/local/explorer'
@@ -21,9 +20,6 @@ include { SPACERANGER             } from '../subworkflows/local/spaceranger'
 include { INPUT_CHECK             } from '../subworkflows/local/input_check'
 include { CELLPOSE                } from '../subworkflows/local/cellpose'
 include { STARDIST                } from '../subworkflows/local/stardist'
-include { PROSEG                  } from '../subworkflows/local/proseg'
-include { COMSEG                  } from '../subworkflows/local/comseg'
-include { BAYSOR                  } from '../subworkflows/local/baysor'
 
 
 include { argsCLI        } from '../modules/local/utils'
@@ -78,38 +74,6 @@ workflow HISTO {
     if (params.use_stardist) {
         ch_image_patches = MAKE_IMAGE_PATCHES(ch_tissue_seg, argsCLI("image_patches"))
         (ch_resolved, versions) = STARDIST(ch_image_patches)
-
-        ch_versions = ch_versions.mix(versions)
-    }
-
-    if (params.use_baysor) {
-        ch_input_baysor = params.use_cellpose ? ch_resolved : ch_tissue_seg
-
-        ch_transcripts_patches = MAKE_TRANSCRIPT_PATCHES(ch_input_baysor, argsCLI("transcript_patches"))
-        (ch_resolved, versions) = BAYSOR(ch_transcripts_patches)
-
-        ch_versions = ch_versions.mix(versions)
-    }
-
-    if (params.use_comseg) {
-        ch_input_comseg = params.use_cellpose ? ch_resolved : ch_tissue_seg
-
-        ch_transcripts_patches = MAKE_TRANSCRIPT_PATCHES(ch_input_comseg, argsCLI("transcript_patches") + " --write-cells-centroids")
-        (ch_resolved, versions) = COMSEG(ch_transcripts_patches)
-
-        ch_versions = ch_versions.mix(versions)
-    }
-
-    if (params.use_proseg) {
-        if (params.technology == "visium_hd") {
-            ch_resolved = params.use_stardist ? ch_resolved : ch_tissue_seg
-            ch_input_proseg = ch_resolved.map { meta, sdata_path -> [meta, sdata_path, []] }
-        } else {
-            ch_proseg_patches = params.use_cellpose ? ch_resolved : ch_tissue_seg
-            ch_input_proseg = MAKE_TRANSCRIPT_PATCHES(ch_proseg_patches, argsCLI("transcript_patches"))
-        }
-
-        (ch_resolved, versions) = PROSEG(ch_input_proseg)
 
         ch_versions = ch_versions.mix(versions)
     }
