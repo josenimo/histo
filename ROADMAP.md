@@ -783,6 +783,62 @@ Carried forward: what was deferred out of this phase, and to where.
 
 ### Entries
 
+### Phase 2: Preprocessing half (closed 2026-08-06)
+
+Commits: `b43231a`..`6058023`, 19 commits, 60 files.
+
+Built: the two halves now meet. A cycle samplesheet goes in; illumination correction runs per cycle,
+cycles are grouped and stitched, optionally background-subtracted, optionally dearrayed into cores,
+and the result enters the downstream half. Every channel connection is proven by stub runs, including
+the TMA fan-out where one slide becomes N independent samples.
+
+Lint at close: **0 failed, 4 warnings**, unchanged from Phase 1. `prek` passes on all 18 hooks.
+
+Deviated:
+
+- Stubs were written for all eleven inherited modules after all, but for a different reason than
+  planned. See §7.
+- `backsub`'s planned patch was unnecessary; the nf-core module had already moved to v0.5.1.
+- Coreograph's patch grew beyond a container bump into output renaming, because core identity turned
+  out to be load-bearing for sopa element names.
+- The Phase 0 Coreograph diagnosis finally happened here, and resolved two Phase 3 items with a
+  one-line container change.
+
+Learned, each of which changes something later:
+
+- **`nf-core subworkflows update` changes more than the code.** `utils_nfschema_plugin` gained an
+  input, which broke the caller at compile time and was caught immediately; it also required
+  nf-schema 2.7.2 while `nextflow.config` pinned 2.5.1, which was silent and made every numeric CLI
+  parameter fail validation. After any update, check the component's `tests/nextflow.config` for
+  declared plugin versions.
+- **Validation must be synchronous.** An `assert` inside a channel operator is swallowed and the run
+  dies with no message. `validateIlluminationColumns` works because it is called on a plain list;
+  `validateMarkersheet` did not until it was moved out of a `.map{}`. **A validation rule is not done
+  until you have watched it fail.**
+- **Adding an output changes a module's arity** and silently breaks every caller that unpacks
+  positionally. Adding `versions.yml` to eight modules broke the whole DAG; the stub run caught it in
+  seconds and nothing else would have.
+- **Stub failures can describe themselves badly.** backsub reported "missing output file" when the
+  file plainly existed; the real cause was a name collision with its input. When a stub failure looks
+  impossible, read what the module's real `script:` block guards against.
+- **Patch against the tool, not against the stub.** The Coreograph rename was written against 2.2.9's
+  stub and would have renamed nothing on 2.4.6, which changed `1.tif` to `1.ome.tif`. It is now
+  extension-agnostic and verified against both.
+- **`eval()` in an output declaration runs even under `-stub`**, so a stub run needs the tool on PATH.
+  Worked around with shims in `tests/stub_bin`.
+- **Every commit should be independently valid.** Four commits referenced `ch_markersheet` without
+  emitting it, because the emit sat uncommitted on disk while `nextflow run` kept passing. Running the
+  tree tests the working directory, not the history.
+
+Carried forward:
+
+- `MERGE_SPATIALDATA` to Phase 3, written from scratch. It exists only on `legacy` and sopa has no
+  equivalent, so this is the genuinely novel piece.
+- Channel names, narrowed to a single experiment: does Ashlar write marker names into its OME-XML?
+  `local/inspect-ome.py` answers it.
+- Marker sheet as a samplesheet column, and `groupKey` for the cycle regroup: both in §7b.
+- The template bump 4.0.3 to 4.1.0, still outstanding from Phase 1.
+
 ### Phase 1: Scaffold (closed 2026-08-06)
 
 Commits: `33e0863`..`c64f520`, plus `6506dda` on TEMPLATE and `1a9277c` on dev.
