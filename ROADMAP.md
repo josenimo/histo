@@ -824,7 +824,12 @@ and `MERGE_SPATIALDATA` combines the finished stores into one object per slide, 
 element so peak memory is one core rather than all of them. `EXPLORER` was also removed from the
 pipeline entirely.
 
-Lint at close: **to be recorded.**
+Lint at close: **242 passed, 33 ignored, 13 warnings, 0 failed.** Warnings rose from 4, and all of the
+increase was one class: eight preprocessing parameters added in Phase 2 sat at the top level of
+`nextflow_schema.json` instead of inside a group, and had no descriptions at all. Grouped and
+documented at the start of Phase 5, which should leave three known warnings — the removed nf-core
+README badge, the deliberate flat `modules/local/utils.nf`, and the deferred 4.0.3 → 4.1.0 template
+bump.
 
 Deviated:
 
@@ -844,7 +849,7 @@ Learned, each of which changes something later:
 - **A stub run cannot detect an incomplete commit.** Nextflow reads the working tree; git records
   something else. Both diverged here and every run still passed. `.gitignore` contained a bare
   `local/`, which git matches at any depth, so `modules/local/` was ignored. Existing modules stayed
-  tracked and nothing looked wrong until a *new* module was added there and silently omitted from its
+  tracked and nothing looked wrong until a _new_ module was added there and silently omitted from its
   own commit, leaving HEAD with an `include` pointing at nothing. Compounding it, `git add` is
   all-or-nothing: one ignored path in the argument list staged none of the others, which is how a
   second commit lost its bulk. **The end-of-phase check must include a clone**, not just a stub run:

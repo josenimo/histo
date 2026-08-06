@@ -84,9 +84,7 @@ def retarget_table(table, rename_map: dict[str, str], core: str):
 
     region_key = attrs.get("region_key")
     if region_key and region_key in table.obs:
-        table.obs[region_key] = pd.Categorical(
-            [rename_map[str(v)] for v in table.obs[region_key]]
-        )
+        table.obs[region_key] = pd.Categorical([rename_map[str(v)] for v in table.obs[region_key]])
 
     return table
 
@@ -119,7 +117,10 @@ def merge(output_zarr: Path, input_zarrs: list[Path]) -> dict:
 
     manifest: dict[str, dict] = {}
 
-    for zarr_path, core in zip(input_zarrs, core_ids):
+    # strict=True: core_ids is derived from input_zarrs, so a length mismatch is
+    # impossible unless someone breaks that invariant. Cheap to assert, and a
+    # silent truncation here would drop cores from the merge.
+    for zarr_path, core in zip(input_zarrs, core_ids, strict=True):
         print(f"[merge] reading {core}", flush=True)
         # No try/except. If a core is unreadable the run must stop.
         sdata = sd.read_zarr(zarr_path)
