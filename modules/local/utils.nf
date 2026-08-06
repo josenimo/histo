@@ -110,15 +110,37 @@ def extractSubArgs(Map args, String group) {
     }
 }
 
-def getChannels(String channels, Boolean allow_null = false) {
-    if (channels instanceof String) {
-        return channels.split(/[ ,|]+/).findAll { it }
-    } else {
-        if (allow_null && channels == null) {
+//
+// Channel names arrive as a string, but may legitimately be a number.
+//
+// The schema declares these parameters as ["string", "integer"], on nf-schema's own
+// recommendation for identifier-like fields: a value of `0` is inferred as an integer
+// somewhere between the params file and validation, and fails a plain "string" schema
+// with `Value is [integer] but should be [string]` before the pipeline even starts.
+//
+// This bites here specifically because channel names are currently integers. Ashlar
+// does not write marker names into the OME-XML, so sopa falls back to naming channels
+// 0..N and the only way to address one is by number. Once ROADMAP section 6 lands and
+// real marker names reach the zarr, the integer case becomes vestigial rather than the
+// normal one, but numeric channel names remain legal so this stays.
+//
+// The parameter is deliberately untyped. Declaring it `String` made Groovy coerce
+// silently, which hid what was happening.
+//
+def getChannels(channels, Boolean allow_null = false) {
+    if (channels == null) {
+        if (allow_null) {
             return null
         }
-        exit 1, "The channels parameter must be a string of channel names separated by space, comma or pipe characters."
+        exit 1, "The channels parameter is required but was not set."
     }
+
+    if (!(channels instanceof CharSequence) && !(channels instanceof Number)) {
+        exit 1, "The channels parameter must be channel names separated by space, comma or " +
+            "pipe characters, or a single channel number. Got a ${channels.getClass().simpleName}: ${channels}"
+    }
+
+    return channels.toString().split(/[ ,|]+/).findAll { it }
 }
 
 def argsCLI(String group = null, Map args = null) {

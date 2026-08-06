@@ -358,8 +358,8 @@
                     "description": "Cellpose `diameter` parameter"
                 },
                 "cellpose_channels": {
-                    "type": "string",
-                    "description": "Channel name(s) to use for cellpose segmentation. If multiple, separate by space, comma or pipe characters."
+                    "type": ["string", "integer"],
+                    "description": "Channel name(s) to use for cellpose segmentation. If multiple, separate by space, comma or pipe characters. May be given as a number when channel names are integers, which is currently the case because marker names are not yet written into the OME-XML."
                 },
                 "flow_threshold": {
                     "type": "number",
@@ -411,8 +411,8 @@
                     "description": "Stardist `nms_thresh` parameter"
                 },
                 "stardist_channels": {
-                    "type": "string",
-                    "description": "Optional channel name(s) to use for stardist segmentation. If multiple, separate by space, comma or pipe characters."
+                    "type": ["string", "integer"],
+                    "description": "Optional channel name(s) to use for stardist segmentation. If multiple, separate by space, comma or pipe characters. May be given as a number when channel names are integers, which is currently the case because marker names are not yet written into the OME-XML."
                 },
                 "stardist_kwargs": {
                     "type": "string",
