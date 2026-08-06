@@ -791,6 +791,114 @@ prompt injection. Revisit if batching becomes a real cost, not before.
 
 ---
 
+## 13. After the first real run — plan, options, risks
+
+Written 2026-08-06, immediately after exemplar001 completed end to end on max-login. Everything here
+is grounded in that run's output rather than prediction.
+
+### What the first run established
+
+- **The pipeline works.** 9,855 cells, 12 channels, five-level pyramid, complete version provenance
+  across all eight processes. ~7 minutes of compute for a 318 MB input.
+- **`size_tiny` is measured**, and is the only tier that is. The other three remain estimates.
+- **Two metadata defects are now demonstrated, not predicted**, with exact repair targets.
+
+### Priority 1: channel names (§6), now fully specified
+
+The expression matrix columns are literally `Channel:0:0` … `Channel:0:11`, confirmed by decompressing
+the table's variable index. The quantification is correct and uninterpretable at the same time.
+
+Exact target: the stitched OME-TIFF has twelve `Channel` elements that already carry `id` attributes
+and lack `Name`. `ImageDescription` is present, so `tiffcomment -set` will work. Nothing needs
+creating; twelve attributes need adding.
+
+Options, best first:
+
+1. **`tiffcomment -set` after Ashlar, as a new local module.** Repairs at the producing step, no
+   post-hoc Python, and `bftools 8.0.0` is already in the Singularity cache. Marker names come from
+   `BACKSUB.out.markerout` when backsub ran and the input marker sheet otherwise (§7b) — backsub can
+   drop channels, so the input sheet is wrong in that case.
+2. Rename inside the Zarr after conversion. Touches `var/_index` and the image `c` coordinate. Avoids
+   rewriting a large TIFF, but leaves the OME-TIFF wrong for anyone reading it directly, and there are
+   two places to keep in step instead of one.
+3. Upstream change to Ashlar so it accepts a marker sheet. Correct, far too slow to depend on.
+
+Risks and mitigations:
+
+- **Editing OME-XML by string substitution can produce invalid XML that still parses.** Mitigate by
+  parsing rather than regexing, and by asserting after injection that the channel count still matches
+  the marker sheet and every `Name` is non-empty.
+- **Rewriting the TIFF risks the pyramid or pixel size.** `tiffcomment -set` edits only the header, but
+  verify with `scratch/inspect-ome.py` before and after on the same file.
+- **Off-by-one between `channel_number` and channel index.** `channel_number` is 1-based, OME channels
+  are 0-based. `validateMarkersheet` already enforces 1..N without gaps, which is what makes the
+  mapping safe; keep that assertion load-bearing and say so in the module.
+
+**Do first, separately and cheaply: fix the detection guard.** `TO_SPATIALDATA` greps sopa's log for
+`"Channel names couldn't be read"`, which never fired, because sopa did read names — they were just
+IDs. The guard tests a log message that only correlates with the property we care about. Replace it
+with a check on the names themselves: reject `Channel:\d+:\d+` and bare integers. Until that is done,
+`require_channel_names = true` gives false confidence rather than protection.
+
+### Priority 2: pixel size into the Zarr (§8), now unambiguous
+
+Observed: the `s0` multiscale transform is `scale: [1.0, 1.0, 1.0]`. No physical scale anywhere, as
+predicted. Removing EXPLORER already eliminated option 1, so the decision is made by elimination.
+
+Method is known and cheap: `SpatialData.write_transformations()` rewrites only transformation metadata
+on an existing store, seconds rather than a rewrite.
+
+- **The trap: add a new coordinate system, do not redefine `global`.** `patch_width_pixel` and
+  `min_area_pixels2` are pixel-denominated. If `global` becomes microns, `patch_width_pixel = 5000`
+  silently means 5000 µm and nothing errors.
+- Source the value from the OME-XML, not a parameter. Ashlar preserves `PhysicalSizeX` (0.65 µm
+  measured), so it is available. Fail loudly when absent rather than defaulting.
+- Both this and priority 1 need the same OME-XML extraction. Build it once.
+
+### Priority 3: the untested surfaces, in risk order
+
+1. **Tiled segmentation across patch boundaries has never run.** exemplar001 produced exactly one
+   patch, so boundary resolution — the part of sopa that makes tiling correct rather than merely
+   parallel — is entirely unexercised. This is the most likely place a real bug is hiding.
+   _Mitigation, and it is cheap:_ re-run exemplar001 with `patch_width_pixel: 1500` for four patches
+   and compare the cell count against 9,855. Agreement within a few percent means resolution works;
+   a large discrepancy means cells are being double-counted or dropped at seams.
+2. **`MERGE_SPATIALDATA` has never executed outside `-stub`.** Predicted failure points: element name
+   collisions, table `region` retargeting, and `write_element` overwrite semantics on a store that
+   already holds an element of that name. _Mitigation:_ run exemplar002 with `use_tma_dearray`, and
+   take the peak-RSS measurement carried forward from Phase 3 in the same run.
+3. **COREOGRAPH on a real TMA plus the merge is the largest untested area.** Both at once, so failures
+   will be hard to attribute. _Mitigation:_ keep `-resume` and inspect the cores as files before
+   trusting the merged object.
+
+### Priority 4: known smaller defects
+
+- **`REPORT` and `FLUO_ANNOTATION` are missing from `size_small`, `size_medium` and `size_huge`.** The
+  header of `conf/sizes.config` lists them as cell-count steps and no tier overrides them, so they
+  inherit `process_medium` — a one-minute REPORT requested 36 GB in the measured run. Present in
+  `size_tiny` only.
+- **`PATCH_SEGMENTATION_CELLPOSE` used 133% CPU against a 1-CPU request.** It is `process_single` and
+  wants at least two. Belongs in `base.config` rather than the size tiers, since its cost follows
+  `patch_width_pixel` rather than image size.
+- **`obs/slide` appears on a non-TMA run** and is unexplained. sopa has no knowledge of Nextflow `meta`,
+  so it is either a sopa default or something aggregation invents. Understand it before
+  `MERGE_SPATIALDATA` starts writing a `slide` key of its own into the same table.
+- **nf-schema infers types on identifier-like fields regardless of quoting.** It cost two cluster round
+  trips on `cellpose_channels`. Any other string parameter that could receive a numeric-looking value
+  has the same exposure; the fix is `["string", "integer"]` plus a cast, not quoting.
+
+### Sequencing
+
+Priorities 1 and 2 share the OME-XML extraction step, so build them together as one piece of work,
+with the guard fix landing first and separately because it is small and independently valuable. The
+four-patch re-run is worth doing before either, since it costs minutes and would invalidate
+assumptions if it fails.
+
+Phase 6 becomes much easier after all of this: fixtures can be cut from output that is known good, and
+`9,855 cells` is a real regression baseline rather than a snapshot of whatever happened to run.
+
+---
+
 ## 12. Phase log
 
 One entry per phase, written when the phase closes. Not per task; the issues track tasks.
