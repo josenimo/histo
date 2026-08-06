@@ -83,6 +83,7 @@ workflow PIPELINE_INITIALISATION {
         before_text,
         after_text,
         command,
+        null, // cli_typecast: null uses the plugin's default behaviour
     )
 
     //
