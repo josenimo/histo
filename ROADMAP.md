@@ -314,14 +314,24 @@ Branch: `feat/preprocess-images`.
    are the integer fallback. sopa only logs a warning, which is not acceptable for unattended runs on
    colleagues' data. This is the cheap guard; actually fixing the names is bookmarked in §6.
 7. `nf-core pipelines schema build`. Never hand-edit `nextflow_schema.json`.
-8. **Write `stub:` blocks for the eleven modules inherited from sopa**, deferred out of Phase 1. Each
-   must `touch` or `mkdir` exactly what the module's `output:` block declares, or the stub passes
-   while the real run fails. Add version capture to the seven modules lacking it: `aggregate`,
-   `explorer`, `make_image_patches`, `patch_segmentation_cellpose`, `patch_segmentation_stardist`,
-   `report`, `tissue_segmentation`.
-9. **Activate the pre-commit config from `planning/`**, which is only possible once the stubs exist,
-   since `module-has-stub` would otherwise fail on every module.
-10. Stub blocks for any new module, in the same commit as the module.
+8. **Add version capture to the seven modules lacking it**: `aggregate`, `explorer`,
+   `make_image_patches`, `patch_segmentation_cellpose`, `patch_segmentation_stardist`, `report`,
+   `tissue_segmentation`. Provenance is priority one and the pipeline currently records almost none.
+9. **Stub blocks where a module creates a file.** Revised 2026-08-06; see `AGENT_CONTEXT.md` §7.
+
+   The reasoning changed even though the outcome barely did, and the reasoning is the point. The
+   original rule was "every local module needs a stub", which assumed every module produces output
+   files. Five of sopa's eleven mutate the zarr in place and produce nothing new, so that rule was
+   wrong. But `versions.yml` counts as a created file, and item 8 gives all eleven one, so all eleven
+   end up needing a stub after all. For the pass-through modules it is three lines.
+
+   Each stub must create exactly what the `output:` block declares. A stale stub that passes while the
+   real run fails is worse than no stub.
+10. **The `module-has-stub` pre-commit hook has been corrected** to key on "declares a created file"
+    rather than "is a module". Verified against all eleven: it exempts only `aggregate` and
+    `tissue_segmentation`, and will stop exempting them once item 8 adds their versions block, which
+    is the behaviour we want.
+11. **Activate the pre-commit config from `planning/`** once items 8 and 9 are done.
 
 Exit criterion: `-stub` passes with `use_backsub = false`, `use_tma_dearray = false`. Handoff boundary
 is a single stitched OME-TIFF. Note that until the §6 bookmark is picked up, channel names will be

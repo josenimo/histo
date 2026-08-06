@@ -139,16 +139,26 @@ repos:
           echo "  ^ eager image read in $f; use dask or tifffile aszarr" >&2;
           fail=1; fi; done; exit $fail' --
 
-      # -stub is the primary feedback loop, and the only local test loop given
-      # amd64-only containers on an M3 Mac. A module without a stub is a hole in it.
+      # Revised 2026-08-06. Originally required a stub in every local module. That
+      # encoded a rule that turned out to be wrong: five of sopa's eleven modules
+      # mutate the SpatialData zarr in place and declare their input as their
+      # output, so an empty stub would be pure ceremony. See AGENT_CONTEXT.md §7.
+      #
+      # Now requires a stub only where the module declares an output path that is
+      # not also an input path, i.e. where it genuinely creates a file. Uses
+      # `path "..."` and `path("...")` with a quoted literal as the signal for a
+      # new file, since pass-through outputs are written as bare `path(var)`.
       - id: module-has-stub
-        name: every local module has a stub block
+        name: local modules that create files must have a stub block
         language: system
         files: '^modules/local/.*/main\.nf$'
         entry: >-
           bash -c 'fail=0; for f in "$@"; do
+          creates=$(awk "/^[[:space:]]*output:/{o=1;next} /^[[:space:]]*(script|shell|exec|stub|when):/{o=0} o" "$f"
+          | grep -cE "path[[:space:]]*\(?[\"]"); [ "${creates:-0}" -eq 0 ] && continue;
           grep -qE "^[[:space:]]*stub:" "$f" ||
-          { echo "$f: no stub: block" >&2; fail=1; }; done; exit $fail' --
+          { echo "$f: declares $creates new output file(s) but has no stub: block" >&2; fail=1; };
+          done; exit $fail' --
 
       # Caught: zero of twelve processes emitted versions.yml, so the pipeline had
       # no provenance record at all.
