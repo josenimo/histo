@@ -14,14 +14,11 @@ include { AGGREGATE               } from '../modules/local/aggregate'
 include { EXPLORER                } from '../modules/local/explorer'
 include { REPORT                  } from '../modules/local/report'
 include { FLUO_ANNOTATION         } from '../modules/local/fluo_annotation'
-include { SPACERANGER             } from '../subworkflows/local/spaceranger'
-include { INPUT_CHECK             } from '../subworkflows/local/input_check'
 include { CELLPOSE                } from '../subworkflows/local/cellpose'
 include { STARDIST                } from '../subworkflows/local/stardist'
 
 
 include { argsCLI        } from '../modules/local/utils'
-include { extractOutsDir } from '../modules/local/utils'
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     RUN MAIN WORKFLOW
@@ -37,17 +34,7 @@ workflow HISTO {
 
     def ch_versions = channel.empty()
 
-    if (params.technology == "visium_hd") {
-        INPUT_CHECK(ch_samplesheet)
-        (ch_input_spatialdata, versions) = SPACERANGER(INPUT_CHECK.out.ch_spaceranger_input, INPUT_CHECK.out.ch_versions)
-
-        ch_input_spatialdata = ch_input_spatialdata.map { meta, out -> [meta, extractOutsDir(out[0]), meta.image] }
-
-        ch_versions = ch_versions.mix(versions)
-    }
-    else {
-        ch_input_spatialdata = ch_samplesheet.map { meta -> [meta, meta.data_dir, []] }
-    }
+    ch_input_spatialdata = ch_samplesheet.map { meta -> [meta, meta.data_dir, []] }
 
     (ch_spatialdata, versions) = TO_SPATIALDATA(ch_input_spatialdata)
     ch_versions = ch_versions.mix(versions)

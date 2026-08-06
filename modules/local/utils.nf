@@ -121,27 +121,12 @@ def argsCLI(String group = null, Map args = null) {
         .join(" ")
 }
 
-def extractOutsDir(file) {
-    if (file.name == 'outs') {
-        return file
-    }
-    return extractOutsDir(file.parent)
-}
 
 def argsToSpatialData(Map meta, String fullres_image_file) {
     def args = [
         technology: params.technology,
         kwargs: [:],
     ]
-
-    if (params.visium_hd_imread_page != null) {
-        args.kwargs['imread_kwargs'] = ["page": params.visium_hd_imread_page]
-    }
-
-    if (params.technology == "visium_hd") {
-        args.kwargs["dataset_id"] = meta.id
-        args.kwargs["fullres_image_file"] = fullres_image_file
-    }
 
     return argsCLI(null, args)
 }

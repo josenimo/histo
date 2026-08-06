@@ -100,33 +100,16 @@ workflow PIPELINE_INITIALISATION {
     Channel
         .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
         .map { meta, data_path ->
-            if (!meta.fastq_dir) {
-                if (!data_path) {
-                    error("The `data_path` must be provided (path to the raw inputs), except when running on Visium HD data (in that case, the `fastq_dir` is required)")
-                }
-
-                if (!meta.sample) {
-                    meta.sample = file(data_path).baseName
-                }
-
-                meta.data_dir = data_path
+            if (!data_path) {
+                error("The `data_path` column must be provided (path to the raw inputs)")
             }
-            else {
-                // spaceranger output directory
-                meta.data_dir = "outs"
 
-                if (!meta.sample) {
-                    error("The `sample` column must be provided when running on Visium HD data")
-                }
-
-                if (!meta.id) {
-                    meta.id = meta.sample
-                }
-
-                if (!meta.image) {
-                    error("The `image` column (full resolution image) must be provided when running Sopa on Visium HD data - it is required for the cell segmentation")
-                }
+            if (!meta.sample) {
+                meta.sample = file(data_path).baseName
             }
+
+            meta.data_dir = data_path
+
             meta.sdata_dir = "${meta.sample}.zarr"
             meta.explorer_dir = "${meta.sample}.explorer"
 
