@@ -207,32 +207,85 @@ rather than relying on a free tier for a pipeline colleagues will run for years.
 
 ## 7. Testing
 
+> **Amended 2026-08-06.** This section originally called `-stub` the primary feedback loop and
+> required stub blocks for every `modules/local/` module. That was written before we understood how
+> sopa's modules behave. Superseded reasoning is kept below the line so the change is auditable.
+
 **Layered, cheapest first:**
 
 1. `singularity exec image.sif <tool> --version` — proves the image runs and is the expected version.
    Most container problems surface here, in seconds.
 2. `nf-core modules test <name>` — nf-test, using the module's own snapshots.
-3. **Pipeline `-stub` run** — see below.
-4. Tiny real data on the cluster.
-5. `test_full` before tagging.
+3. **Pipeline `-stub` run** — a channel-topology check, not a correctness check. See below.
+4. **`-profile test` with `technology = toy_dataset`** — the real fast loop. Synthetic SpatialData is
+   generated in-process, so it needs no input data and runs in minutes with real code and real
+   containers. This is what sopa themselves use, and it is why sopa ships no stub blocks.
+5. Tiny real data on the cluster.
+6. `test_full` before tagging.
 
-**`-stub` is the primary fast feedback loop.** With `-stub-run`, Nextflow executes each process's
-`stub:` block instead of the real command — typically `touch`ing empty output files and faking the
-`versions.yml`. The full DAG is still built and every channel resolved, so it catches: cardinality
-mismatches, wrong tuple shapes, missing `meta` keys, optional-step conditionals that leave a channel
-empty and silently drop downstream work, output filenames not matching `output:` declarations,
-`publishDir` paths, and param/schema validation. Seconds, no real data.
+### Why sopa has no stubs, and what that means here
 
-**Two `-stub` specifics that matter here:**
+**Most sopa modules mutate the SpatialData Zarr in place.** Five of eleven declare their input zarr
+as their output and create no new file: `aggregate`, `fluo_annotation`, `tissue_segmentation`,
+`resolve_cellpose`, `resolve_stardist`. Nextflow has already staged the input into the work directory,
+so the output declaration resolves whether or not the stub does anything. A stub block for those
+modules is ceremony.
 
-- Because stub commands are trivial shell, **`-stub` runs are viable on my Mac** even when the
-  amd64 containers underneath are not. This is my one meaningful local test loop. (If the Nextflow
-  version still tries to stage containers in stub mode, combine `-stub` with the `local` executor.)
-- **Stub blocks rot.** If a module's real outputs change and the stub is not updated, `-stub` passes
-  while the real run fails — worse than no test. **Whenever you change a module's outputs, update its
-  stub block in the same commit.** Write stubs for all `modules/local/` modules. Keep `-stub` in CI.
+This is not a traditional file-in, file-out pipeline, and the nf-core stub convention assumes one.
 
-`-stub` proves nothing about tool behaviour, correctness, or resource requirements.
+**Consequences to keep in mind, beyond testing:** Nextflow stages inputs as symlinks, so a process
+writing into `sdata_path` writes into the *previous* task's work directory. Tasks share mutable state
+and the DAG is not a pure dataflow graph. Expect this to matter for `-resume` correctness and for
+parallel safety; check `stageInMode` when something behaves oddly.
+
+### The revised rule
+
+**Write a stub block only where a module declares an output file it actually creates.** For a module
+whose only output is its mutated input, an empty stub adds nothing and creates the illusion of
+coverage.
+
+**In practice this still means nearly every module**, and the reason is worth following: `versions.yml`
+counts as a created file. Provenance matters more than stub minimalism, so every module should emit
+versions, and a module that emits versions needs a stub that writes them. The difference from the
+original blanket rule is not the count but the principle: a stub exists because the module creates
+something, not because it is a module. For pass-through modules that stub is three lines, the versions
+heredoc and nothing else, which is honest about how little it is checking.
+
+`-stub` is worth keeping for what it genuinely catches: cardinality mismatches, wrong tuple shapes,
+missing `meta` keys, optional-step conditionals that silently empty a channel, output filenames not
+matching declarations, and param/schema validation. That is exactly the risk profile of the
+preprocessing half — multi-cycle fan-out, dfp/ffp positional ordering, TMA core fan-out — so stubs
+matter most for modules added from mcmicro, and least for the inherited sopa ones.
+
+**`-stub` proves nothing about tool behaviour, correctness, or resource requirements.** Treat it as a
+compile check for the DAG.
+
+**Stub blocks still rot.** Where a stub exists and the module's outputs change, update it in the same
+commit; a stale stub passing while the real run fails is worse than no stub.
+
+### Local execution on Apple Silicon
+
+sopa ships arm64 conda-locks for 7 of 11 modules. The four without are
+`patch_segmentation_cellpose`, `patch_segmentation_stardist`, `resolve_cellpose` and
+`resolve_stardist` — the segmentation steps, presumably because of PyTorch and TensorFlow. So a
+native arm64 local run is partially possible but excludes the expensive and interesting steps. Not a
+substitute for cluster testing; possibly useful for iterating on conversion and aggregation.
+
+---
+
+<details>
+<summary>Superseded: the original section 7 reasoning</summary>
+
+> **`-stub` is the primary fast feedback loop.** ... Because stub commands are trivial shell, `-stub`
+> runs are viable on my Mac even when the amd64 containers underneath are not. This is my one
+> meaningful local test loop. ... Write stubs for all `modules/local/` modules.
+
+Why this was wrong: it assumed every module produces new output files, so a stub would meaningfully
+fake something. It also assumed no faster loop existed, when sopa's `toy_dataset` profile runs the
+real code on synthetic data in minutes. The Mac constraint is real, but it makes `-stub` the only
+*local* loop, not the primary one overall.
+
+</details>
 
 **Test data:** a `test` profile with a deliberately tiny input (cropped 2-channel tile, 4-core TMA)
 and a `test_full` profile for a real dataset. Test data lives in my own small repo
