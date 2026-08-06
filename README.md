@@ -18,10 +18,10 @@ Processing, segmentation and quantification of H&E and multiplex immunofluoresce
 A Nextflow pipeline for imaging data from human tissue, built to run unattended on datasets from
 colleagues as well as my own. It combines two existing projects:
 
-| Source | What is taken from it |
-| --- | --- |
+| Source                                                | What is taken from it                                                                                   |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
 | [nf-core/mcmicro](https://github.com/nf-core/mcmicro) | Preprocessing: illumination correction, stitching and registration, background subtraction, TMA dearray |
-| [nf-core/sopa](https://github.com/nf-core/sopa) | Everything from segmentation onward: SpatialData object, tiled segmentation, aggregation, reporting |
+| [nf-core/sopa](https://github.com/nf-core/sopa)       | Everything from segmentation onward: SpatialData object, tiled segmentation, aggregation, reporting     |
 
 The handoff between the two halves is a single stitched OME-TIFF.
 

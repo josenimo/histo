@@ -53,6 +53,11 @@ repos:
       - id: detect-private-key
       - id: check-executables-have-shebangs
       - id: check-shebang-scripts-are-executable
+        # main.nf carries `#!/usr/bin/env nextflow` but is not executable, and the
+        # pristine nf-core TEMPLATE ships it the same way (100644). It is run via
+        # `nextflow run`, never invoked directly. chmod +x would diverge from the
+        # template and conflict at every sync, so exclude it instead.
+        exclude: ^main\.nf$
 
   - repo: https://github.com/seqeralabs/nf-lint-pre-commit
     rev: v0.3.0

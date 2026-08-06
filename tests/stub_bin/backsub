@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Shim for -stub runs only. The backsub module declares its version with
+# eval('backsub --version'), which Nextflow evaluates even in stub mode, so the
+# binary must exist on PATH. Never used for real work.
+echo "0.5.1-stub"

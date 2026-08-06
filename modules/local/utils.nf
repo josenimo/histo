@@ -149,4 +149,3 @@ def argsToSpatialData(Map meta, String fullres_image_file) {
 
     return argsCLI(null, args)
 }
-

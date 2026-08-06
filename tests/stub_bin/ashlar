@@ -1,0 +1,5 @@
+#!/usr/bin/env bash
+# Shim for -stub runs only. See tests/stub_bin/backsub. Ashlar's eval pipes
+# through sed, so a missing binary silently yields an empty version rather than
+# failing; this makes that case honest.
+echo "ashlar 1.19.0-stub"

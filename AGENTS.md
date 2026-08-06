@@ -33,16 +33,16 @@ The directory you are working on was created with the nf-core pipeline template.
 ├── main.nf                // core Nextflow script, may need editing if input structure changes
 ├── modules                // Nextflow DSL2 modules
 │   ├── local              // local modules (see "Modules" below)
-|   |   └── mymodule       // each module must be in a separate directory 
+|   |   └── mymodule       // each module must be in a separate directory
 │   └── nf-core            // nf-core modules (see "Modules" below)
 ├── nextflow_schema.json   // JSON schema describing pipeline parameters
 ├── subworkflows           // Nextflow subworkflows (see "Subworkflows" below)
 │   ├── local              // local subworkflows
-|   |   └── myswf          // each subworkflow must be in a separate directory 
+|   |   └── myswf          // each subworkflow must be in a separate directory
 │   └── nf-core            // nf-core subworkflows
 ├── tests                  // nf-test end-to-end tests for the pipeline
 │   └── default.nf.test    // main test script, must exist
-└── workflows              // do not add files 
+└── workflows              // do not add files
     └── {pipeline-name}.nf // Nextflow file containing main pipeline logic
 ```
 
