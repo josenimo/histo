@@ -314,31 +314,6 @@
             },
             "fa_icon": "fas fa-calculator"
         },
-        "scanpy_preprocessing": {
-            "title": "Scanpy preprocessing",
-            "type": "object",
-            "description": "Optional scanpy table preprocessing (log1p, UMAP, leiden clustering) after aggregation/annotation.",
-            "default": "",
-            "properties": {
-                "use_scanpy_preprocessing": {
-                    "type": "boolean",
-                    "description": "Whether to run scanpy preprocessing"
-                },
-                "resolution": {
-                    "type": "number",
-                    "description": "Resolution parameter for the leiden clustering"
-                },
-                "check_counts": {
-                    "type": "boolean",
-                    "description": "Whether to check that adata.X contains counts"
-                },
-                "hvg": {
-                    "type": "boolean",
-                    "description": "Whether to compute highly variable genes before computing the UMAP and clustering"
-                }
-            },
-            "fa_icon": "fas fa-tools"
-        },
         "explorer": {
             "title": "Explorer",
             "type": "object",
@@ -511,9 +486,6 @@
         },
         {
             "$ref": "#/$defs/aggregation"
-        },
-        {
-            "$ref": "#/$defs/scanpy_preprocessing"
         },
         {
             "$ref": "#/$defs/explorer"

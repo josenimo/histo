@@ -86,12 +86,6 @@ def extractSubArgs(Map args, String group) {
             cell_type_key: args.fluorescence_cell_type_key,
             marker_cell_dict: args.marker_cell_dict,
         ]
-    } else if (group == "scanpy_preprocessing") {
-        return [
-            resolution: args.resolution,
-            check_counts: args.check_counts,
-            hvg: args.hvg,
-        ]
     } else if (group == "explorer") {
         return [
             pixel_size: args.pixel_size,
@@ -152,12 +146,3 @@ def argsToSpatialData(Map meta, String fullres_image_file) {
     return argsCLI(null, args)
 }
 
-def argsExplorerRaw(String raw_data_path) {
-    def args = extractSubArgs(params, "explorer")
-
-    if (params.technology == "xenium") {
-        args["raw_data_path"] = raw_data_path
-    }
-
-    return argsCLI(null, args)
-}

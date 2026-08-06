@@ -12,8 +12,6 @@ include { MAKE_IMAGE_PATCHES      } from '../modules/local/make_image_patches'
 include { TISSUE_SEGMENTATION     } from '../modules/local/tissue_segmentation'
 include { AGGREGATE               } from '../modules/local/aggregate'
 include { EXPLORER                } from '../modules/local/explorer'
-include { EXPLORER_RAW            } from '../modules/local/explorer_raw'
-include { SCANPY_PREPROCESS       } from '../modules/local/scanpy_preprocess'
 include { REPORT                  } from '../modules/local/report'
 include { FLUO_ANNOTATION         } from '../modules/local/fluo_annotation'
 include { SPACERANGER             } from '../subworkflows/local/spaceranger'
@@ -54,9 +52,6 @@ workflow HISTO {
     (ch_spatialdata, versions) = TO_SPATIALDATA(ch_input_spatialdata)
     ch_versions = ch_versions.mix(versions)
 
-    ch_explorer_raw = ch_spatialdata.map { meta, sdata_path -> [meta, sdata_path, params.technology == "xenium" ? meta.data_dir : []] }
-    EXPLORER_RAW(ch_explorer_raw)
-
     if (params.use_tissue_segmentation) {
         ch_tissue_seg = TISSUE_SEGMENTATION(ch_spatialdata, argsCLI("tissue_segmentation"))
     }
@@ -88,13 +83,7 @@ workflow HISTO {
         ch_annotated = ch_aggregated
     }
 
-    if (params.use_scanpy_preprocessing) {
-        (ch_preprocessed, versions) = SCANPY_PREPROCESS(ch_annotated, argsCLI("scanpy_preprocessing"))
-        ch_versions = ch_versions.mix(versions)
-    }
-    else {
-        ch_preprocessed = ch_annotated
-    }
+    ch_preprocessed = ch_annotated
 
     EXPLORER(ch_preprocessed, argsCLI("explorer"))
 
