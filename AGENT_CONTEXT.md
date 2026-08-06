@@ -343,7 +343,11 @@ against current documentation before building on any of these:
 - Wave / Seqera Containers config keys, capabilities, free-tier limits, and image retention policy —
   this service has been iterating fast and is the most likely to have moved
 - Whether backsub or other mcmicro tools now ship multi-arch images
-- Whether the current Nextflow version stages containers during `-stub` runs
+- ~~Whether the current Nextflow version stages containers during `-stub` runs~~ **Answered
+  2026-08-06: no.** Nextflow 26.04.6 ran `-profile test -stub` as `executor > local (9)` with no
+  container staging, on macOS arm64, against amd64-only images. `-stub` is therefore a genuine local
+  loop, provided stub blocks do not invoke the tool. Ours write `versions: stub` rather than calling
+  `sopa --version` for exactly this reason.
 - Whether my institution already runs a container registry (Harbor, GitLab, Artifactory) to mirror into
 - The contents of the nf-core community `AGENTS.md`
   (`https://github.com/nf-core/agents/blob/main/resources/pipeline/AGENTS.md`) — this should be
