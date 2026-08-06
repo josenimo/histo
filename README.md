@@ -49,7 +49,7 @@ Downstream, from nf-core/sopa:
 6. Optional tissue segmentation, to skip empty tiles
 7. Tiled cell segmentation with Cellpose, parallelised per tile
 8. Aggregation of channel intensities per cell
-9. QC report and Xenium Explorer export
+9. QC report
 
 ## Usage
 

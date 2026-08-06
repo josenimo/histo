@@ -169,7 +169,7 @@
             "properties": {
                 "technology": {
                     "type": "string",
-                    "description": "Technology used for the spatial data, e.g., 'xenium', 'merscope', ...",
+                    "description": "Reader used to build the SpatialData object. 'ome_tif' for real data, a stitched OME-TIFF from Ashlar; 'toy_dataset' for sopa's synthetic data, used in tests.",
                     "enum": ["ome_tif", "toy_dataset"],
                     "default": "ome_tif"
                 }
@@ -265,30 +265,6 @@
                 }
             },
             "fa_icon": "fas fa-calculator"
-        },
-        "explorer": {
-            "title": "Explorer",
-            "type": "object",
-            "description": "Parameters related to the Xenium Explorer visualization tool",
-            "default": "",
-            "properties": {
-                "pixel_size": {
-                    "type": "number",
-                    "default": 0.2125,
-                    "description": "Number of microns in a pixel. Invalid value can lead to inconsistent scales in the Explorer."
-                },
-                "lazy": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "If `True`, will not load the full images in memory (except if the image memory is below `ram_threshold_gb`)"
-                },
-                "ram_threshold_gb": {
-                    "type": "number",
-                    "description": "Threshold (in gygabytes) from which image can be loaded in memory.",
-                    "default": 4.0
-                }
-            },
-            "fa_icon": "fas fa-tools"
         },
         "image_preprocessing": {
             "title": "Image preprocessing",
@@ -435,9 +411,6 @@
         },
         {
             "$ref": "#/$defs/aggregation"
-        },
-        {
-            "$ref": "#/$defs/explorer"
         },
         {
             "$ref": "#/$defs/image_preprocessing"
