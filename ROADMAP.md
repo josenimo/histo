@@ -424,11 +424,16 @@ element names and `check_qupath_paquo.py` passes against the cores.
 
 Branch: `feat/size-profiles`.
 
-1. `conf/size_small.config`, `conf/size_medium.config`, `conf/size_huge.config`, each with `TODO`
-   markers against every `cpus`, `memory` and `time` value for you to fill from real run data.
-2. Replace `max_memory` and `max_cpus` with `resourceLimits`.
-3. `conf/mdc.config` institutional profile for the SLURM setup.
-4. Review the `errorStrategy` retry on exit codes 137, 140, 7, 125 against nf-core `base.config`.
+1. **Done, restructured.** One `conf/sizes.config` declaring all three profiles, not three files.
+   Three near-identical files would have to be kept in step by hand; one file lets the tiers be read
+   side by side. It is included at the top level of `nextflow.config` rather than from inside the
+   `profiles` block, because it declares its own `profiles` scope and Nextflow merges the two.
+2. **Already done** in Phase 2. No `max_memory` or `max_cpus` survives anywhere.
+3. **Done as `conf/slurm.config`, not `conf/mdc.config`.** Nothing in it is specific to the MDC, so
+   naming it after the scheduler makes it reusable and makes the invocation read properly:
+   `-profile singularity,size_medium,slurm`.
+4. **Already correct.** `base.config` carries nf-core's standard
+   `(130..145) + 104 + (175..177)`, which covers 137 and 140.
 
 ### Phase 5. Containers
 
@@ -814,6 +819,49 @@ Carried forward: what was deferred out of this phase, and to where.
 ```
 
 ### Entries
+
+### Phase 4: Resource profiles (closed 2026-08-06)
+
+Commits: see `feat/size-profiles`.
+
+Built: `conf/sizes.config` with `size_small`, `size_medium` and `size_huge`, and `conf/slurm.config`
+carrying the executor and the cluster's real limits. A run is now
+`-profile singularity,size_medium,slurm`.
+
+Lint at close: **to be recorded.** Config-only changes; no movement expected from 5.
+
+Deviated:
+
+- One `conf/sizes.config` rather than three files, and `conf/slurm.config` rather than
+  `conf/mdc.config`. See §3 Phase 4 for both.
+- Items 2 and 4 turned out to be already done, in Phase 2 and by inheritance respectively.
+
+Learned:
+
+- **Nothing set an executor.** There was no SLURM profile at all, so the default was `local` and every
+  task would have run on the login node. This had been invisible because every run so far was `-stub`
+  on a laptop. Found only by grepping for `executor` while writing the profile.
+- **The four mcmicro modules are all `process_single`**, so ASHLAR, BASICPY, BACKSUB and COREOGRAPH
+  were getting 1 CPU, 6 GB and 4 h from `base.config`. Ashlar stitching a large acquisition under that
+  would have failed, after queueing. Doing this phase before the first real run rather than after was
+  the right call, though it was chosen for a different reason.
+- **Tiled segmentation must not be scaled.** `PATCH_SEGMENTATION_*` is deliberately absent from all
+  three profiles. Its cost is set by `patch_width_pixel`, not slide size; scaling it would mean bigger
+  tasks rather than more of them, discarding the size independence sopa was chosen for.
+- **`resourceLimits` interacts with retry doubling.** `memory * task.attempt` stops growing at the cap.
+  ASHLAR under `size_huge` asks 150 GB, so its retry asks 300 GB and receives 172 GB. Still an
+  increase, but far less than the doubling implies. Two OOMs at the cap mean a fat-node partition is
+  needed, not a third attempt.
+- The MDC `normal` partition allows 7 days, so no `queue` needs setting. `high`, `long` and `gpu`
+  exist at 28, 62 and 14 days if a single task ever outgrows that.
+
+Carried forward:
+
+- Every number in `conf/sizes.config` is an estimate. `trace.fields` was made explicit so that request
+  and reality sit side by side in the trace file; the profiles should be rewritten from real
+  `peak_rss` and `realtime` after the first runs.
+- Singularity bind mounts in `conf/slurm.config` are a commented TODO, unresolved until a real task
+  either finds its input or does not.
 
 ### Phase 5: Containers (closed 2026-08-06)
 
