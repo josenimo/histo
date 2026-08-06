@@ -29,4 +29,13 @@ process RESOLVE_CELLPOSE {
         cellpose: \$(cellpose --version | grep 'cellpose version:' | head -n1 | awk '{print \$3}')
     END_VERSIONS
     """
+
+    stub:
+    """
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: stub
+        cellpose: stub
+    END_VERSIONS
+    """
 }

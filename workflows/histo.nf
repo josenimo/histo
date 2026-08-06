@@ -40,27 +40,31 @@ workflow HISTO {
     ch_versions = ch_versions.mix(versions)
 
     if (params.use_tissue_segmentation) {
-        ch_tissue_seg = TISSUE_SEGMENTATION(ch_spatialdata, argsCLI("tissue_segmentation"))
+        (ch_tissue_seg, versions) = TISSUE_SEGMENTATION(ch_spatialdata, argsCLI("tissue_segmentation"))
+        ch_versions = ch_versions.mix(versions)
     }
     else {
         ch_tissue_seg = ch_spatialdata
     }
 
     if (params.use_cellpose) {
-        ch_image_patches = MAKE_IMAGE_PATCHES(ch_tissue_seg, argsCLI("image_patches"))
-        (ch_resolved, versions) = CELLPOSE(ch_image_patches)
+        (ch_image_patches, versions) = MAKE_IMAGE_PATCHES(ch_tissue_seg, argsCLI("image_patches"))
+        ch_versions = ch_versions.mix(versions)
 
+        (ch_resolved, versions) = CELLPOSE(ch_image_patches)
         ch_versions = ch_versions.mix(versions)
     }
 
     if (params.use_stardist) {
-        ch_image_patches = MAKE_IMAGE_PATCHES(ch_tissue_seg, argsCLI("image_patches"))
-        (ch_resolved, versions) = STARDIST(ch_image_patches)
+        (ch_image_patches, versions) = MAKE_IMAGE_PATCHES(ch_tissue_seg, argsCLI("image_patches"))
+        ch_versions = ch_versions.mix(versions)
 
+        (ch_resolved, versions) = STARDIST(ch_image_patches)
         ch_versions = ch_versions.mix(versions)
     }
 
-    ch_aggregated = AGGREGATE(ch_resolved, argsCLI("aggregate"))
+    (ch_aggregated, versions) = AGGREGATE(ch_resolved, argsCLI("aggregate"))
+    ch_versions = ch_versions.mix(versions)
 
     if (params.use_fluorescence_annotation) {
         (ch_annotated, versions) = FLUO_ANNOTATION(ch_aggregated, argsCLI("fluorescence_annotation"))

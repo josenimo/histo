@@ -13,11 +13,29 @@ process MAKE_IMAGE_PATCHES {
 
     output:
     tuple val(meta), path(sdata_path), path("patches_file_image")
+    path "versions.yml"
 
     script:
     """
     sopa patchify image ${sdata_path} ${cli_arguments}
 
     mv ${sdata_path}/.sopa_cache/patches_file_image patches_file_image
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: \$(sopa --version)
+    END_VERSIONS
+    """
+
+    stub:
+    // patches_file_image holds the patch count, which the segmentation subworkflows
+    // read to fan out. Two exercises the fan-out without being slow.
+    """
+    echo 2 > patches_file_image
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: stub
+    END_VERSIONS
     """
 }

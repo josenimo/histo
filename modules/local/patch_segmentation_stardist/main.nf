@@ -12,11 +12,29 @@ process PATCH_SEGMENTATION_STARDIST {
 
     output:
     tuple val(meta), path(sdata_path), path("${index}.parquet"), val(n_patches)
+    path "versions.yml"
 
     script:
     """
     sopa segmentation stardist ${sdata_path} --patch-index ${index} ${cli_arguments}
 
     mv ${sdata_path}/.sopa_cache/stardist_boundaries/${index}.parquet ${index}.parquet
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: \$(sopa --version)
+        stardist: \$(python -c "import stardist; print(stardist.__version__)" 2> /dev/null)
+    END_VERSIONS
+    """
+
+    stub:
+    """
+    touch ${index}.parquet
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: stub
+        stardist: stub
+    END_VERSIONS
     """
 }

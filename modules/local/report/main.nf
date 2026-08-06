@@ -15,6 +15,7 @@ process REPORT {
     output:
     path sdata_path
     path "${meta.explorer_dir}/analysis_summary.html"
+    path "versions.yml"
 
     script:
     """
@@ -23,5 +24,21 @@ process REPORT {
     sopa report ${sdata_path} ${meta.explorer_dir}/analysis_summary.html
 
     rm -r ${sdata_path}/.sopa_cache || true # clean up cache if existing
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: \$(sopa --version)
+    END_VERSIONS
+    """
+
+    stub:
+    """
+    mkdir -p ${meta.explorer_dir}
+    touch ${meta.explorer_dir}/analysis_summary.html
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: stub
+    END_VERSIONS
     """
 }

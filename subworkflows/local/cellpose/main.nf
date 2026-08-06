@@ -16,7 +16,10 @@ workflow CELLPOSE {
         .flatMap { meta, sdata_path, n_patches -> (0..<n_patches).collect { index -> [meta, sdata_path, cellpose_args, index, n_patches] } }
         .set { ch_cellpose }
 
-    ch_segmented = PATCH_SEGMENTATION_CELLPOSE(ch_cellpose)
+    (ch_patch_segmented, versions) = PATCH_SEGMENTATION_CELLPOSE(ch_cellpose)
+    ch_versions = ch_versions.mix(versions)
+
+    ch_segmented = ch_patch_segmented
         .map { meta, sdata_path, parquet, n_patches -> [groupKey(meta.sdata_dir, n_patches), meta, sdata_path, parquet] }
         .groupTuple().map { _key, metas, sdata_paths, parquets -> [metas[0], sdata_paths[0], parquets] }
 

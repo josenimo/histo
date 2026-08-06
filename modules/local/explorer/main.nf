@@ -19,9 +19,30 @@ process EXPLORER {
     path "${meta.explorer_dir}/cell_feature_matrix.zarr.zip"
     path "${meta.explorer_dir}/adata.h5ad"
     path "${meta.explorer_dir}/cells.zarr.zip"
+    path "versions.yml"
 
     script:
     """
     sopa explorer write ${sdata_path} --output-path ${meta.explorer_dir} ${cli_arguments} --mode "-it"
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: \$(sopa --version)
+    END_VERSIONS
+    """
+
+    stub:
+    """
+    mkdir -p ${meta.explorer_dir}
+    touch ${meta.explorer_dir}/experiment.xenium
+    touch ${meta.explorer_dir}/analysis.zarr.zip
+    touch ${meta.explorer_dir}/cell_feature_matrix.zarr.zip
+    touch ${meta.explorer_dir}/adata.h5ad
+    touch ${meta.explorer_dir}/cells.zarr.zip
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: stub
+    END_VERSIONS
     """
 }

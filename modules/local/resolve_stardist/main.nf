@@ -29,4 +29,13 @@ process RESOLVE_STARDIST {
         stardist: \$(python -c "import stardist; print(stardist.__version__)" 2> /dev/null)
     END_VERSIONS
     """
+
+    stub:
+    """
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: stub
+        stardist: stub
+    END_VERSIONS
+    """
 }
