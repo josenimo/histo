@@ -1,16 +1,52 @@
+# Every exemption below is a deliberate divergence from the nf-core template,
+# grouped by reason. If you add one, say why. An unexplained exemption is
+# indistinguishable from a bug someone silenced.
+
 lint:
   files_exist:
-    - conf/igenomes.config
-    - conf/igenomes_ignored.config
-    - assets/multiqc_config.yml
+    # Template features disabled at creation (see template.skip_features)
     - conf/igenomes.config
     - conf/igenomes_ignored.config
     - assets/multiqc_config.yml
     - .github/workflows/linting_comment.yml
+
+    # nf-core organisation files. This is not an nf-core pipeline and must not
+    # be branded as one. Removed in commit 2dc2fa2.
+    - CODE_OF_CONDUCT.md
+    - ro-crate-metadata.json
+    - assets/nf-core-histo_logo_light.png
+    - docs/images/nf-core-histo_logo_light.png
+    - docs/images/nf-core-histo_logo_dark.png
+
+    # nf-core organisation CI. Requires nf-core credentials (AWS megatests via
+    # TOWER_ACCESS_TOKEN) or serves nf-core repository triage. Removed in c7bcad4.
+    - .github/.dockstore.yml
+    - .github/workflows/branch.yml
+    - .github/workflows/pr-comment.yml
+    - .github/workflows/awstest.yml
+    - .github/workflows/awsfulltest.yml
+
   files_unchanged:
-    - assets/sendmail_template.txt
+    # Rewritten because they carried nf-core/sopa branding or an nf-core
+    # community process that does not apply to a single-maintainer pipeline.
+    - .github/ISSUE_TEMPLATE/bug_report.yml
+    - .github/ISSUE_TEMPLATE/config.yml
+    - .github/PULL_REQUEST_TEMPLATE.md
+    - docs/README.md
     - .github/workflows/linting.yml
+
+    # Email templates: the sendmail template embedded a logo read from disk at
+    # runtime, which broke when the logos were deleted. Rebuilt in 81e180b.
+    - assets/sendmail_template.txt
+    - assets/email_template.html
+    - assets/email_template.txt
+
+    # LICENSE carries a second copyright notice alongside the retained
+    # nf-core/sopa one, as MIT requires for derivative works. Commit 82c4466.
+    - LICENSE
+
   multiqc_config: false
+
 nf_core_version: 4.0.3
 repository_type: pipeline
 template:
