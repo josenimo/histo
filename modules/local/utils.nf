@@ -105,12 +105,6 @@ def extractSubArgs(Map args, String group) {
             cell_type_key: args.fluorescence_cell_type_key,
             marker_cell_dict: args.marker_cell_dict,
         ]
-    } else if (group == "explorer") {
-        return [
-            pixel_size: args.pixel_size,
-            ram_threshold_gb: args.ram_threshold_gb,
-            lazy: args.lazy,
-        ]
     } else {
         exit 1, "Unknown argument group: ${group}"
     }

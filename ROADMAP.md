@@ -327,9 +327,11 @@ Branch: `feat/preprocess-images`.
    are the integer fallback. sopa only logs a warning, which is not acceptable for unattended runs on
    colleagues' data. This is the cheap guard; actually fixing the names is bookmarked in §6.
 7. `nf-core pipelines schema build`. Never hand-edit `nextflow_schema.json`.
-8. **Add version capture to the seven modules lacking it**: `aggregate`, `explorer`,
+8. **Add version capture to the six modules lacking it**: `aggregate`,
    `make_image_patches`, `patch_segmentation_cellpose`, `patch_segmentation_stardist`, `report`,
    `tissue_segmentation`. Provenance is priority one and the pipeline currently records almost none.
+   (`explorer` was on this list; it has since been removed from the pipeline entirely. `report` also
+   emitted a `versions.yml` that nothing collected, fixed when its outputs were given `emit:` names.)
 9. **Stub blocks where a module creates a file.** Revised 2026-08-06; see `AGENT_CONTEXT.md` §7.
 
    The reasoning changed even though the outcome barely did, and the reasoning is the point. The
@@ -380,9 +382,39 @@ everything downstream inherits them. Run `histo-inspect-ome.py` on an Ashlar out
    `{slide}_core001`, zero-padded, preserving the tool's original numbering so the mapping to
    `centroidsY-X.txt` survives. Renaming is extension-agnostic, since 2.2.9 and 2.4.6 disagree.
    `tma_map`, `coremask` and `centroids` are emitted and published rather than discarded.
-3. Gate `MERGE_SPATIALDATA` on `params.use_tma_dearray`.
-4. Rewrite the merge incrementally, see §5.
-5. ~~If pixel size is lost by Coreograph, fix it at the producer~~ **Not needed. 2.4.6 preserves
+3. **Done.** `MERGE_SPATIALDATA` is gated on `params.use_tma_dearray`, and `validateParams` now
+   rejects `use_tma_dearray` without `use_preprocessing`: dearraying is what stamps `meta.slide`,
+   and without it every core would group under a null key and silently merge unrelated slides.
+
+   It chains off `REPORT` rather than off the same upstream channel. Both give the same cores, but
+   the sopa modules mutate the zarr in place and `REPORT` deletes `.sopa_cache` from it, so a
+   concurrent reader would be racing a writer.
+
+   Merge happens at the very end, after every core has been through every step independently. Chosen
+   over merging before segmentation because segmenting many small dense objects scales better than
+   one large sparse one, and it keeps a per-core QC report.
+
+4. **Done.** `bin/merge_spatialdata.py` writes one element at a time with
+   `SpatialData.write_element()` (verified present in the 0.8.0 API, signature
+   `write_element(element_name, overwrite=False, ...)`). Two behaviours differ deliberately from the
+   `legacy` script:
+   - A core that cannot be read is a **hard failure**. The old script caught every exception, printed
+     a warning and continued, so a slide could merge 78 of 80 cores and still exit 0.
+   - It **refuses to overwrite** an existing output rather than `shutil.rmtree`-ing it.
+
+   Merged object contains everything, images included, so a slide opens as one self-contained object.
+   Tables stay one per core rather than concatenated. Elements are named `{core_id}__{original}`; the
+   separator is doubled because core IDs contain single underscores.
+
+   Peak RSS still needs measuring with `/usr/bin/time -v` on the real TMA, per §5.
+
+5. **Bug found while wiring this, unrelated to the merge itself.** The core ID was derived with
+   `replaceFirst(/\.tif$/, '')`, which leaves a trailing `.ome` on Coreograph 2.4.6 output
+   (`{slide}_core001.ome.tif`). That ID becomes the sdata directory name and the prefix of every
+   merged element, so cores would have been named `..._core001.ome__image`. Now extension-agnostic
+   across 2.2.9 and 2.4.6, with a shape check on the result. Same class as the earlier patch bug:
+   the rename was made version-proof, the thing parsing the rename was not.
+6. ~~If pixel size is lost by Coreograph, fix it at the producer~~ **Not needed. 2.4.6 preserves
    pixel size**, confirmed in QuPath. The sentinel-default discussion is moot.
 
 Exit criterion: `-stub` passes with `use_tma_dearray = true`; on real data, core IDs are visible in
@@ -782,6 +814,117 @@ Carried forward: what was deferred out of this phase, and to where.
 ```
 
 ### Entries
+
+### Phase 5: Containers (closed 2026-08-06)
+
+Commits: `ac6334e`, `8f44eed`, 2 commits. Item 1 had already been done during the Phase 1 rebrand.
+
+Built: `containers.tsv`, a generated, reviewable list of every image the pipeline needs, kept current
+by a pre-commit hook; `tools/container_manifest.py` that produces and verifies it; and
+`docs/containers.md` covering pre-staging into the shared Singularity cache.
+
+Lint at close: **242 passed, 33 ignored, 5 warnings, 0 failed**, down from 13. `prek` green.
+
+Deviated:
+
+- **Phase 5 was run before Phase 4, deliberately.** Phase 4's size profiles are meant to be filled
+  from real run data, and every run so far has been `-stub`. Containers are what make a real run
+  possible, so the order was inverted rather than inventing numbers.
+- Item 1 was already complete: no `.sif` paths or `/fast/AG_Coscia` references survived the rebrand.
+- The manifest is keyed on the **image**, not the module, which was not specified. Fifteen modules
+  need seven images, and pre-staging cost is per image.
+- `tools/` was created rather than putting the generator in `bin/`. `bin/` is staged onto the PATH of
+  every task, and development tooling does not belong there. The ruff hooks were widened to cover it.
+
+Learned:
+
+- **Three images are Docker-only.** `basicpy`, `coreograph` and `backsub` come from mcmicro with no
+  BioContainers Singularity build, so they convert from Docker rather than download, with Docker Hub
+  rate limits in play. On a cluster with intermittent connectivity these are the likely failure point
+  of a first pre-staging run. The empty `singularity_uri` column records this.
+- **Cross-checking the manifest against the real cache found exactly one gap**: ashlar
+  `1.19.0--pyhdfd78af_0`. Six of seven were already staged from earlier mcmicro and sopa downloads.
+  The cache also holds `labsyspharm-ashlar-1.19.0` and a personal `jose_ashlar-1.21.0` build; using
+  either would need an `nf-core modules patch` carried indefinitely, so the declared BioContainers
+  image was fetched instead. The 1.21 fork will need that patch when it is adopted.
+- **Eight Phase 2 parameters had no schema group and no descriptions**, so `--help` listed bare names.
+  Grouped as `Preprocessing` and documented; this alone accounted for the whole 4 → 13 warning rise.
+  `marker_sheet` also gained `format`/`exists`/`.csv` validation, so a typo now fails at launch.
+
+Carried forward:
+
+- Phase 4 in full, now with a decision attached: the three size profiles go in a **single**
+  `conf/sizes.config` declaring one `profiles` scope, not three near-identical files that must be kept
+  in sync. Numbers come from real runs.
+- `conf/mdc.config` for the SLURM setup, still unwritten.
+
+### Phase 3: TMA path (closed 2026-08-06)
+
+Commits: `532955d`..`ee35514`, 7 commits, 26 files.
+
+Built: a dearrayed slide now comes back together. Each core runs the whole downstream half on its own
+and `MERGE_SPATIALDATA` combines the finished stores into one object per slide, writing element by
+element so peak memory is one core rather than all of them. `EXPLORER` was also removed from the
+pipeline entirely.
+
+Lint at close: **242 passed, 33 ignored, 13 warnings, 0 failed.** Warnings rose from 4, and all of the
+increase was one class: eight preprocessing parameters added in Phase 2 sat at the top level of
+`nextflow_schema.json` instead of inside a group, and had no descriptions at all. Grouped and
+documented at the start of Phase 5, which should leave three known warnings — the removed nf-core
+README badge, the deliberate flat `modules/local/utils.nf`, and the deferred 4.0.3 → 4.1.0 template
+bump.
+
+Deviated:
+
+- **`EXPLORER` removal was not in the Phase 3 plan.** Requested mid-phase. It was cheap, but it had a
+  consequence nobody predicted: `params.pixel_size` existed only to feed the Explorer export, so
+  removing it deleted the one place physical scale lived. See "Learned".
+- Merge placement was decided as **after everything**, not after `AGGREGATE` as §3 left open.
+  Segmenting many small dense objects scales better than one large sparse one, and per-core QC
+  reports survive.
+- Tables are kept **one per core** rather than concatenated, so §5's concatenation caveat is moot for
+  now.
+- The merge chains off `REPORT` rather than off the shared upstream channel, because `REPORT` deletes
+  `.sopa_cache` from the zarr in place and a concurrent reader would race it.
+
+Learned, each of which changes something later:
+
+- **A stub run cannot detect an incomplete commit.** Nextflow reads the working tree; git records
+  something else. Both diverged here and every run still passed. `.gitignore` contained a bare
+  `local/`, which git matches at any depth, so `modules/local/` was ignored. Existing modules stayed
+  tracked and nothing looked wrong until a _new_ module was added there and silently omitted from its
+  own commit, leaving HEAD with an `include` pointing at nothing. Compounding it, `git add` is
+  all-or-nothing: one ignored path in the argument list staged none of the others, which is how a
+  second commit lost its bulk. **The end-of-phase check must include a clone**, not just a stub run:
+  `git clone . /tmp/check && cd /tmp/check && nextflow run . -profile laptop,test -stub`.
+- **Removing EXPLORER forced the open pixel-size decision.** Option 1 in §8, "accept sopa's model and
+  let physical scale live only in the Explorer bundle", no longer exists. Scale goes into the zarr or
+  nowhere. The path is now known and cheap: `sopa convert` needs no patching, because
+  `SpatialData.write_transformations()` rewrites only transformation metadata on an existing store.
+  The trap is that the new `Scale` must go into a **new** coordinate system; redefining `global` would
+  silently reinterpret `patch_width_pixel` and `min_area_pixels2` as microns.
+- **Ashlar preserves pixel size and does not invent channel names.** Confirmed on real output:
+  `PhysicalSize` 0.65 µm survives, `ImageDescription` is present so `tiffcomment -set` will work, and
+  the 12 `Channel` elements exist but are unnamed. So §6 is now only about adding `Name` attributes to
+  elements that already exist, keyed on the marker sheet's continuous `channel_number` — which makes
+  that validation rule load-bearing rather than merely tidy.
+- **Coreograph's version difference bit a second time.** The core ID was derived with
+  `replaceFirst(/\.tif$/, '')`, leaving a trailing `.ome` on 2.4.6's `.ome.tif` output. The module
+  patch had been made extension-agnostic; the code parsing its output had not. When a rename is
+  version-proofed, everything that reads the renamed thing must be too.
+- **`assert` inside a channel operator closure is swallowed** — already learned once with
+  `validateMarkersheet`, and nearly repeated here. `error()` is the only reliable form.
+
+Carried forward:
+
+- Peak RSS measurement of the merge with `/usr/bin/time -v` on the real TMA. The incremental write is
+  the entire point of the script and inspection cannot confirm it works.
+- Real-data confirmation that core IDs appear in merged element names, and `check_qupath_paquo.py`
+  against the cores. Both need containers.
+- A committed TMA test profile. Blocked on a small fixture, so it goes to Phase 6; the local
+  `params-exemplar002-tma.yml` covers it meanwhile.
+- Writing pixel size into the zarr: now a known method rather than an open question, but unbuilt.
+- Channel-name injection before `sopa convert`, still §6.
 
 ### Phase 2: Preprocessing half (closed 2026-08-06)
 

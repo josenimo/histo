@@ -12,7 +12,7 @@ include { TO_SPATIALDATA          } from '../modules/local/to_spatialdata'
 include { MAKE_IMAGE_PATCHES      } from '../modules/local/make_image_patches'
 include { TISSUE_SEGMENTATION     } from '../modules/local/tissue_segmentation'
 include { AGGREGATE               } from '../modules/local/aggregate'
-include { EXPLORER                } from '../modules/local/explorer'
+include { MERGE_SPATIALDATA       } from '../modules/local/merge_spatialdata'
 include { REPORT                  } from '../modules/local/report'
 include { FLUO_ANNOTATION         } from '../modules/local/fluo_annotation'
 include { CELLPOSE                } from '../subworkflows/local/cellpose'
@@ -40,14 +40,13 @@ workflow HISTO {
         PREPROCESS_IMAGES(ch_samplesheet, ch_markersheet)
 
         // Grouping cycles into samples reduces meta to {id}, but the downstream
-        // half needs sample, sdata_dir and explorer_dir. They are per-sample and
-        // only meaningful once cycles are stitched, so they are added here rather
+        // half needs sample and sdata_dir. They are per-sample and only
+        // meaningful once cycles are stitched, so they are added here rather
         // than during samplesheet validation.
         ch_input_spatialdata = PREPROCESS_IMAGES.out.images.map { meta, image ->
             def m = meta + [
                 sample: meta.id,
                 sdata_dir: "${meta.id}.zarr",
-                explorer_dir: "${meta.id}.explorer",
             ]
             [m, image, []]
         }
@@ -96,9 +95,25 @@ workflow HISTO {
 
     ch_preprocessed = ch_annotated
 
-    EXPLORER(ch_preprocessed, argsCLI("explorer"))
-
     REPORT(ch_preprocessed)
+    ch_versions = ch_versions.mix(REPORT.out.versions)
+
+    // TMA cores are merged only at the very end, once every core has been
+    // through every step on its own. Merging earlier would mean segmenting and
+    // aggregating one large sparse object instead of many small dense ones,
+    // which scales badly and loses the per-core QC report.
+    //
+    // This chains off REPORT rather than off ch_preprocessed. Both would give
+    // the same cores, but REPORT mutates the zarr in place (it removes
+    // .sopa_cache), so reading the same store concurrently would be a race.
+    if (params.use_tma_dearray) {
+        ch_cores_by_slide = REPORT.out.sdata
+            .map { meta, sdata -> [[id: meta.slide], sdata] }
+            .groupTuple()
+
+        MERGE_SPATIALDATA(ch_cores_by_slide)
+        ch_versions = ch_versions.mix(MERGE_SPATIALDATA.out.versions)
+    }
 
     //
     // Collate and save software versions

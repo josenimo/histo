@@ -21,5 +21,11 @@ histo_*.txt
 local_test_datasets/
 # scratch space: params files with absolute paths, diagnostic scripts, tool inputs.
 # See local/README.md, itself ignored.
-local/
+#
+# MUST keep the leading slash. A bare `local/` matches a directory of that name at
+# ANY depth, which silently ignored the whole of `modules/local/`. Existing files
+# there stayed tracked, so nothing looked wrong until a NEW local module was added
+# and `git add` refused it; the module then went missing from its own commit while
+# the workflow that included it was committed fine.
+/local/
 .nf-test*

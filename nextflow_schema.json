@@ -37,6 +37,62 @@
                 }
             }
         },
+        "preprocessing": {
+            "title": "Preprocessing",
+            "type": "object",
+            "description": "Illumination correction, stitching and registration, optional background subtraction and optional TMA dearray. These run before the image enters the SpatialData half, and are skipped entirely when use_preprocessing is false.",
+            "default": "",
+            "fa_icon": "fas fa-layer-group",
+            "properties": {
+                "use_preprocessing": {
+                    "type": "boolean",
+                    "default": true,
+                    "description": "Run the preprocessing half: illumination correction, stitching and registration, and the optional steps below. When false the samplesheet must point at images sopa can already read, which covers pre-stitched images and dearrayed cores re-entering the pipeline.",
+                    "fa_icon": "fas fa-toggle-on"
+                },
+                "marker_sheet": {
+                    "type": "string",
+                    "description": "Path to the marker sheet CSV, one row per channel. Required when use_preprocessing is true. channel_number must run 1..N without gaps, because that ordering is what maps marker names onto the stitched image's channels.",
+                    "fa_icon": "fas fa-file-csv",
+                    "format": "file-path",
+                    "exists": true,
+                    "mimetype": "text/csv",
+                    "pattern": "^\\S+\\.csv$"
+                },
+                "ashlar_args": {
+                    "type": "string",
+                    "default": "--maximum-shift 30",
+                    "description": "Extra command-line arguments passed through to Ashlar.",
+                    "fa_icon": "fas fa-terminal"
+                },
+                "use_backsub": {
+                    "type": "boolean",
+                    "description": "Subtract background channels after stitching. Requires exposure and background columns in the marker sheet.",
+                    "fa_icon": "fas fa-toggle-on"
+                },
+                "backsub_args": {
+                    "type": "string",
+                    "description": "Extra command-line arguments passed through to backsub.",
+                    "fa_icon": "fas fa-terminal"
+                },
+                "use_tma_dearray": {
+                    "type": "boolean",
+                    "description": "Split a tissue microarray into individual cores with UNetCoreograph. Each core then runs the downstream half as an independent sample, and the results are merged per slide at the end. Requires use_preprocessing.",
+                    "fa_icon": "fas fa-th"
+                },
+                "coreograph_args": {
+                    "type": "string",
+                    "default": "--downsampleFactor 5 --channel 0 --buffer 2",
+                    "description": "Extra command-line arguments passed through to UNetCoreograph.",
+                    "fa_icon": "fas fa-terminal"
+                },
+                "require_channel_names": {
+                    "type": "boolean",
+                    "description": "Fail the run when channel names cannot be read from the OME-XML and sopa falls back to integer names. Off by default because the preprocessing half does not yet write names into the OME-XML; turn it on once it does.",
+                    "fa_icon": "fas fa-exclamation-triangle"
+                }
+            }
+        },
         "institutional_config_options": {
             "title": "Institutional config options",
             "type": "object",
@@ -169,7 +225,7 @@
             "properties": {
                 "technology": {
                     "type": "string",
-                    "description": "Technology used for the spatial data, e.g., 'xenium', 'merscope', ...",
+                    "description": "Reader used to build the SpatialData object. 'ome_tif' for real data, a stitched OME-TIFF from Ashlar; 'toy_dataset' for sopa's synthetic data, used in tests.",
                     "enum": ["ome_tif", "toy_dataset"],
                     "default": "ome_tif"
                 }
@@ -265,30 +321,6 @@
                 }
             },
             "fa_icon": "fas fa-calculator"
-        },
-        "explorer": {
-            "title": "Explorer",
-            "type": "object",
-            "description": "Parameters related to the Xenium Explorer visualization tool",
-            "default": "",
-            "properties": {
-                "pixel_size": {
-                    "type": "number",
-                    "default": 0.2125,
-                    "description": "Number of microns in a pixel. Invalid value can lead to inconsistent scales in the Explorer."
-                },
-                "lazy": {
-                    "type": "boolean",
-                    "default": true,
-                    "description": "If `True`, will not load the full images in memory (except if the image memory is below `ram_threshold_gb`)"
-                },
-                "ram_threshold_gb": {
-                    "type": "number",
-                    "description": "Threshold (in gygabytes) from which image can be loaded in memory.",
-                    "default": 4.0
-                }
-            },
-            "fa_icon": "fas fa-tools"
         },
         "image_preprocessing": {
             "title": "Image preprocessing",
@@ -416,6 +448,9 @@
             "$ref": "#/$defs/input_output_options"
         },
         {
+            "$ref": "#/$defs/preprocessing"
+        },
+        {
             "$ref": "#/$defs/institutional_config_options"
         },
         {
@@ -437,9 +472,6 @@
             "$ref": "#/$defs/aggregation"
         },
         {
-            "$ref": "#/$defs/explorer"
-        },
-        {
             "$ref": "#/$defs/image_preprocessing"
         },
         {
@@ -451,34 +483,5 @@
         {
             "$ref": "#/$defs/fluorescence_annotation"
         }
-    ],
-    "properties": {
-        "marker_sheet": {
-            "type": "string"
-        },
-        "ashlar_args": {
-            "type": "string",
-            "default": "--maximum-shift 30"
-        },
-        "use_preprocessing": {
-            "type": "boolean",
-            "default": true
-        },
-        "use_backsub": {
-            "type": "boolean"
-        },
-        "backsub_args": {
-            "type": "string"
-        },
-        "use_tma_dearray": {
-            "type": "boolean"
-        },
-        "coreograph_args": {
-            "type": "string",
-            "default": "--downsampleFactor 5 --channel 0 --buffer 2"
-        },
-        "require_channel_names": {
-            "type": "boolean"
-        }
-    }
+    ]
 }

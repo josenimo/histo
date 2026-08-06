@@ -16,8 +16,7 @@ The directories listed below will be created in the results directory after the 
 The pipeline is built using [Nextflow](https://www.nextflow.io/) and outputs the following information:
 
 - [SpatialData directory](#spatialdata-directory) - Full [SpatialData](https://spatialdata.scverse.org/en/stable/) object with the segmented and aggregated data.
-- [Explorer directory](#explorer-directory) - Visualization and quick analysis directory
-- [VisiumHD-specific outputs](#visiumhd-specific-outputs) - Outputs of Space Ranger
+- [QC report](#qc-report) - Per-sample HTML summary of segmentation and aggregation
 - [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
 
 ### SpatialData directory
@@ -34,20 +33,20 @@ The `{sample}.zarr` directory contains a [SpatialData](https://spatialdata.scver
 
 Refer to the [SpatialData docs](https://spatialdata.scverse.org/en/stable/) for usage details, or to the [documentation of `sopa` as a Python package](https://prism-oncology.github.io/sopa/). If you are not familiar with `SpatialData`, you can also use directly the extracted `AnnData` object (see below).
 
-### Explorer directory
+### QC report
 
 <details markdown="1">
 <summary>Output files</summary>
 
-- `{sample}.explorer/`
-  - Sopa quality controls: `report.html`
-  - AnnData object (extracted from the above SpatialData object): `adata.h5ad`
-  - Xenium Explorer file: `experiment.xenium`. Double-click on it to open it on the Xenium Explorer; you can download the software [here](https://www.10xgenomics.com/support/software/xenium-explorer/downloads).
-  - Other files related and required by the Xenium Explorer.
+- `{sample}_analysis_summary.html`
+  - Sopa quality control report: cell counts, area distributions, per-channel intensity summaries.
 
 </details>
 
-The `{sample}.explorer` directory can be used for visualization and quick analysis.
+Upstream nf-core/sopa also produced a `{sample}.explorer/` directory holding a Xenium Explorer
+bundle and a standalone `adata.h5ad`. **This pipeline does not export to Xenium Explorer.** The
+cell table is still available inside `{sample}.zarr` under `tables/`, and can be pulled out with
+`spatialdata.read_zarr(...).tables`.
 
 ### Pipeline information
 

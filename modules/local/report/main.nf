@@ -13,15 +13,21 @@ process REPORT {
     tuple val(meta), path(sdata_path)
 
     output:
-    path sdata_path
-    path "${meta.explorer_dir}/analysis_summary.html"
-    path "versions.yml"
+    // sdata is emitted so that MERGE_SPATIALDATA can chain off REPORT rather
+    // than fanning off the same upstream channel. The sopa modules mutate the
+    // zarr in place and this one deletes .sopa_cache from it, so a concurrent
+    // reader would be racing a writer.
+    tuple val(meta), path(sdata_path)           , emit: sdata
+    path "${meta.sample}_analysis_summary.html" , emit: report
+    path "versions.yml"                         , emit: versions
 
     script:
+    // Upstream sopa wrote this into the Xenium Explorer directory, so that the
+    // report shipped alongside the Explorer bundle. EXPLORER has been removed
+    // from this pipeline, so the report is published as a flat per-sample file
+    // rather than alone inside a directory named after a step that no longer runs.
     """
-    mkdir -p ${meta.explorer_dir}
-
-    sopa report ${sdata_path} ${meta.explorer_dir}/analysis_summary.html
+    sopa report ${sdata_path} ${meta.sample}_analysis_summary.html
 
     rm -r ${sdata_path}/.sopa_cache || true # clean up cache if existing
 
@@ -33,8 +39,7 @@ process REPORT {
 
     stub:
     """
-    mkdir -p ${meta.explorer_dir}
-    touch ${meta.explorer_dir}/analysis_summary.html
+    touch ${meta.sample}_analysis_summary.html
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":
