@@ -83,8 +83,8 @@ workflow PIPELINE_INITIALISATION {
         before_text,
         after_text,
         command,
-        // cast_cli_params. Without this, --pixel_size 0.65 arrives as the string
-        // "0.65" and fails schema validation against a number, and likewise
+        // cast_cli_params. Without this, --expand_radius_ratio 0.1 arrives as the
+        // string "0.1" and fails schema validation against a number, and likewise
         // --use_cellpose true against a boolean. Anything set on the command line
         // rather than in a profile or params file needs coercion.
         true,
@@ -114,9 +114,9 @@ workflow PIPELINE_INITIALISATION {
                 samplesheetToList(params.input, "${projectDir}/assets/schema_input_cycle.json")
             ))
             .map { meta, image_tiles, dfp, ffp ->
-                // sdata_dir and explorer_dir are deliberately not set here. They are
-                // per-sample, and at this point a row is one cycle of a sample. They
-                // are added after cycles are grouped and stitched.
+                // sdata_dir is deliberately not set here. It is per-sample, and at
+                // this point a row is one cycle of a sample. It is added after
+                // cycles are grouped and stitched.
                 [meta, image_tiles, dfp, ffp]
             }
             .set { ch_samplesheet }
@@ -135,7 +135,6 @@ workflow PIPELINE_INITIALISATION {
 
                 meta.data_dir = data_path
                 meta.sdata_dir = "${meta.sample}.zarr"
-                meta.explorer_dir = "${meta.sample}.explorer"
 
                 return meta
             }
@@ -362,6 +361,15 @@ def validateParams(params) {
     assert enabled <= 1 : "Only one of ${STAINING_BASED_METHODS} may be used, but ${enabled} are enabled"
     assert enabled >= 1 : "A segmentation backend is required: set one of ${STAINING_BASED_METHODS} to true, " +
         "or use a profile that does (for example -profile test)"
+
+    // TMA dearray happens inside the preprocessing half, and it is what stamps
+    // meta.slide onto each core. MERGE_SPATIALDATA groups on meta.slide, so
+    // without preprocessing every core would group under a null key and silently
+    // merge unrelated slides into one object.
+    assert !(params.use_tma_dearray && !params.use_preprocessing) :
+        "use_tma_dearray requires use_preprocessing. Dearraying is part of the preprocessing " +
+        "half; to re-enter already-dearrayed cores, list them in the samplesheet with " +
+        "use_preprocessing = false and use_tma_dearray = false."
 
     return params
 }
