@@ -49,10 +49,6 @@ Refer to the [SpatialData docs](https://spatialdata.scverse.org/en/stable/) for 
 
 The `{sample}.explorer` directory can be used for visualization and quick analysis.
 
-### VisiumHD-specific outputs
-
-**(Only for Visium HD)** a `{sample}_spaceranger/outs` directory with the outputs of Space Ranger. See [the official 10X Genomics documentation](https://www.10xgenomics.com/support/software/space-ranger/latest/analysis/outputs/output-overview) for more details.
-
 ### Pipeline information
 
 <details markdown="1">

@@ -23,9 +23,17 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
   orphan branch with no inherited history. The import commit is deliberately unmodified so it can be
   verified against upstream.
 - Rebranded to `josenimo/histo`: pipeline name, manifest, schema metadata, workflow identifiers
-  (`SOPA` to `HISTO`, `NFCORE_SOPA` to `HISTO_PIPELINE`), startup banner, email templates and README.
+  (`SOPA` to `HISTO`, `NFCORE_SOPA` to `HISTO_PIPELINE`), startup banner, email templates, README,
+  config headers, `modules.json` name and homepage, and the GitHub issue and PR templates. Module and
+  subworkflow SHA pins in `modules.json` verified unchanged.
 - Reset the version to `0.1.0dev`. The previous history in this file described nf-core/sopa's
   releases, which do not apply to this pipeline.
+- Replaced the nf-core ASCII logo in the startup banner with a plain banner driven by
+  `workflow.manifest`, so it cannot go stale.
+- Emptied `docs/usage.md` rather than rebranding it. It documented sopa's samplesheet format for
+  spatial transcriptomics platforms, none of which is in scope, and the mIF input format is undecided.
+- Replaced `docs/CONTRIBUTING.md`'s nf-core community contribution process with pointers to
+  `AGENT_CONTEXT.md` and `AGENTS.md`, keeping the AI and LLM guidance.
 
 ### Removed
 
@@ -38,9 +46,19 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
   after the logo files were deleted.
 - The `workflow.manifest.doi` interpolation from the citation footer, which called `.tokenize()`
   unguarded on a field the manifest no longer defines.
+- `.devcontainer/`, which configured a GitHub Codespaces environment that is unused.
+
+### Known broken
+
+- `tests/*.nf.test.snap` still record `"nf-core/sopa": "v1.0.1"`. Snapshots must not be hand-edited;
+  they need regenerating with `nf-test`, which needs real containers on the cluster. Until then
+  `nf-test` fails. This blocks the Phase 1 exit criterion.
+- `nf-core pipelines lint` has not been run since `is_nfcore` was set to `false`. Expect failures.
+- `nextflow_schema.json` and `modules.json` were hand-edited for metadata only. Confirm with
+  `nf-core pipelines schema build`.
 
 ### Not yet done
 
 The preprocessing half does not exist. The downstream half still contains sopa's transcriptomics
-paths (baysor, comseg, proseg, stardist, Space Ranger, transcript patches) pending removal, and
-`docs/` and the GitHub issue templates still carry nf-core branding.
+paths (baysor, comseg, proseg, stardist, Space Ranger, transcript patches) pending removal, along
+with their test configs and snapshots.

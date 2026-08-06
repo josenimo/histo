@@ -11,7 +11,6 @@
 include { UTILS_NFSCHEMA_PLUGIN     } from '../../nf-core/utils_nfschema_plugin'
 include { paramsSummaryMap          } from 'plugin/nf-schema'
 include { samplesheetToList         } from 'plugin/nf-schema'
-include { paramsHelp                } from 'plugin/nf-schema'
 include { completionEmail           } from '../../nf-core/utils_nfcore_pipeline'
 include { completionSummary         } from '../../nf-core/utils_nfcore_pipeline'
 include { UTILS_NFCORE_PIPELINE     } from '../../nf-core/utils_nfcore_pipeline'
@@ -84,6 +83,7 @@ workflow PIPELINE_INITIALISATION {
         before_text,
         after_text,
         command,
+        null, // cli_typecast: null uses the plugin's default behaviour
     )
 
     //
@@ -100,33 +100,16 @@ workflow PIPELINE_INITIALISATION {
     Channel
         .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
         .map { meta, data_path ->
-            if (!meta.fastq_dir) {
-                if (!data_path) {
-                    error("The `data_path` must be provided (path to the raw inputs), except when running on Visium HD data (in that case, the `fastq_dir` is required)")
-                }
-
-                if (!meta.sample) {
-                    meta.sample = file(data_path).baseName
-                }
-
-                meta.data_dir = data_path
+            if (!data_path) {
+                error("The `data_path` column must be provided (path to the raw inputs)")
             }
-            else {
-                // spaceranger output directory
-                meta.data_dir = "outs"
 
-                if (!meta.sample) {
-                    error("The `sample` column must be provided when running on Visium HD data")
-                }
-
-                if (!meta.id) {
-                    meta.id = meta.sample
-                }
-
-                if (!meta.image) {
-                    error("The `image` column (full resolution image) must be provided when running Sopa on Visium HD data - it is required for the cell segmentation")
-                }
+            if (!meta.sample) {
+                meta.sample = file(data_path).baseName
             }
+
+            meta.data_dir = data_path
+
             meta.sdata_dir = "${meta.sample}.zarr"
             meta.explorer_dir = "${meta.sample}.explorer"
 
@@ -265,16 +248,15 @@ def validateParams(params) {
         error("You use a deprecated Sopa params format. We flattened all parameters to conform to the future nextflow 26.04 strict syntax check.\nSee the nf-core/sopa docs for more details on the new syntax usage: https://nf-co.re/sopa/docs/usage/.")
     }
 
-    def TRANSCRIPT_BASED_METHODS = ['use_proseg', 'use_baysor', 'use_comseg']
     def STAINING_BASED_METHODS = ['use_stardist', 'use_cellpose']
-    def NON_VALID_STARDIST_METHODS = ['use_baysor', 'use_comseg']
+    def enabled = STAINING_BASED_METHODS.count { params[it] }
 
-    // check segmentation methods
-    assert TRANSCRIPT_BASED_METHODS.count { params[it] } <= 1 : "Only one of ${TRANSCRIPT_BASED_METHODS} may be used"
-    assert STAINING_BASED_METHODS.count { params[it] } <= 1 : "Only one of ${STAINING_BASED_METHODS} may be used"
-    if (params.use_stardist) {
-        assert NON_VALID_STARDIST_METHODS.every { !params[it] } : "'stardist' cannot be combined with transcript-based methods, except proseg."
-    }
+    // Exactly one segmentation backend must be enabled. Both default to false, so
+    // running without a profile would otherwise leave ch_resolved unassigned and
+    // fail deep inside AGGREGATE with an unhelpful Groovy error.
+    assert enabled <= 1 : "Only one of ${STAINING_BASED_METHODS} may be used, but ${enabled} are enabled"
+    assert enabled >= 1 : "A segmentation backend is required: set one of ${STAINING_BASED_METHODS} to true, " +
+        "or use a profile that does (for example -profile test)"
 
     return params
 }

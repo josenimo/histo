@@ -25,6 +25,17 @@ reconcile the affected issues.
 There is one scheduled exception: **at the end of each phase, add a summary to §12**. Once per phase,
 not per task. That is the cadence that keeps the record useful without turning this into a changelog.
 
+**Run `nf-core pipelines lint` at the end of every phase**, before writing the §12 entry, and record
+the pass/fail/warning counts in it. The agent cannot run it: the sandbox has no network for PyPI and
+no Nextflow. Write the report to a file instead and the agent will read it directly:
+
+```
+nf-core pipelines lint --markdown histo_lint_results.md 2>&1 | tee histo_lint_results.txt
+```
+
+Both patterns are gitignored. Do not fix lint findings mid-phase if the phase will delete the files
+they concern; exemptions written against files that are about to disappear are wasted work.
+
 ---
 
 ## 1. Decisions settled
@@ -39,9 +50,10 @@ not per task. That is the cadence that keeps the record useful without turning t
 | **Post-module Python fixes** | **Undesired, but permitted as a pragmatic escape hatch.** Default to fixing at the producing step. Where going through the full module route is disproportionate, a post-hoc script is acceptable provided it is a named module with a stub, a version capture and a comment stating why the producer was not fixed. `bin/fix_core_ome_tiff.py` still goes, because a better tool exists (see §6). |
 | Containers | Restore upstream registry URIs. Pre-stage SIFs into the shared `NXF_SINGULARITY_CACHEDIR`. No launch-time pulls. |
 | Params interface | `-params-file params.yml` is the primary interface, validated by `nextflow_schema.json`. |
-| Segmentation | Cellpose only for 1.0.0. |
-| Scope in | `TISSUE_SEGMENTATION`, `conf/predefined` mIF presets (phenocycler, macsima, hyperion). |
-| Scope out | `STARDIST`, `SCANPY_PREPROCESS`, `FLUO_ANNOTATION`, `BAYSOR`, `COMSEG`, `PROSEG`, `SPACERANGER`, all transcript-patch paths. |
+| Segmentation | Cellpose is the primary backend for 1.0.0. StarDist retained alongside it. |
+| Scope in | `TISSUE_SEGMENTATION`, `CELLPOSE`, `STARDIST`, `FLUO_ANNOTATION`, `conf/predefined` mIF presets (phenocycler, macsima, hyperion). |
+| Scope out | `SCANPY_PREPROCESS`, `EXPLORER_RAW`, `BAYSOR`, `COMSEG`, `PROSEG`, `SPACERANGER`, the Visium HD path, all transcript-patch paths. |
+| Reader | `ome_tif` only, plus `toy_dataset` until the test fixtures are replaced in Phase 6. H&E support to be added deliberately later, not inherited. |
 | Ashlar fork | Deferred to nice-to-haves. Keep `josenimo/jose_ashlar:1.21.0` as-is for now. |
 | `min_intensity_ratio`, `expand_radius_ratio` | Deferred until the baseline runs. 1.0.0 quantification is therefore nuclear-only. |
 | Channel names and physical pixel size | Bookmarked. Route identified via mcmicro's bftools metadata stack, see §6. Not scheduled yet. |
@@ -249,14 +261,23 @@ Branch: `feat/scaffold`.
 
 1. Copy the `nf-core/sopa:dev` tree at `c2b4e5f`. Fresh `git init`, no sopa remote. Initial commit
    records source repository, SHA and retrieval date in the message body.
-2. Rebrand as one commit: rename the pipeline to `imagingpipeline` (lowercase, no separators, since
-   Nextflow uses the repo name), strip `NFCORE_SOPA`, `assets/nf-core-sopa_logo_*`, `docs/images/`,
-   `CODE_OF_CONDUCT.md`, `ro-crate-metadata.json`, nf-core org CI in `.github/`, and branding in
-   `README.md` and `utils_nfcore_sopa_pipeline`.
-3. Delete out-of-scope features, one commit per feature so each deletion is documented: `baysor`,
-   `comseg`, `proseg`, `stardist`, `spaceranger`, `scanpy_preprocess`, `fluo_annotation`,
-   `make_transcript_patches`, `explorer_raw`, and their `conf/predefined/*`, schema entries and
-   nf-tests.
+2. Rebrand: rename the pipeline to `histo` (lowercase, no separators, since Nextflow uses the repo
+   name), strip `NFCORE_SOPA`, the logos, `CODE_OF_CONDUCT.md`, `ro-crate-metadata.json`, nf-core org
+   CI in `.github/`, and branding in `README.md` and `utils_nfcore_sopa_pipeline`. Done across eight
+   commits rather than one, since it touched roughly 40 files across config, code, CI and docs.
+3. Delete out-of-scope features, grouped by reason for removal so each commit is one documented
+   decision: transcript-based segmentation (`baysor`, `comseg`, `proseg`, `make_transcript_patches`);
+   `explorer_raw` and `scanpy_preprocess`; the Visium HD path (`spaceranger`, `input_check`, `untar`).
+   Then restrict the technology enum to `ome_tif`.
+
+   **Ordering note:** feature removal should come *before* rebranding, not after. Roughly a quarter
+   of the branded files were deleted anyway, and lint exemptions written against files that are about
+   to disappear are wasted work. This was done in the wrong order.
+
+   **Scope changed mid-phase:** `stardist` and `fluo_annotation` were originally listed for removal
+   and are now retained, StarDist as a second segmentation backend better suited to H&E nuclei, and
+   fluorescence annotation for marker-based cell typing. Both must appear in at least one `-stub`
+   profile, since a feature kept but never exercised rots silently.
 4. Housekeeping: MIT `LICENSE` with attribution to sopa and mcmicro; `CITATIONS.md` crediting sopa,
    mcmicro and every underlying tool; `CHANGELOG.md`.
 5. Vendor the nf-core community `AGENTS.md` verbatim with source URL, SHA and retrieval date, plus
@@ -265,9 +286,17 @@ Branch: `feat/scaffold`.
    nf-core question, so `nf-core pipelines sync` works going forward. Note the template gap: sopa:dev
    is on tools 4.0.3, current is 4.1.0.
 7. Set a real `min_area_pixels2` default in the schema rather than 0.
-8. `nf-core pipelines lint`, `prek`, and a `-stub` run must all pass before the PR.
+8. `nf-core pipelines lint` and `prek` must pass before the PR.
 
-Exit criterion: `-stub` run completes on the `test` profile, cellpose path only.
+**Deferred out of Phase 1 to Phase 2:** none of the eleven vendored `modules/local` have a `stub:`
+block, so a `-stub` run is impossible. nf-core/sopa does not support stub runs either; its
+`download_pipeline.yml` has an explicit "stub run not supported" fallback. Writing eleven stubs plus
+version capture for the seven modules missing it is real work, and Phase 1 was already fourteen
+commits. Consequently the pre-commit config in `planning/` is **not** activated in Phase 1 either:
+its `module-has-stub` hook would fail on all eleven modules and block every commit.
+
+Exit criterion: `nf-core pipelines lint` reports no failures, and `nextflow run . --help` resolves the
+whole DAG. The original criterion was a completed `-stub` run; see the deferral above.
 
 ### Phase 2. Preprocessing half
 
@@ -285,7 +314,14 @@ Branch: `feat/preprocess-images`.
    are the integer fallback. sopa only logs a warning, which is not acceptable for unattended runs on
    colleagues' data. This is the cheap guard; actually fixing the names is bookmarked in §6.
 7. `nf-core pipelines schema build`. Never hand-edit `nextflow_schema.json`.
-8. Stub blocks for every local module, in the same commit as the module.
+8. **Write `stub:` blocks for the eleven modules inherited from sopa**, deferred out of Phase 1. Each
+   must `touch` or `mkdir` exactly what the module's `output:` block declares, or the stub passes
+   while the real run fails. Add version capture to the seven modules lacking it: `aggregate`,
+   `explorer`, `make_image_patches`, `patch_segmentation_cellpose`, `patch_segmentation_stardist`,
+   `report`, `tissue_segmentation`.
+9. **Activate the pre-commit config from `planning/`**, which is only possible once the stubs exist,
+   since `module-has-stub` would otherwise fail on every module.
+10. Stub blocks for any new module, in the same commit as the module.
 
 Exit criterion: `-stub` passes with `use_backsub = false`, `use_tma_dearray = false`. Handoff boundary
 is a single stitched OME-TIFF. Note that until the §6 bookmark is picked up, channel names will be
@@ -340,6 +376,15 @@ Branch: `feat/tests`.
 3. Test data in a small repository of your own.
 4. `-stub` run in CI. `nf-test test tests/`.
 5. `check_qupath_paquo.py` wired in as an acceptance check on the TMA fixture.
+6. **Regenerate the inherited nf-test snapshots.** `tests/*.nf.test.snap` still record
+   `"nf-core/sopa": "v1.0.1"` from the import. They must not be hand-edited; regenerate with
+   `nf-test test --update-snapshot`, on the same CPU architecture as CI. This needs real containers,
+   so it is cluster work and it blocks the Phase 1 exit criterion until done.
+
+**Keep `.github/workflows/download_pipeline.yml`.** It counts container images before and after a
+stub run and fails if the count changed, which is a machine-check of the §6 rule that nothing may be
+pulled at launch time. It is the only automated guard on offline reproducibility in the repository, and
+it is easy to mistake for nf-core boilerplate and delete.
 
 ### Phase 7. QC report
 
@@ -597,6 +642,11 @@ Consequences, which together form the working model:
 - Git writes may also leave orphaned `.git/objects/*/tmp_obj_*` blobs. Harmless, but they accumulate
   and only the user can remove them. `git fsck --connectivity-only` confirms no real damage.
 
+**Some paths are blocked from editing entirely**, not just from deletion. Attempting to edit
+`.devcontainer/setup.sh` returned `resolves to a protected location`. Dotfile directories appear to be
+protected regardless of the connected folder. If an edit is refused this way, either the user makes it
+or the file is removed; there is no agent-side workaround.
+
 **Commit identity** is set repository-locally to `Jose Nimo <nimojose@gmail.com>`, which is the address
 verified on GitHub. The two pre-existing commits use a hostname-derived address that GitHub cannot
 attribute; that inconsistency is confined to the abandoned `legacy` branch and needs no fixing.
@@ -638,4 +688,67 @@ Carried forward: what was deferred out of this phase, and to where.
 
 ### Entries
 
-Phase 0 is in progress. No entries yet.
+### Phase 1: Scaffold  (closed 2026-08-06)
+
+Commits: `33e0863`..`c64f520`, plus `6506dda` on TEMPLATE and `1a9277c` on dev.
+
+Built: `main` now holds a rebranded, de-scoped pipeline derived from nf-core/sopa. The import commit
+is byte-identical to upstream (tree `ec7b5cca`) so it can be verified. Out-of-scope features are gone,
+the reader is restricted to `ome_tif`, and a `TEMPLATE` branch exists with ancestry established into
+`dev`.
+
+Lint at close: **0 failed, 212 passed, 33 ignored, 4 warnings**, against 13 failed / 268 passed /
+20 warnings at the start. The four remaining warnings:
+
+| Warning | Status |
+| --- | --- |
+| `readme`: no nf-core template version badge | Correct. This is not an nf-core pipeline. |
+| `local_component_structure`: `modules/local/utils.nf` | Accepted false positive; reason at the top of that file. |
+| `meta_yml_exists`: `utils_nfcore_histo_pipeline` | Accepted false positive; the template ships that file without one. |
+| `nfcore_yml`: 4.0.3 should be 4.1.0 | Real. Unblocked now the TEMPLATE branch exists. |
+
+Deviated:
+
+- Feature removal should have preceded the rebrand, not followed it. Roughly a quarter of the branded
+  files were deleted anyway, and seven lint warnings evaporated with the features they described.
+  Order matters more than it looks.
+- The rebrand took eight commits, not one. Phase 1 as written underestimated it.
+- Phase 0's Coreograph diagnosis has not happened. It needs real TMA data and gates Phase 3.
+- The QC hook scaffold was dropped rather than built. An empty module is cruft, and what QC consumes
+  depends on decisions not yet made.
+- Stubs and the pre-commit config are deferred to Phase 2; see the note under Phase 1.
+
+Learned, each of which changes something later:
+
+- **sopa does not support `-stub` runs.** None of the eleven vendored modules has a stub block. The
+  whole testing strategy in `AGENT_CONTEXT.md` §7 rests on `-stub` being the primary local loop, so
+  Phase 2 has to build that loop before it can be relied on.
+- **`nf-core pipelines schema build` syncs parameters, not enum values or descriptions.** Three
+  hand-edits to `nextflow_schema.json` were unavoidable. The "never hand-edit" rule has a real gap.
+- **`argsCLI` lets a parameter exist, validate, appear in `--help`, and do nothing.** `cellprob_threshold`
+  was set to -6 in four test profiles and never reached Cellpose, because `extractSubArgs` did not list
+  it. No linter catches this. The check that does is comparing `nextflow.config` params against
+  `args.*` reads in `utils.nf`, and it is worth re-running whenever parameters change.
+- **`nf-core subworkflows update` can silently change a subworkflow's interface.** `utils_nfschema_plugin`
+  gained a tenth input and broke the caller at compile time, after the update had already written the
+  lockfile. Run `nextflow run . --help` after every module or subworkflow update.
+- **Deleting a file can break runtime code.** Removing the logos broke the completion email, which read
+  one from disk. `git grep` for dangling references after every deletion.
+- Three DOIs and one licence notice needed care: sopa's Zenodo DOI was inherited by the manifest and
+  README, and MIT requires retaining the upstream copyright rather than replacing it.
+
+Carried forward:
+
+- Stubs for eleven modules, version capture for seven, and activation of the pre-commit config, all to
+  Phase 2.
+- Regenerating `tests/*.nf.test.snap`, which still record `nf-core/sopa v1.0.1`, to Phase 6. Needs real
+  containers, so it is cluster work. `nf-test` is red until then.
+- Template bump 4.0.3 to 4.1.0, now unblocked by the TEMPLATE branch.
+- Two accepted standing lint warnings, both false positives rather than defects:
+  `local_component_structure` on `modules/local/utils.nf`, reason documented at the top of that file;
+  and `meta_yml_exists` on `subworkflows/local/utils_nfcore_histo_pipeline`, because the nf-core
+  template itself ships that file with two workflows and no `meta.yml`. Adding one produced six new
+  warnings, including a `meta_name` conflict that cannot be resolved while the file defines both
+  `PIPELINE_INITIALISATION` and `PIPELINE_COMPLETION`.
+- `ro-crate-metadata.json` was deleted as nf-core branding, but the non-nf-core template still generates
+  one, so that reasoning was probably wrong. Accept it back at the first `nf-core pipelines sync`.
