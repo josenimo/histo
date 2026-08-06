@@ -815,6 +815,69 @@ Carried forward: what was deferred out of this phase, and to where.
 
 ### Entries
 
+### Phase 3: TMA path (closed 2026-08-06)
+
+Commits: `532955d`..`ee35514`, 7 commits, 26 files.
+
+Built: a dearrayed slide now comes back together. Each core runs the whole downstream half on its own
+and `MERGE_SPATIALDATA` combines the finished stores into one object per slide, writing element by
+element so peak memory is one core rather than all of them. `EXPLORER` was also removed from the
+pipeline entirely.
+
+Lint at close: **to be recorded.**
+
+Deviated:
+
+- **`EXPLORER` removal was not in the Phase 3 plan.** Requested mid-phase. It was cheap, but it had a
+  consequence nobody predicted: `params.pixel_size` existed only to feed the Explorer export, so
+  removing it deleted the one place physical scale lived. See "Learned".
+- Merge placement was decided as **after everything**, not after `AGGREGATE` as §3 left open.
+  Segmenting many small dense objects scales better than one large sparse one, and per-core QC
+  reports survive.
+- Tables are kept **one per core** rather than concatenated, so §5's concatenation caveat is moot for
+  now.
+- The merge chains off `REPORT` rather than off the shared upstream channel, because `REPORT` deletes
+  `.sopa_cache` from the zarr in place and a concurrent reader would race it.
+
+Learned, each of which changes something later:
+
+- **A stub run cannot detect an incomplete commit.** Nextflow reads the working tree; git records
+  something else. Both diverged here and every run still passed. `.gitignore` contained a bare
+  `local/`, which git matches at any depth, so `modules/local/` was ignored. Existing modules stayed
+  tracked and nothing looked wrong until a *new* module was added there and silently omitted from its
+  own commit, leaving HEAD with an `include` pointing at nothing. Compounding it, `git add` is
+  all-or-nothing: one ignored path in the argument list staged none of the others, which is how a
+  second commit lost its bulk. **The end-of-phase check must include a clone**, not just a stub run:
+  `git clone . /tmp/check && cd /tmp/check && nextflow run . -profile laptop,test -stub`.
+- **Removing EXPLORER forced the open pixel-size decision.** Option 1 in §8, "accept sopa's model and
+  let physical scale live only in the Explorer bundle", no longer exists. Scale goes into the zarr or
+  nowhere. The path is now known and cheap: `sopa convert` needs no patching, because
+  `SpatialData.write_transformations()` rewrites only transformation metadata on an existing store.
+  The trap is that the new `Scale` must go into a **new** coordinate system; redefining `global` would
+  silently reinterpret `patch_width_pixel` and `min_area_pixels2` as microns.
+- **Ashlar preserves pixel size and does not invent channel names.** Confirmed on real output:
+  `PhysicalSize` 0.65 µm survives, `ImageDescription` is present so `tiffcomment -set` will work, and
+  the 12 `Channel` elements exist but are unnamed. So §6 is now only about adding `Name` attributes to
+  elements that already exist, keyed on the marker sheet's continuous `channel_number` — which makes
+  that validation rule load-bearing rather than merely tidy.
+- **Coreograph's version difference bit a second time.** The core ID was derived with
+  `replaceFirst(/\.tif$/, '')`, leaving a trailing `.ome` on 2.4.6's `.ome.tif` output. The module
+  patch had been made extension-agnostic; the code parsing its output had not. When a rename is
+  version-proofed, everything that reads the renamed thing must be too.
+- **`assert` inside a channel operator closure is swallowed** — already learned once with
+  `validateMarkersheet`, and nearly repeated here. `error()` is the only reliable form.
+
+Carried forward:
+
+- Peak RSS measurement of the merge with `/usr/bin/time -v` on the real TMA. The incremental write is
+  the entire point of the script and inspection cannot confirm it works.
+- Real-data confirmation that core IDs appear in merged element names, and `check_qupath_paquo.py`
+  against the cores. Both need containers.
+- A committed TMA test profile. Blocked on a small fixture, so it goes to Phase 6; the local
+  `params-exemplar002-tma.yml` covers it meanwhile.
+- Writing pixel size into the zarr: now a known method rather than an open question, but unbuilt.
+- Channel-name injection before `sopa convert`, still §6.
+
 ### Phase 2: Preprocessing half (closed 2026-08-06)
 
 Commits: `b43231a`..`6058023`, 19 commits, 60 files.
