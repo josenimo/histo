@@ -9,12 +9,15 @@
 // rather than reinvented.
 //
 
-include { BASICPY } from '../../../modules/nf-core/basicpy/main'
-include { ASHLAR  } from '../../../modules/nf-core/ashlar/main'
+include { BASICPY    } from '../../../modules/nf-core/basicpy/main'
+include { ASHLAR     } from '../../../modules/nf-core/ashlar/main'
+include { BACKSUB    } from '../../../modules/nf-core/backsub/main'
+include { COREOGRAPH } from '../../../modules/nf-core/coreograph/main'
 
 workflow PREPROCESS_IMAGES {
     take:
     ch_cycles // channel: [ val(meta), path(image_tiles), path(dfp), path(ffp) ]
+    ch_markersheet // channel: list of marker rows, or empty
 
     main:
 
@@ -70,9 +73,71 @@ workflow PREPROCESS_IMAGES {
 
     ASHLAR(ch_ashlar.images, ch_ashlar.dfps, ch_ashlar.ffps)
 
+    //
+    // Background subtraction. Optional, off by default.
+    //
+    // backsub wants a marker file with exactly the six columns it reads, so the
+    // sheet is rewritten rather than passed through: nulls become empty strings,
+    // and the extra columns are dropped. Same approach as nf-core/mcmicro.
+    //
+    if (params.use_backsub) {
+        ch_backsub_markers = ch_markersheet
+            .map { rows ->
+                [
+                    'channel_number,cycle_number,marker_name,exposure,background,remove',
+                    rows.collect { r ->
+                        [r.channel_number, r.cycle_number, r.marker_name, r.exposure, r.background, r.remove].join(',')
+                    },
+                ]
+            }
+            .flatten()
+            .map { it.replaceAll('(?<=,|^)null(?=,|$)', '') }
+            .collectFile(name: 'markers_backsub.csv', sort: false, newLine: true)
+
+        // combine() rather than join(): one marker sheet serves every sample, so
+        // it is broadcast against the images rather than matched by key.
+        ASHLAR.out.tif
+            .combine(ch_backsub_markers)
+            .multiMap { meta, image, markers ->
+                image: [meta, image]
+                markers: [meta, markers]
+            }
+            .set { ch_backsub }
+
+        BACKSUB(ch_backsub.image, ch_backsub.markers)
+        ch_registered = BACKSUB.out.backsub_tif
+    }
+    else {
+        ch_registered = ASHLAR.out.tif
+    }
+
+    //
+    // TMA dearray. Optional, off by default.
+    //
+    // This is the one step that changes the cardinality of the pipeline: one slide
+    // becomes N cores, and each core continues through the downstream half as an
+    // independent sample with its own SpatialData object.
+    //
+    if (params.use_tma_dearray) {
+        COREOGRAPH(ch_registered)
+
+        // transpose() turns [meta, [core1, core2, ...]] into one item per core.
+        // The core's identity comes from its filename, which the patched module
+        // writes as {slide}_core001. meta.slide is retained so cores can be
+        // grouped back to their slide later.
+        ch_images = COREOGRAPH.out.cores
+            .transpose()
+            .map { meta, core ->
+                [meta + [id: core.name.replaceFirst(/\.tif$/, ''), slide: meta.id], core]
+            }
+    }
+    else {
+        ch_images = ch_registered
+    }
+
     // Versions are emitted on the `versions` topic by all four mcmicro modules,
     // and collected in workflows/histo.nf. Nothing to mix here.
 
     emit:
-    ome_tif = ASHLAR.out.tif // channel: [ val(meta), path(ome_tif) ]
+    images = ch_images // channel: [ val(meta), path(image) ] one per sample, or one per TMA core
 }

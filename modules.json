@@ -23,7 +23,8 @@
                     "coreograph": {
                         "branch": "master",
                         "git_sha": "23c5535328a9837510b9e2dafd5eef457aee7719",
-                        "installed_by": ["modules"]
+                        "installed_by": ["modules"],
+                        "patch": "modules/nf-core/coreograph/coreograph.diff"
                     }
                 }
             },

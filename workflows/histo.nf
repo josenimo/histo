@@ -29,6 +29,7 @@ include { argsCLI        } from '../modules/local/utils'
 workflow HISTO {
     take:
     ch_samplesheet // channel: samplesheet read in from --input
+    ch_markersheet // channel: marker sheet read in from --marker_sheet
     outdir
 
     main:
@@ -36,19 +37,19 @@ workflow HISTO {
     def ch_versions = channel.empty()
 
     if (params.use_preprocessing) {
-        PREPROCESS_IMAGES(ch_samplesheet)
+        PREPROCESS_IMAGES(ch_samplesheet, ch_markersheet)
 
         // Grouping cycles into samples reduces meta to {id}, but the downstream
         // half needs sample, sdata_dir and explorer_dir. They are per-sample and
         // only meaningful once cycles are stitched, so they are added here rather
         // than during samplesheet validation.
-        ch_input_spatialdata = PREPROCESS_IMAGES.out.ome_tif.map { meta, ome_tif ->
+        ch_input_spatialdata = PREPROCESS_IMAGES.out.images.map { meta, image ->
             def m = meta + [
                 sample: meta.id,
                 sdata_dir: "${meta.id}.zarr",
                 explorer_dir: "${meta.id}.explorer",
             ]
-            [m, ome_tif, []]
+            [m, image, []]
         }
     }
     else {
