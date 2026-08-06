@@ -19,13 +19,18 @@ histo_*.txt
 # local test imagery. Gigabytes; never committed. Phase 6 puts small fixtures in
 # a separate test-data repository instead.
 local_test_datasets/
-# scratch space: params files with absolute paths, diagnostic scripts, tool inputs.
-# See local/README.md, itself ignored.
+# Scratch space: params files with absolute paths, diagnostic scripts, runbooks,
+# tool inputs. See scratch/README.md, itself ignored.
 #
-# MUST keep the leading slash. A bare `local/` matches a directory of that name at
-# ANY depth, which silently ignored the whole of `modules/local/`. Existing files
-# there stayed tracked, so nothing looked wrong until a NEW local module was added
-# and `git add` refused it; the module then went missing from its own commit while
-# the workflow that included it was committed fine.
-/local/
+# Named `scratch/` and not `local/`. This directory was called `local/`, and a bare
+# `local/` here matched a directory of that name at ANY depth, which silently ignored
+# the whole of `modules/local/`. Files already tracked there stayed tracked, so nothing
+# looked wrong until a NEW module was added and `git add` refused it; the module then
+# went missing from its own commit while the workflow including it committed fine.
+#
+# Anchoring to `/local/` fixed that, but the name was still wrong: `modules/local`,
+# `subworkflows/local`, `local_test_datasets` and Nextflow's own `local` executor all
+# use the word for different things. The rename removes the ambiguity rather than
+# working around it. The leading slash is kept regardless.
+/scratch/
 .nf-test*

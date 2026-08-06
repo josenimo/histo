@@ -1026,7 +1026,7 @@ Carried forward:
 - `MERGE_SPATIALDATA` to Phase 3, written from scratch. It exists only on `legacy` and sopa has no
   equivalent, so this is the genuinely novel piece.
 - Channel names, narrowed to a single experiment: does Ashlar write marker names into its OME-XML?
-  `local/inspect-ome.py` answers it.
+  `scratch/inspect-ome.py` answers it.
 - Marker sheet as a samplesheet column, and `groupKey` for the cycle regroup: both in §7b.
 - The template bump 4.0.3 to 4.1.0, still outstanding from Phase 1.
 
