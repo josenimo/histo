@@ -1,0 +1,45 @@
+repository_type: pipeline
+
+nf_core_version: 4.1.0
+
+lint:
+  files_unchanged:
+    - assets/sendmail_template.txt
+    - CODE_OF_CONDUCT.md
+    - assets/nf-core-histo_logo_light.png
+    - docs/images/nf-core-histo_logo_light.png
+    - docs/images/nf-core-histo_logo_dark.png
+    - .github/ISSUE_TEMPLATE/bug_report.yml
+    - .github/PULL_REQUEST_TEMPLATE.md
+    - assets/email_template.txt
+    - docs/README.md
+  nextflow_config:
+    - manifest.name
+    - manifest.homePage
+  multiqc_config: false
+  files_exist:
+    - assets/multiqc_config.yml
+    - CODE_OF_CONDUCT.md
+    - assets/nf-core-histo_logo_light.png
+    - docs/images/nf-core-histo_logo_light.png
+    - docs/images/nf-core-histo_logo_dark.png
+    - .github/ISSUE_TEMPLATE/config.yml
+    - .github/workflows/awstest.yml
+    - .github/workflows/awsfulltest.yml
+    - conf/igenomes.config
+    - conf/igenomes_ignored.config
+
+template:
+  org: josenimo
+  name: histo
+  description: Processing, segmentation and quantification of H&E and multiplex immunofluorescence
+    images
+  author: Jose Nimo
+  version: 0.1.0dev
+  force: false
+  outdir: /tmp/histo-template
+  skip_features:
+    - igenomes
+    - multiqc
+    - fastqc
+  is_nfcore: false
