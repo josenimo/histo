@@ -815,6 +815,49 @@ Carried forward: what was deferred out of this phase, and to where.
 
 ### Entries
 
+### Phase 5: Containers (closed 2026-08-06)
+
+Commits: `ac6334e`, `8f44eed`, 2 commits. Item 1 had already been done during the Phase 1 rebrand.
+
+Built: `containers.tsv`, a generated, reviewable list of every image the pipeline needs, kept current
+by a pre-commit hook; `tools/container_manifest.py` that produces and verifies it; and
+`docs/containers.md` covering pre-staging into the shared Singularity cache.
+
+Lint at close: **242 passed, 33 ignored, 5 warnings, 0 failed**, down from 13. `prek` green.
+
+Deviated:
+
+- **Phase 5 was run before Phase 4, deliberately.** Phase 4's size profiles are meant to be filled
+  from real run data, and every run so far has been `-stub`. Containers are what make a real run
+  possible, so the order was inverted rather than inventing numbers.
+- Item 1 was already complete: no `.sif` paths or `/fast/AG_Coscia` references survived the rebrand.
+- The manifest is keyed on the **image**, not the module, which was not specified. Fifteen modules
+  need seven images, and pre-staging cost is per image.
+- `tools/` was created rather than putting the generator in `bin/`. `bin/` is staged onto the PATH of
+  every task, and development tooling does not belong there. The ruff hooks were widened to cover it.
+
+Learned:
+
+- **Three images are Docker-only.** `basicpy`, `coreograph` and `backsub` come from mcmicro with no
+  BioContainers Singularity build, so they convert from Docker rather than download, with Docker Hub
+  rate limits in play. On a cluster with intermittent connectivity these are the likely failure point
+  of a first pre-staging run. The empty `singularity_uri` column records this.
+- **Cross-checking the manifest against the real cache found exactly one gap**: ashlar
+  `1.19.0--pyhdfd78af_0`. Six of seven were already staged from earlier mcmicro and sopa downloads.
+  The cache also holds `labsyspharm-ashlar-1.19.0` and a personal `jose_ashlar-1.21.0` build; using
+  either would need an `nf-core modules patch` carried indefinitely, so the declared BioContainers
+  image was fetched instead. The 1.21 fork will need that patch when it is adopted.
+- **Eight Phase 2 parameters had no schema group and no descriptions**, so `--help` listed bare names.
+  Grouped as `Preprocessing` and documented; this alone accounted for the whole 4 → 13 warning rise.
+  `marker_sheet` also gained `format`/`exists`/`.csv` validation, so a typo now fails at launch.
+
+Carried forward:
+
+- Phase 4 in full, now with a decision attached: the three size profiles go in a **single**
+  `conf/sizes.config` declaring one `profiles` scope, not three near-identical files that must be kept
+  in sync. Numbers come from real runs.
+- `conf/mdc.config` for the SLURM setup, still unwritten.
+
 ### Phase 3: TMA path (closed 2026-08-06)
 
 Commits: `532955d`..`ee35514`, 7 commits, 26 files.
