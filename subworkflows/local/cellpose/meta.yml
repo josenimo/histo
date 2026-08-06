@@ -7,8 +7,9 @@ keywords:
   - spatial
   - imaging
 components:
-  - patch_segmentation_cellpose
-  - resolve_cellpose
+  - patch/segmentation/cellpose
+  - resolve/cellpose
+  - argscli
 input:
   - ch_patches:
       type: file

@@ -7,8 +7,9 @@ keywords:
   - nuclei
   - imaging
 components:
-  - patch_segmentation_stardist
-  - resolve_stardist
+  - patch/segmentation/stardist
+  - resolve/stardist
+  - argscli
 input:
   - ch_patches:
       type: file
