@@ -516,8 +516,6 @@ TMA rather than by inspection.
 > sopa falls back to integer names, and `require_channel_names` escalates that to a hard failure once
 > the preprocessing half guarantees them.
 
-
-
 Not scheduled. Recording the route so it is not rediscovered later.
 
 Your recollection about bftools is correct, and mcmicro has a more complete metadata stack than just
@@ -616,6 +614,14 @@ two problems: it would match any input filename containing a digit, which all of
 resulting core identity is a bare number with no link to its slide. Target naming is
 `{sample}_core001`, zero-padded to three digits, which is ample for a slide. This is Phase 3 work and
 it is the same requirement as the unambiguous core IDs already recorded there.
+
+**The backsub-applied marker sheet is the one to use for channel names.** `BACKSUB` emits
+`markerout`, a rewritten marker sheet reflecting what it actually applied, and it is already
+published to `preprocessing/background_subtraction/`. No wiring was added, because nothing consumes
+it yet and an emit with no consumer is a placeholder. It matters later: when channel names are
+written into the OME-XML, the source must be this sheet rather than the input one, since backsub can
+drop or alter channels. Whatever does the injection should take `BACKSUB.out.markerout` when backsub
+ran and the original marker sheet otherwise.
 
 **`eval()` in version outputs breaks stub runs.** `ashlar` and `backsub` declare versions with
 `eval('<tool> --version')`, which Nextflow evaluates in the task environment even under `-stub`, so
