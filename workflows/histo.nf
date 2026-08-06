@@ -7,6 +7,7 @@ include { paramsSummaryMap        } from 'plugin/nf-schema'
 include { softwareVersionsToYAML  } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { methodsDescriptionText  } from '../subworkflows/local/utils_nfcore_histo_pipeline'
 
+include { PREPROCESS_IMAGES       } from '../subworkflows/local/preprocess_images'
 include { TO_SPATIALDATA          } from '../modules/local/to_spatialdata'
 include { MAKE_IMAGE_PATCHES      } from '../modules/local/make_image_patches'
 include { TISSUE_SEGMENTATION     } from '../modules/local/tissue_segmentation'
@@ -34,7 +35,25 @@ workflow HISTO {
 
     def ch_versions = channel.empty()
 
-    ch_input_spatialdata = ch_samplesheet.map { meta -> [meta, meta.data_dir, []] }
+    if (params.use_preprocessing) {
+        PREPROCESS_IMAGES(ch_samplesheet)
+
+        // Grouping cycles into samples reduces meta to {id}, but the downstream
+        // half needs sample, sdata_dir and explorer_dir. They are per-sample and
+        // only meaningful once cycles are stitched, so they are added here rather
+        // than during samplesheet validation.
+        ch_input_spatialdata = PREPROCESS_IMAGES.out.ome_tif.map { meta, ome_tif ->
+            def m = meta + [
+                sample: meta.id,
+                sdata_dir: "${meta.id}.zarr",
+                explorer_dir: "${meta.id}.explorer",
+            ]
+            [m, ome_tif, []]
+        }
+    }
+    else {
+        ch_input_spatialdata = ch_samplesheet.map { meta -> [meta, meta.data_dir, []] }
+    }
 
     (ch_spatialdata, versions) = TO_SPATIALDATA(ch_input_spatialdata)
     ch_versions = ch_versions.mix(versions)

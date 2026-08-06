@@ -83,7 +83,11 @@ workflow PIPELINE_INITIALISATION {
         before_text,
         after_text,
         command,
-        null, // cli_typecast: null uses the plugin's default behaviour
+        // cast_cli_params. Without this, --pixel_size 0.65 arrives as the string
+        // "0.65" and fails schema validation against a number, and likewise
+        // --use_cellpose true against a boolean. Anything set on the command line
+        // rather than in a profile or params file needs coercion.
+        true,
     )
 
     //
@@ -96,26 +100,47 @@ workflow PIPELINE_INITIALISATION {
     //
     // Create channel from input file provided through params.input
     //
-
-    Channel
-        .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
-        .map { meta, data_path ->
-            if (!data_path) {
-                error("The `data_path` column must be provided (path to the raw inputs)")
+    // The samplesheet has two shapes, chosen by params.use_preprocessing:
+    //
+    //   true  (default) one row per acquisition cycle. Raw tiles go through
+    //                   illumination correction and stitching first.
+    //   false           one row per sample, pointing at data already in a form
+    //                   sopa can read. Used for pre-stitched images, for dearrayed
+    //                   TMA cores re-entering the pipeline, and for toy_dataset.
+    //
+    if (params.use_preprocessing) {
+        Channel
+            .fromList(validateIlluminationColumns(
+                samplesheetToList(params.input, "${projectDir}/assets/schema_input_cycle.json")
+            ))
+            .map { meta, image_tiles, dfp, ffp ->
+                // sdata_dir and explorer_dir are deliberately not set here. They are
+                // per-sample, and at this point a row is one cycle of a sample. They
+                // are added after cycles are grouped and stitched.
+                [meta, image_tiles, dfp, ffp]
             }
+            .set { ch_samplesheet }
+    }
+    else {
+        Channel
+            .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
+            .map { meta, data_path ->
+                if (!data_path) {
+                    error("The `data_path` column must be provided when use_preprocessing is false")
+                }
 
-            if (!meta.sample) {
-                meta.sample = file(data_path).baseName
+                if (!meta.sample) {
+                    meta.sample = file(data_path).baseName
+                }
+
+                meta.data_dir = data_path
+                meta.sdata_dir = "${meta.sample}.zarr"
+                meta.explorer_dir = "${meta.sample}.explorer"
+
+                return meta
             }
-
-            meta.data_dir = data_path
-
-            meta.sdata_dir = "${meta.sample}.zarr"
-            meta.explorer_dir = "${meta.sample}.explorer"
-
-            return meta
-        }
-        .set { ch_samplesheet }
+            .set { ch_samplesheet }
+    }
 
     //
     // Sopa params validation
@@ -241,6 +266,28 @@ def methodsDescriptionText(mqc_methods_yaml) {
     def description_html = engine.createTemplate(methods_text).make(meta)
 
     return description_html.toString()
+}
+
+//
+// Illumination profiles are all-or-nothing per sample.
+//
+// Whether BaSiCPy runs is inferred from the samplesheet rather than set by a
+// parameter, which is only safe if the columns are consistent. A samplesheet
+// giving dfp and ffp for some cycles of a sample but not others would send half
+// the cycles down each path, and Ashlar would receive profiles that do not line
+// up with its images. That is silent misregistration, the same failure mode as
+// unsorted cycles. JSON Schema cannot express this, so it is checked here.
+//
+def validateIlluminationColumns(rows) {
+    rows.groupBy { it[0].id }.each { sample, cycles ->
+        def withProfiles = cycles.count { it[2] && it[3] }
+        assert withProfiles == 0 || withProfiles == cycles.size() : (
+            "Sample '${sample}': dfp and ffp must be given for every cycle or for none. " +
+            "Found ${withProfiles} of ${cycles.size()} cycles with profiles. " +
+            "Supplying them for some cycles only would misalign illumination profiles against images."
+        )
+    }
+    return rows
 }
 
 def validateParams(params) {
