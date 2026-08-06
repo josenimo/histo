@@ -83,7 +83,11 @@ workflow PIPELINE_INITIALISATION {
         before_text,
         after_text,
         command,
-        null, // cli_typecast: null uses the plugin's default behaviour
+        // cast_cli_params. Without this, --pixel_size 0.65 arrives as the string
+        // "0.65" and fails schema validation against a number, and likewise
+        // --use_cellpose true against a boolean. Anything set on the command line
+        // rather than in a profile or params file needs coercion.
+        true,
     )
 
     //
@@ -96,34 +100,78 @@ workflow PIPELINE_INITIALISATION {
     //
     // Create channel from input file provided through params.input
     //
-
-    Channel
-        .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
-        .map { meta, data_path ->
-            if (!data_path) {
-                error("The `data_path` column must be provided (path to the raw inputs)")
+    // The samplesheet has two shapes, chosen by params.use_preprocessing:
+    //
+    //   true  (default) one row per acquisition cycle. Raw tiles go through
+    //                   illumination correction and stitching first.
+    //   false           one row per sample, pointing at data already in a form
+    //                   sopa can read. Used for pre-stitched images, for dearrayed
+    //                   TMA cores re-entering the pipeline, and for toy_dataset.
+    //
+    if (params.use_preprocessing) {
+        Channel
+            .fromList(validateIlluminationColumns(
+                samplesheetToList(params.input, "${projectDir}/assets/schema_input_cycle.json")
+            ))
+            .map { meta, image_tiles, dfp, ffp ->
+                // sdata_dir and explorer_dir are deliberately not set here. They are
+                // per-sample, and at this point a row is one cycle of a sample. They
+                // are added after cycles are grouped and stitched.
+                [meta, image_tiles, dfp, ffp]
             }
+            .set { ch_samplesheet }
+    }
+    else {
+        Channel
+            .fromList(samplesheetToList(params.input, "${projectDir}/assets/schema_input.json"))
+            .map { meta, data_path ->
+                if (!data_path) {
+                    error("The `data_path` column must be provided when use_preprocessing is false")
+                }
 
-            if (!meta.sample) {
-                meta.sample = file(data_path).baseName
+                if (!meta.sample) {
+                    meta.sample = file(data_path).baseName
+                }
+
+                meta.data_dir = data_path
+                meta.sdata_dir = "${meta.sample}.zarr"
+                meta.explorer_dir = "${meta.sample}.explorer"
+
+                return meta
             }
-
-            meta.data_dir = data_path
-
-            meta.sdata_dir = "${meta.sample}.zarr"
-            meta.explorer_dir = "${meta.sample}.explorer"
-
-            return meta
-        }
-        .set { ch_samplesheet }
+            .set { ch_samplesheet }
+    }
 
     //
     // Sopa params validation
     //
     validateParams(params)
 
+    //
+    // Marker sheet. One row per channel across all cycles. Optional overall, but
+    // required by background subtraction, which scales each channel by its
+    // exposure time.
+    //
+    if (params.marker_sheet) {
+        // Validated synchronously, before the channel exists. An assert thrown
+        // inside a channel operator is swallowed and the run dies with no message;
+        // called here it surfaces the way validateIlluminationColumns does.
+        //
+        // Every column is declared as meta, so each row arrives as a
+        // single-element list holding the meta map, hence it[0].
+        def marker_rows = validateMarkersheet(
+            samplesheetToList(params.marker_sheet, "${projectDir}/assets/schema_marker.json")
+                .collect { it[0] }
+        )
+        ch_markersheet = channel.value(marker_rows)
+    }
+    else {
+        ch_markersheet = channel.empty()
+    }
+
     emit:
     samplesheet = ch_samplesheet
+    markersheet = ch_markersheet
     versions = ch_versions
 }
 
@@ -241,6 +289,63 @@ def methodsDescriptionText(mqc_methods_yaml) {
     def description_html = engine.createTemplate(methods_text).make(meta)
 
     return description_html.toString()
+}
+
+//
+// Illumination profiles are all-or-nothing per sample.
+//
+// Whether BaSiCPy runs is inferred from the samplesheet rather than set by a
+// parameter, which is only safe if the columns are consistent. A samplesheet
+// giving dfp and ffp for some cycles of a sample but not others would send half
+// the cycles down each path, and Ashlar would receive profiles that do not line
+// up with its images. That is silent misregistration, the same failure mode as
+// unsorted cycles. JSON Schema cannot express this, so it is checked here.
+//
+def validateIlluminationColumns(rows) {
+    rows.groupBy { it[0].id }.each { sample, cycles ->
+        def withProfiles = cycles.count { it[2] && it[3] }
+        assert withProfiles == 0 || withProfiles == cycles.size() : (
+            "Sample '${sample}': dfp and ffp must be given for every cycle or for none. " +
+            "Found ${withProfiles} of ${cycles.size()} cycles with profiles. " +
+            "Supplying them for some cycles only would misalign illumination profiles against images."
+        )
+    }
+    return rows
+}
+
+//
+// Marker sheet checks that JSON Schema cannot express.
+//
+def validateMarkersheet(rows) {
+    // channel_number is a continuous index across all cycles, not per-cycle. If it
+    // restarts each cycle, every channel after cycle 1 is mislabelled and the
+    // feature table silently carries the wrong marker names.
+    def numbers = rows.collect { it.channel_number }
+    def expected = (1..rows.size()).toList()
+    assert numbers == expected : (
+        "marker_sheet: channel_number must run 1..${rows.size()} continuously across all cycles, " +
+        "without restarting per cycle. Got ${numbers}."
+    )
+
+    // Background subtraction scales by exposure and looks up a background channel
+    // by marker_name. Both are optional columns in general but mandatory here, and
+    // a missing one produces a confusing failure inside the tool.
+    if (params.use_backsub) {
+        def noExposure = rows.findAll { !it.exposure }.collect { it.marker_name }
+        assert !noExposure : (
+            "marker_sheet: use_backsub is enabled, so every channel needs an exposure. " +
+            "Missing for: ${noExposure}"
+        )
+
+        def names = rows.collect { it.marker_name } as Set
+        def unknown = rows.findAll { it.background && !(it.background in names) }
+            .collect { "${it.marker_name} -> ${it.background}" }
+        assert !unknown : (
+            "marker_sheet: background must name another channel's marker_name. Unknown: ${unknown}"
+        )
+    }
+
+    return rows
 }
 
 def validateParams(params) {

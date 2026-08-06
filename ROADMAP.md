@@ -13,7 +13,7 @@ The phases and steps below were published as 10 milestones and 57 issues on 2026
 `create_issues.sh`. Progress lives there, not here. Do not update this document to reflect what is
 done; check the issues instead.
 
-What this document is for: the *why*. The findings from the review of the prior tree, the decisions
+What this document is for: the _why_. The findings from the review of the prior tree, the decisions
 that were considered and rejected, the constraints that shaped the plan. An issue says "patch
 coreograph to 2.4.6"; this says why the nf-core module is a downgrade, why that matters, and what was
 verified. That reasoning does not go stale the way a checklist does.
@@ -40,24 +40,24 @@ they concern; exemptions written against files that are about to disappear are w
 
 ## 1. Decisions settled
 
-| Question | Decision |
-|---|---|
-| Starting point | Clone `nf-core/sopa:dev` at `c2b4e5f` as a scaffold with fresh git history. No sopa remote, no inherited TEMPLATE. Rebrand once, record source SHA in the initial commit. |
-| Module sourcing | Vendor sopa's `modules/local/*` verbatim, preserving licence header, `meta.yml`, `environment.yml`, `.conda-lock/`, and a source-commit comment. |
-| Tool arguments | Keep sopa's `argsCLI()` verbatim in `modules/local/utils.nf`. |
-| SpatialData conversion | Use upstream `sopa convert` with `technology = 'ome_tif'`. Delete `bin/convert_to_spatialdata.py`. |
-| TMA dearray | Install `nf-core/modules` `coreograph`, then `nf-core modules patch` to bump the container. Delete `bin/run_coreograph.py`. |
-| **Post-module Python fixes** | **Undesired, but permitted as a pragmatic escape hatch.** Default to fixing at the producing step. Where going through the full module route is disproportionate, a post-hoc script is acceptable provided it is a named module with a stub, a version capture and a comment stating why the producer was not fixed. `bin/fix_core_ome_tiff.py` still goes, because a better tool exists (see §6). |
-| Containers | Restore upstream registry URIs. Pre-stage SIFs into the shared `NXF_SINGULARITY_CACHEDIR`. No launch-time pulls. |
-| Params interface | `-params-file params.yml` is the primary interface, validated by `nextflow_schema.json`. |
-| Segmentation | Cellpose is the primary backend for 1.0.0. StarDist retained alongside it. |
-| Scope in | `TISSUE_SEGMENTATION`, `CELLPOSE`, `STARDIST`, `FLUO_ANNOTATION`, `conf/predefined` mIF presets (phenocycler, macsima, hyperion). |
-| Scope out | `SCANPY_PREPROCESS`, `EXPLORER_RAW`, `BAYSOR`, `COMSEG`, `PROSEG`, `SPACERANGER`, the Visium HD path, all transcript-patch paths. |
-| Reader | `ome_tif` only, plus `toy_dataset` until the test fixtures are replaced in Phase 6. H&E support to be added deliberately later, not inherited. |
-| Ashlar fork | Deferred to nice-to-haves. Keep `josenimo/jose_ashlar:1.21.0` as-is for now. |
-| `min_intensity_ratio`, `expand_radius_ratio` | Deferred until the baseline runs. 1.0.0 quantification is therefore nuclear-only. |
-| Channel names and physical pixel size | Bookmarked. Route identified via mcmicro's bftools metadata stack, see §6. Not scheduled yet. |
-| QC report | Deferred. Scaffold the hook, build later. |
+| Question                                     | Decision                                                                                                                                                                                                                                                                                                                                                                                           |
+| -------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Starting point                               | Clone `nf-core/sopa:dev` at `c2b4e5f` as a scaffold with fresh git history. No sopa remote, no inherited TEMPLATE. Rebrand once, record source SHA in the initial commit.                                                                                                                                                                                                                          |
+| Module sourcing                              | Vendor sopa's `modules/local/*` verbatim, preserving licence header, `meta.yml`, `environment.yml`, `.conda-lock/`, and a source-commit comment.                                                                                                                                                                                                                                                   |
+| Tool arguments                               | Keep sopa's `argsCLI()` verbatim in `modules/local/utils.nf`.                                                                                                                                                                                                                                                                                                                                      |
+| SpatialData conversion                       | Use upstream `sopa convert` with `technology = 'ome_tif'`. Delete `bin/convert_to_spatialdata.py`.                                                                                                                                                                                                                                                                                                 |
+| TMA dearray                                  | Install `nf-core/modules` `coreograph`, then `nf-core modules patch` to bump the container. Delete `bin/run_coreograph.py`.                                                                                                                                                                                                                                                                        |
+| **Post-module Python fixes**                 | **Undesired, but permitted as a pragmatic escape hatch.** Default to fixing at the producing step. Where going through the full module route is disproportionate, a post-hoc script is acceptable provided it is a named module with a stub, a version capture and a comment stating why the producer was not fixed. `bin/fix_core_ome_tiff.py` still goes, because a better tool exists (see §6). |
+| Containers                                   | Restore upstream registry URIs. Pre-stage SIFs into the shared `NXF_SINGULARITY_CACHEDIR`. No launch-time pulls.                                                                                                                                                                                                                                                                                   |
+| Params interface                             | `-params-file params.yml` is the primary interface, validated by `nextflow_schema.json`.                                                                                                                                                                                                                                                                                                           |
+| Segmentation                                 | Cellpose is the primary backend for 1.0.0. StarDist retained alongside it.                                                                                                                                                                                                                                                                                                                         |
+| Scope in                                     | `TISSUE_SEGMENTATION`, `CELLPOSE`, `STARDIST`, `FLUO_ANNOTATION`, `conf/predefined` mIF presets (phenocycler, macsima, hyperion).                                                                                                                                                                                                                                                                  |
+| Scope out                                    | `SCANPY_PREPROCESS`, `EXPLORER_RAW`, `BAYSOR`, `COMSEG`, `PROSEG`, `SPACERANGER`, the Visium HD path, all transcript-patch paths.                                                                                                                                                                                                                                                                  |
+| Reader                                       | `ome_tif` only, plus `toy_dataset` until the test fixtures are replaced in Phase 6. H&E support to be added deliberately later, not inherited.                                                                                                                                                                                                                                                     |
+| Ashlar fork                                  | Deferred to nice-to-haves. Keep `josenimo/jose_ashlar:1.21.0` as-is for now.                                                                                                                                                                                                                                                                                                                       |
+| `min_intensity_ratio`, `expand_radius_ratio` | Deferred until the baseline runs. 1.0.0 quantification is therefore nuclear-only.                                                                                                                                                                                                                                                                                                                  |
+| Channel names and physical pixel size        | Bookmarked. Route identified via mcmicro's bftools metadata stack, see §6. Not scheduled yet.                                                                                                                                                                                                                                                                                                      |
+| QC report                                    | Deferred. Scaffold the hook, build later.                                                                                                                                                                                                                                                                                                                                                          |
 
 ### Why the plan changed
 
@@ -89,12 +89,12 @@ call `sopa convert`. It loads whole images into RAM, writes no pyramid, overwrit
 Reading the actual source of sopa's reader (`sopa/io/reader/`, `ome_tif()`) against your four stated
 requirements gives a mixed result:
 
-| Requirement | Met by `sopa convert --technology ome_tif`? |
-|---|---|
-| Lazy loading to Zarr | Yes. Uses `dask_image.imread`, then `rechunk`. Never materialises the array. |
-| Pyramid | Yes. `_default_image_kwargs()` supplies `scale_factors` to `Image2DModel.parse`. |
+| Requirement                      | Met by `sopa convert --technology ome_tif`?                                                                                                                                                                           |
+| -------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Lazy loading to Zarr             | Yes. Uses `dask_image.imread`, then `rechunk`. Never materialises the array.                                                                                                                                          |
+| Pyramid                          | Yes. `_default_image_kwargs()` supplies `scale_factors` to `Image2DModel.parse`.                                                                                                                                      |
 | Channel names from `markers.csv` | **No.** Read from OME-XML only, via `_ome_channels_names(path)`. There is no parameter for a channel list, and `sopa convert` passes only `technology` and `kwargs`, which `ome_tif()` does not accept names through. |
-| Physical pixel size in the Zarr | **No.** Sets `transformations={"pixels": Identity()}`. `PhysicalSizeX` is never read. |
+| Physical pixel size in the Zarr  | **No.** Sets `transformations={"pixels": Identity()}`. `PhysicalSizeX` is never read.                                                                                                                                 |
 
 Two consequences.
 
@@ -233,6 +233,7 @@ Branch: none, work on `legacy`.
    Do the same for the Ashlar output that fed Coreograph, so the comparison isolates what Coreograph
    changes. Record the findings in the repo. This determines whether the fix is a container bump to
    2.4.6, a patched module, or an upstream UNetCoreograph change.
+
 4. Reuse `bin/check_qupath_paquo.py` here as a diagnostic, then move it to `tests/` as an acceptance
    check. It is a good test for "cores are ingestable by QuPath" and a bad pipeline step.
 
@@ -270,7 +271,7 @@ Branch: `feat/scaffold`.
    `explorer_raw` and `scanpy_preprocess`; the Visium HD path (`spaceranger`, `input_check`, `untar`).
    Then restrict the technology enum to `ome_tif`.
 
-   **Ordering note:** feature removal should come *before* rebranding, not after. Roughly a quarter
+   **Ordering note:** feature removal should come _before_ rebranding, not after. Roughly a quarter
    of the branded files were deleted anyway, and lint exemptions written against files that are about
    to disappear are wasted work. This was done in the wrong order.
 
@@ -278,6 +279,7 @@ Branch: `feat/scaffold`.
    and are now retained, StarDist as a second segmentation backend better suited to H&E nuclei, and
    fluorescence annotation for marker-based cell typing. Both must appear in at least one `-stub`
    profile, since a feature kept but never exercised rots silently.
+
 4. Housekeeping: MIT `LICENSE` with attribution to sopa and mcmicro; `CITATIONS.md` crediting sopa,
    mcmicro and every underlying tool; `CHANGELOG.md`.
 5. Vendor the nf-core community `AGENTS.md` verbatim with source URL, SHA and retrieval date, plus
@@ -309,19 +311,41 @@ Branch: `feat/preprocess-images`.
 3. Build `subworkflows/local/preprocess_images`: illumination correction, then stitching and
    registration, then optional background subtraction, then optional TMA dearray.
 4. Fan `BASICPY` out per cycle rather than looping inside one task.
-5. Fix dfp/ffp ordering with an explicit cycle index and a length assertion.
+5. Fix dfp/ffp ordering. Largely inherited: the cycle samplesheet carries an explicit
+   `cycle_number`, and mcmicro's grouping sorts on it
+   (`groupTuple(sort: { a, b -> a[0] <=> b[0] })`), which is the fix for P0-5. Still to add:
+   - **`dfp` and `ffp` are all or nothing per sample.** JSON Schema cannot express "if present for one
+     cycle, required for all", so this needs a runtime check in `validateParams`. A half-populated
+     column would silently misalign illumination profiles against cycles, which is the same class of
+     bug as P0-5 and just as invisible.
+   - An assertion that the number of profiles matches the number of cycles before Ashlar is called.
+   - Optional improvement, not required: mcmicro's `groupTuple` has no `size`, so it blocks until the
+     channel completes. The samplesheet knows the cycle count per sample, so `groupKey` would release
+     each sample as soon as its cycles arrive. Their own code carries a `FIXME` about this.
+
 6. **Assert channel names survived conversion.** After `TO_SPATIALDATA`, fail the run if channel names
    are the integer fallback. sopa only logs a warning, which is not acceptable for unattended runs on
    colleagues' data. This is the cheap guard; actually fixing the names is bookmarked in §6.
 7. `nf-core pipelines schema build`. Never hand-edit `nextflow_schema.json`.
-8. **Write `stub:` blocks for the eleven modules inherited from sopa**, deferred out of Phase 1. Each
-   must `touch` or `mkdir` exactly what the module's `output:` block declares, or the stub passes
-   while the real run fails. Add version capture to the seven modules lacking it: `aggregate`,
-   `explorer`, `make_image_patches`, `patch_segmentation_cellpose`, `patch_segmentation_stardist`,
-   `report`, `tissue_segmentation`.
-9. **Activate the pre-commit config from `planning/`**, which is only possible once the stubs exist,
-   since `module-has-stub` would otherwise fail on every module.
-10. Stub blocks for any new module, in the same commit as the module.
+8. **Add version capture to the seven modules lacking it**: `aggregate`, `explorer`,
+   `make_image_patches`, `patch_segmentation_cellpose`, `patch_segmentation_stardist`, `report`,
+   `tissue_segmentation`. Provenance is priority one and the pipeline currently records almost none.
+9. **Stub blocks where a module creates a file.** Revised 2026-08-06; see `AGENT_CONTEXT.md` §7.
+
+   The reasoning changed even though the outcome barely did, and the reasoning is the point. The
+   original rule was "every local module needs a stub", which assumed every module produces output
+   files. Five of sopa's eleven mutate the zarr in place and produce nothing new, so that rule was
+   wrong. But `versions.yml` counts as a created file, and item 8 gives all eleven one, so all eleven
+   end up needing a stub after all. For the pass-through modules it is three lines.
+
+   Each stub must create exactly what the `output:` block declares. A stale stub that passes while the
+   real run fails is worse than no stub.
+
+10. **The `module-has-stub` pre-commit hook has been corrected** to key on "declares a created file"
+    rather than "is a module". Verified against all eleven: it exempts only `aggregate` and
+    `tissue_segmentation`, and will stop exempting them once item 8 adds their versions block, which
+    is the behaviour we want.
+11. **Activate the pre-commit config from `planning/`** once items 8 and 9 are done.
 
 Exit criterion: `-stub` passes with `use_backsub = false`, `use_tma_dearray = false`. Handoff boundary
 is a single stitched OME-TIFF. Note that until the §6 bookmark is picked up, channel names will be
@@ -332,17 +356,34 @@ warning-with-exit-code decision you make consciously rather than a hard error th
 
 Branch: `feat/tma-dearray`. Design follows from the Phase 0 diagnosis.
 
-1. Fix Coreograph's output at the producing step, based on the diagnosis. In preference order:
-   container bump to 2.4.6 alone if that resolves it; a patched module with a corrected write step;
-   an upstream UNetCoreograph fix. No `bin/fix_core_ome_tiff.py`, no post-hoc Python.
-2. Rename cores to carry unambiguous IDs before conversion, since sopa derives element names from
-   filenames. A `mv` loop in the patched module, using Coreograph's `centroidsY-X.txt` and
-   `TMA_MAP.tif` so the core-ID-to-position mapping is recorded rather than inferred.
+**DIAGNOSIS DONE 2026-08-06, and it resolved items 1 and 5 with no code.**
+
+UNetCoreograph 2.4.6 was run on exemplar-002 and its output inspected in QuPath and through
+`sopa convert`:
+
+- Pixel size metadata **preserved**.
+- Pyramid levels **preserved**.
+- `sopa convert` **succeeds**, producing a `DataTree[cyx]` with five scales.
+- Cores are written as `1.ome.tif`, not `1.tif` as in 2.2.9. An extra `Coremask.tif` appears. Masks
+  remain plain `.tif`, so the two output families disagree on extension.
+
+So the original failure was a **2.2.9 problem, and the container bump alone is the fix**. No OME
+repair step is needed and the `bin/fix_core_ome_tiff.py` line of work is dead. This is why the
+diagnosis had to precede the patch: bumping first would have hidden which change mattered.
+
+Channel names could not be assessed, because the input image itself carries default names. That
+question is now purely about **Ashlar's output**: if Ashlar writes marker names into its OME-XML,
+everything downstream inherits them. Run `histo-inspect-ome.py` on an Ashlar output to settle it.
+
+1. ~~Fix Coreograph's output at the producing step~~ **Done: container bumped to 2.4.6.**
+2. ~~Rename cores to carry unambiguous IDs~~ **Done in Phase 2.** The patched module writes
+   `{slide}_core001`, zero-padded, preserving the tool's original numbering so the mapping to
+   `centroidsY-X.txt` survives. Renaming is extension-agnostic, since 2.2.9 and 2.4.6 disagree.
+   `tma_map`, `coremask` and `centroids` are emitted and published rather than discarded.
 3. Gate `MERGE_SPATIALDATA` on `params.use_tma_dearray`.
 4. Rewrite the merge incrementally, see §5.
-5. If pixel size is genuinely lost by Coreograph, that is a producer-side fix too. It must fail loudly
-   rather than defaulting. If a default is unavoidable, use 1.0 µm/px as an obviously-wrong sentinel,
-   not 0.65, and emit a warning that reaches the report.
+5. ~~If pixel size is lost by Coreograph, fix it at the producer~~ **Not needed. 2.4.6 preserves
+   pixel size**, confirmed in QuPath. The sentinel-default discussion is moot.
 
 Exit criterion: `-stub` passes with `use_tma_dearray = true`; on real data, core IDs are visible in
 element names and `check_qupath_paquo.py` passes against the cores.
@@ -410,11 +451,25 @@ release that quantification is nuclear-only, since `expand_radius_ratio` is defe
 Every nf-core module ships older than what you run.
 
 | Tool | nf-core module | Your version | Action |
-|---|---|---|---|
-| `basicpy` | `docker.io/labsyspharm/basicpy-docker-mcmicro:1.2.0-patch5` | identical | Install, no patch. |
-| `ashlar` | `biocontainers/ashlar:1.18.0--pyhdfd78af_0` | `josenimo/jose_ashlar:1.21.0`, code fork | Deferred. Keep the fork image, vendor to `modules/local/ashlar` with provenance documented. |
-| `backsub` | `ghcr.io/schapirolabor/background_subtraction:v0.4.1` | `v0.5.1` | Install, then `nf-core modules patch backsub`. |
-| `coreograph` | `docker.io/labsyspharm/unetcoreograph:2.2.9` | `2.4.6` | Install, then `nf-core modules patch coreograph`. |
+| ---- | -------------- | ------------ | ------ |
+
+**Corrected 2026-08-06 after installing.** The original table was built from the SHAs _mcmicro_ pins,
+not from current `nf-core/modules` master, and two of the four had moved.
+
+| Tool         | nf-core module, as installed                                | Your version                             | Action                                                                                                     |
+| ------------ | ----------------------------------------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `basicpy`    | `docker.io/labsyspharm/basicpy-docker-mcmicro:1.2.0-patch5` | identical                                | None.                                                                                                      |
+| `ashlar`     | `quay.io/biocontainers/ashlar:1.19.0--pyhdfd78af_0`         | `josenimo/jose_ashlar:1.21.0`, code fork | Deferred. Baseline moved from 1.18.0 to 1.19.0; the rotation-correction fork is still a separate question. |
+| `backsub`    | `ghcr.io/schapirolabor/background_subtraction:v0.5.1`       | `v0.5.1`                                 | **None. Already current; the planned patch is unnecessary.**                                               |
+| `coreograph` | `docker.io/labsyspharm/unetcoreograph:2.2.9`                | `2.4.6`                                  | Install, then `nf-core modules patch coreograph`. Still the only patch needed.                             |
+
+All four emit versions through **topic channels** rather than `versions.yml`, and name their outputs
+with `emit:`. Callers therefore use `MODULE.out.<name>` and cannot hit the output-arity trap that
+adding `versions.yml` to the sopa modules caused. `workflows/histo.nf` already collects
+`channel.topic("versions")`, so this needs no extra wiring.
+
+`ashlar` stages its inputs as `image*/*`, `dfp*/*` and `ffp*/*`, one numbered directory each. That is
+the mechanism preserving positional correspondence between cycles and illumination profiles.
 
 Module SHAs pinned in mcmicro's `modules.json`: `ashlar c7c25b63`, `backsub 41dfa3f7`,
 `basicpy a46512fa`, `coreograph 41dfa3f7`.
@@ -452,19 +507,26 @@ TMA rather than by inspection.
 
 ---
 
-## 6. BOOKMARK: channel names and physical pixel size
+## 6. BOOKMARK: channel names (pixel size resolved)
+
+> **Updated 2026-08-06.** Half of this bookmark is closed. The Coreograph diagnosis showed that
+> **pixel size survives** the preprocessing half, so no injection step is needed for it. What remains
+> is channel names, and the question narrowed: it is now entirely about whether **Ashlar** writes
+> marker names into the OME-XML of the image it hands over. `TO_SPATIALDATA` now warns loudly when
+> sopa falls back to integer names, and `require_channel_names` escalates that to a hard failure once
+> the preprocessing half guarantees them.
 
 Not scheduled. Recording the route so it is not rediscovered later.
 
 Your recollection about bftools is correct, and mcmicro has a more complete metadata stack than just
 the extractor. Four pieces already exist and fit together:
 
-| Piece | Location | What it does |
-|---|---|---|
-| `BFTOOLS_SHOWINF` | `nf-core/modules`, installable | `showinf -nopix -no-upgrade -omexml-only` per cycle, emits `*.xml`. Has `environment.yml` (`bioconda::bftools=8.0.0`) and a biocontainer. |
-| `OMEVALIDATION` | mcmicro `modules/local`, must be vendored | Groovy `exec:` block. Parses the XML with `XmlSlurper`, extracts tile count, tile size, `PhysicalSizeX/Y` and their units, and validates they are present and consistent. |
-| `UPDATE_FROM_OME` | mcmicro `subworkflows/local` | Joins the markersheet against the OME-XML, computes cumulative `channel_number` offsets across cycles, checks marker count against channel count, and errors if `exposure_time` is null when backsub is enabled. |
-| `PRELUDE` | mcmicro `subworkflows/local` | MultiQC-ready summaries of XML, markersheet and samplesheet, with error reporting. |
+| Piece             | Location                                  | What it does                                                                                                                                                                                                     |
+| ----------------- | ----------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `BFTOOLS_SHOWINF` | `nf-core/modules`, installable            | `showinf -nopix -no-upgrade -omexml-only` per cycle, emits `*.xml`. Has `environment.yml` (`bioconda::bftools=8.0.0`) and a biocontainer.                                                                        |
+| `OMEVALIDATION`   | mcmicro `modules/local`, must be vendored | Groovy `exec:` block. Parses the XML with `XmlSlurper`, extracts tile count, tile size, `PhysicalSizeX/Y` and their units, and validates they are present and consistent.                                        |
+| `UPDATE_FROM_OME` | mcmicro `subworkflows/local`              | Joins the markersheet against the OME-XML, computes cumulative `channel_number` offsets across cycles, checks marker count against channel count, and errors if `exposure_time` is null when backsub is enabled. |
+| `PRELUDE`         | mcmicro `subworkflows/local`              | MultiQC-ready summaries of XML, markersheet and samplesheet, with error reporting.                                                                                                                               |
 
 Two things this gives you beyond what you asked for.
 
@@ -534,6 +596,39 @@ Tissue segmentation: `level`, `mode`, `tissue_segmentation_kwargs`.
 Correction to an earlier note: `cellprob_threshold` appears in sopa's `conf/predefined/*` configs but
 is never read by `extractSubArgs`, so it does not reach the Cellpose CLI upstream either. If you want
 it, that is an edit to the vendored `utils.nf` and a candidate upstream fix.
+
+---
+
+## 7b. Deferred design improvements
+
+Raised during Phase 2, sound, not urgent.
+
+**Marker sheet as a samplesheet column.** Currently `--marker_sheet` is a single global file
+broadcast to every sample with `combine()`, which is correct for one acquisition protocol and wrong
+the moment two samples have different channel layouts. Making it a column of the cycle samplesheet
+would fix that and simultaneously reduce the pipeline from two input files to one. Do this before the
+first genuinely multi-sample run, not after.
+
+**Coreograph core naming.** `coreograph` emits cores matching `*[0-9]*.tif`, a bare numeric glob with
+two problems: it would match any input filename containing a digit, which all of ours do, and the
+resulting core identity is a bare number with no link to its slide. Target naming is
+`{sample}_core001`, zero-padded to three digits, which is ample for a slide. This is Phase 3 work and
+it is the same requirement as the unambiguous core IDs already recorded there.
+
+**The backsub-applied marker sheet is the one to use for channel names.** `BACKSUB` emits
+`markerout`, a rewritten marker sheet reflecting what it actually applied, and it is already
+published to `preprocessing/background_subtraction/`. No wiring was added, because nothing consumes
+it yet and an emit with no consumer is a placeholder. It matters later: when channel names are
+written into the OME-XML, the source must be this sheet rather than the input one, since backsub can
+drop or alter channels. Whatever does the injection should take `BACKSUB.out.markerout` when backsub
+ran and the original marker sheet otherwise.
+
+**`eval()` in version outputs breaks stub runs.** `ashlar` and `backsub` declare versions with
+`eval('<tool> --version')`, which Nextflow evaluates in the task environment even under `-stub`, so
+the binary must exist. Worked around with shims in `tests/stub_bin` loaded by the `laptop` profile.
+Arguably a Nextflow issue: an output declaration that shells out defeats the purpose of stub mode.
+Worth reporting upstream. Note `ashlar` only appeared to work because its eval pipes through `sed`,
+which exits 0 and silently yields an empty version.
 
 ---
 
@@ -688,7 +783,63 @@ Carried forward: what was deferred out of this phase, and to where.
 
 ### Entries
 
-### Phase 1: Scaffold  (closed 2026-08-06)
+### Phase 2: Preprocessing half (closed 2026-08-06)
+
+Commits: `b43231a`..`6058023`, 19 commits, 60 files.
+
+Built: the two halves now meet. A cycle samplesheet goes in; illumination correction runs per cycle,
+cycles are grouped and stitched, optionally background-subtracted, optionally dearrayed into cores,
+and the result enters the downstream half. Every channel connection is proven by stub runs, including
+the TMA fan-out where one slide becomes N independent samples.
+
+Lint at close: **0 failed, 4 warnings**, unchanged from Phase 1. `prek` passes on all 18 hooks.
+
+Deviated:
+
+- Stubs were written for all eleven inherited modules after all, but for a different reason than
+  planned. See §7.
+- `backsub`'s planned patch was unnecessary; the nf-core module had already moved to v0.5.1.
+- Coreograph's patch grew beyond a container bump into output renaming, because core identity turned
+  out to be load-bearing for sopa element names.
+- The Phase 0 Coreograph diagnosis finally happened here, and resolved two Phase 3 items with a
+  one-line container change.
+
+Learned, each of which changes something later:
+
+- **`nf-core subworkflows update` changes more than the code.** `utils_nfschema_plugin` gained an
+  input, which broke the caller at compile time and was caught immediately; it also required
+  nf-schema 2.7.2 while `nextflow.config` pinned 2.5.1, which was silent and made every numeric CLI
+  parameter fail validation. After any update, check the component's `tests/nextflow.config` for
+  declared plugin versions.
+- **Validation must be synchronous.** An `assert` inside a channel operator is swallowed and the run
+  dies with no message. `validateIlluminationColumns` works because it is called on a plain list;
+  `validateMarkersheet` did not until it was moved out of a `.map{}`. **A validation rule is not done
+  until you have watched it fail.**
+- **Adding an output changes a module's arity** and silently breaks every caller that unpacks
+  positionally. Adding `versions.yml` to eight modules broke the whole DAG; the stub run caught it in
+  seconds and nothing else would have.
+- **Stub failures can describe themselves badly.** backsub reported "missing output file" when the
+  file plainly existed; the real cause was a name collision with its input. When a stub failure looks
+  impossible, read what the module's real `script:` block guards against.
+- **Patch against the tool, not against the stub.** The Coreograph rename was written against 2.2.9's
+  stub and would have renamed nothing on 2.4.6, which changed `1.tif` to `1.ome.tif`. It is now
+  extension-agnostic and verified against both.
+- **`eval()` in an output declaration runs even under `-stub`**, so a stub run needs the tool on PATH.
+  Worked around with shims in `tests/stub_bin`.
+- **Every commit should be independently valid.** Four commits referenced `ch_markersheet` without
+  emitting it, because the emit sat uncommitted on disk while `nextflow run` kept passing. Running the
+  tree tests the working directory, not the history.
+
+Carried forward:
+
+- `MERGE_SPATIALDATA` to Phase 3, written from scratch. It exists only on `legacy` and sopa has no
+  equivalent, so this is the genuinely novel piece.
+- Channel names, narrowed to a single experiment: does Ashlar write marker names into its OME-XML?
+  `local/inspect-ome.py` answers it.
+- Marker sheet as a samplesheet column, and `groupKey` for the cycle regroup: both in §7b.
+- The template bump 4.0.3 to 4.1.0, still outstanding from Phase 1.
+
+### Phase 1: Scaffold (closed 2026-08-06)
 
 Commits: `33e0863`..`c64f520`, plus `6506dda` on TEMPLATE and `1a9277c` on dev.
 
@@ -700,12 +851,12 @@ the reader is restricted to `ome_tif`, and a `TEMPLATE` branch exists with ances
 Lint at close: **0 failed, 212 passed, 33 ignored, 4 warnings**, against 13 failed / 268 passed /
 20 warnings at the start. The four remaining warnings:
 
-| Warning | Status |
-| --- | --- |
-| `readme`: no nf-core template version badge | Correct. This is not an nf-core pipeline. |
-| `local_component_structure`: `modules/local/utils.nf` | Accepted false positive; reason at the top of that file. |
-| `meta_yml_exists`: `utils_nfcore_histo_pipeline` | Accepted false positive; the template ships that file without one. |
-| `nfcore_yml`: 4.0.3 should be 4.1.0 | Real. Unblocked now the TEMPLATE branch exists. |
+| Warning                                               | Status                                                             |
+| ----------------------------------------------------- | ------------------------------------------------------------------ |
+| `readme`: no nf-core template version badge           | Correct. This is not an nf-core pipeline.                          |
+| `local_component_structure`: `modules/local/utils.nf` | Accepted false positive; reason at the top of that file.           |
+| `meta_yml_exists`: `utils_nfcore_histo_pipeline`      | Accepted false positive; the template ships that file without one. |
+| `nfcore_yml`: 4.0.3 should be 4.1.0                   | Real. Unblocked now the TEMPLATE branch exists.                    |
 
 Deviated:
 

@@ -1,5 +1,6 @@
-# Proposed ruff.toml, lands in Phase 1 alongside .pre-commit-config.yaml.
-# Scoped to bin/ only; nothing else in the pipeline is Python.
+# Scoped to bin/ only; nothing else in the pipeline is Python. bin/ does not exist
+# yet: mcmicro's helper scripts arrive with the metadata stack, so these rules are
+# inert until then rather than unused.
 
 line-length = 110
 target-version = "py311" # TODO: match the Python in the sopa container

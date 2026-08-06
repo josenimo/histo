@@ -13,9 +13,23 @@ process AGGREGATE {
 
     output:
     tuple val(meta), path(sdata_path)
+    path "versions.yml"
 
     script:
     """
     sopa aggregate ${sdata_path} ${cli_arguments}
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: \$(sopa --version)
+    END_VERSIONS
+    """
+
+    stub:
+    """
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: stub
+    END_VERSIONS
     """
 }

@@ -28,7 +28,7 @@ The pipeline must run **unattended on datasets from colleagues**, not just my ow
 Speed and elegance are secondary to the three above. Prefer boring, explicit, inspectable
 solutions over clever ones.
 
-**Scope note:** this is a **private, personal pipeline**. It is *not* an nf-core pipeline and
+**Scope note:** this is a **private, personal pipeline**. It is _not_ an nf-core pipeline and
 must not be branded as one. However, I want to follow every nf-core community guideline, because
 (a) the conventions genuinely help with the priorities above, and (b) I may eventually contribute
 modules or a pipeline upstream. Do not foreclose that option.
@@ -39,10 +39,10 @@ modules or a pipeline upstream. Do not foreclose that option.
 
 The pipeline combines two existing projects:
 
-| Source | What I take from it |
-|---|---|
+| Source              | What I take from it                                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------- |
 | **nf-core/mcmicro** | Preprocessing: illumination correction, stitching & registration, background subtraction, TMA dearray (`coreograph`) |
-| **nf-core/sopa** | Everything from segmentation onward: SpatialData object, tiled segmentation, aggregation, QC |
+| **nf-core/sopa**    | Everything from segmentation onward: SpatialData object, tiled segmentation, aggregation, QC                         |
 
 **Step requirements:**
 
@@ -207,32 +207,85 @@ rather than relying on a free tier for a pipeline colleagues will run for years.
 
 ## 7. Testing
 
+> **Amended 2026-08-06.** This section originally called `-stub` the primary feedback loop and
+> required stub blocks for every `modules/local/` module. That was written before we understood how
+> sopa's modules behave. Superseded reasoning is kept below the line so the change is auditable.
+
 **Layered, cheapest first:**
 
 1. `singularity exec image.sif <tool> --version` — proves the image runs and is the expected version.
    Most container problems surface here, in seconds.
 2. `nf-core modules test <name>` — nf-test, using the module's own snapshots.
-3. **Pipeline `-stub` run** — see below.
-4. Tiny real data on the cluster.
-5. `test_full` before tagging.
+3. **Pipeline `-stub` run** — a channel-topology check, not a correctness check. See below.
+4. **`-profile test` with `technology = toy_dataset`** — the real fast loop. Synthetic SpatialData is
+   generated in-process, so it needs no input data and runs in minutes with real code and real
+   containers. This is what sopa themselves use, and it is why sopa ships no stub blocks.
+5. Tiny real data on the cluster.
+6. `test_full` before tagging.
 
-**`-stub` is the primary fast feedback loop.** With `-stub-run`, Nextflow executes each process's
-`stub:` block instead of the real command — typically `touch`ing empty output files and faking the
-`versions.yml`. The full DAG is still built and every channel resolved, so it catches: cardinality
-mismatches, wrong tuple shapes, missing `meta` keys, optional-step conditionals that leave a channel
-empty and silently drop downstream work, output filenames not matching `output:` declarations,
-`publishDir` paths, and param/schema validation. Seconds, no real data.
+### Why sopa has no stubs, and what that means here
 
-**Two `-stub` specifics that matter here:**
+**Most sopa modules mutate the SpatialData Zarr in place.** Five of eleven declare their input zarr
+as their output and create no new file: `aggregate`, `fluo_annotation`, `tissue_segmentation`,
+`resolve_cellpose`, `resolve_stardist`. Nextflow has already staged the input into the work directory,
+so the output declaration resolves whether or not the stub does anything. A stub block for those
+modules is ceremony.
 
-- Because stub commands are trivial shell, **`-stub` runs are viable on my Mac** even when the
-  amd64 containers underneath are not. This is my one meaningful local test loop. (If the Nextflow
-  version still tries to stage containers in stub mode, combine `-stub` with the `local` executor.)
-- **Stub blocks rot.** If a module's real outputs change and the stub is not updated, `-stub` passes
-  while the real run fails — worse than no test. **Whenever you change a module's outputs, update its
-  stub block in the same commit.** Write stubs for all `modules/local/` modules. Keep `-stub` in CI.
+This is not a traditional file-in, file-out pipeline, and the nf-core stub convention assumes one.
 
-`-stub` proves nothing about tool behaviour, correctness, or resource requirements.
+**Consequences to keep in mind, beyond testing:** Nextflow stages inputs as symlinks, so a process
+writing into `sdata_path` writes into the _previous_ task's work directory. Tasks share mutable state
+and the DAG is not a pure dataflow graph. Expect this to matter for `-resume` correctness and for
+parallel safety; check `stageInMode` when something behaves oddly.
+
+### The revised rule
+
+**Write a stub block only where a module declares an output file it actually creates.** For a module
+whose only output is its mutated input, an empty stub adds nothing and creates the illusion of
+coverage.
+
+**In practice this still means nearly every module**, and the reason is worth following: `versions.yml`
+counts as a created file. Provenance matters more than stub minimalism, so every module should emit
+versions, and a module that emits versions needs a stub that writes them. The difference from the
+original blanket rule is not the count but the principle: a stub exists because the module creates
+something, not because it is a module. For pass-through modules that stub is three lines, the versions
+heredoc and nothing else, which is honest about how little it is checking.
+
+`-stub` is worth keeping for what it genuinely catches: cardinality mismatches, wrong tuple shapes,
+missing `meta` keys, optional-step conditionals that silently empty a channel, output filenames not
+matching declarations, and param/schema validation. That is exactly the risk profile of the
+preprocessing half — multi-cycle fan-out, dfp/ffp positional ordering, TMA core fan-out — so stubs
+matter most for modules added from mcmicro, and least for the inherited sopa ones.
+
+**`-stub` proves nothing about tool behaviour, correctness, or resource requirements.** Treat it as a
+compile check for the DAG.
+
+**Stub blocks still rot.** Where a stub exists and the module's outputs change, update it in the same
+commit; a stale stub passing while the real run fails is worse than no stub.
+
+### Local execution on Apple Silicon
+
+sopa ships arm64 conda-locks for 7 of 11 modules. The four without are
+`patch_segmentation_cellpose`, `patch_segmentation_stardist`, `resolve_cellpose` and
+`resolve_stardist` — the segmentation steps, presumably because of PyTorch and TensorFlow. So a
+native arm64 local run is partially possible but excludes the expensive and interesting steps. Not a
+substitute for cluster testing; possibly useful for iterating on conversion and aggregation.
+
+---
+
+<details>
+<summary>Superseded: the original section 7 reasoning</summary>
+
+> **`-stub` is the primary fast feedback loop.** ... Because stub commands are trivial shell, `-stub`
+> runs are viable on my Mac even when the amd64 containers underneath are not. This is my one
+> meaningful local test loop. ... Write stubs for all `modules/local/` modules.
+
+Why this was wrong: it assumed every module produces new output files, so a stub would meaningfully
+fake something. It also assumed no faster loop existed, when sopa's `toy_dataset` profile runs the
+real code on synthetic data in minutes. The Mac constraint is real, but it makes `-stub` the only
+_local_ loop, not the primary one overall.
+
+</details>
 
 **Test data:** a `test` profile with a deliberately tiny input (cropped 2-channel tile, 4-core TMA)
 and a `test_full` profile for a real dataset. Test data lives in my own small repo
@@ -290,7 +343,11 @@ against current documentation before building on any of these:
 - Wave / Seqera Containers config keys, capabilities, free-tier limits, and image retention policy —
   this service has been iterating fast and is the most likely to have moved
 - Whether backsub or other mcmicro tools now ship multi-arch images
-- Whether the current Nextflow version stages containers during `-stub` runs
+- ~~Whether the current Nextflow version stages containers during `-stub` runs~~ **Answered
+  2026-08-06: no.** Nextflow 26.04.6 ran `-profile test -stub` as `executor > local (9)` with no
+  container staging, on macOS arm64, against amd64-only images. `-stub` is therefore a genuine local
+  loop, provided stub blocks do not invoke the tool. Ours write `versions: stub` rather than calling
+  `sopa --version` for exactly this reason.
 - Whether my institution already runs a container registry (Harbor, GitLab, Artifactory) to mirror into
 - The contents of the nf-core community `AGENTS.md`
   (`https://github.com/nf-core/agents/blob/main/resources/pipeline/AGENTS.md`) — this should be
@@ -306,7 +363,7 @@ against current documentation before building on any of these:
   accepting changes I did not understand.
 - **Small, single-concern commits with clear messages.** The git history is a primary deliverable,
   not a byproduct.
-- Explain *why*, not just *what*. If there is a simpler and a cleverer option, default to simpler.
+- Explain _why_, not just _what_. If there is a simpler and a cleverer option, default to simpler.
 - **Flag uncertainty explicitly** rather than guessing at API details, module names, or flags.
 - Nextflow/nf-core is not my native domain — I am a bioimage analyst. Do not assume familiarity with
   Groovy idioms or DSL2 subtleties; explain them briefly when they matter.

@@ -13,4 +13,13 @@ samplesheets
 lint_*
 *lint_results*
 *lint_console*
+# scratch files written for the agent to read (lint reports, PR reviews)
+histo_*_review.txt
+histo_*.txt
+# local test imagery. Gigabytes; never committed. Phase 6 puts small fixtures in
+# a separate test-data repository instead.
+local_test_datasets/
+# scratch space: params files with absolute paths, diagnostic scripts, tool inputs.
+# See local/README.md, itself ignored.
+local/
 .nf-test*

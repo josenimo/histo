@@ -32,6 +32,7 @@ workflow HISTO_PIPELINE {
 
     take:
     samplesheet // channel: samplesheet read in from --input
+    markersheet // channel: marker sheet read in from --marker_sheet
 
     main:
 
@@ -40,6 +41,7 @@ workflow HISTO_PIPELINE {
     //
     HISTO (
         samplesheet,
+        markersheet,
         params.outdir,
     )
 }
@@ -69,7 +71,8 @@ workflow {
     // WORKFLOW: Run main workflow
     //
     HISTO_PIPELINE(
-        PIPELINE_INITIALISATION.out.samplesheet
+        PIPELINE_INITIALISATION.out.samplesheet,
+        PIPELINE_INITIALISATION.out.markersheet
     )
     //
     // SUBWORKFLOW: Run completion tasks

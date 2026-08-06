@@ -16,11 +16,10 @@
                     "type": "string",
                     "format": "file-path",
                     "exists": true,
-                    "schema": "assets/schema_input.json",
                     "mimetype": "text/csv",
                     "pattern": "^\\S+\\.csv$",
-                    "description": "Path to comma-separated file containing information about the samples in the experiment.",
-                    "help_text": "You will need to create a design file with information about the samples in your experiment before running the pipeline. Use this parameter to specify its location. It has to be a comma-separated file with 3 columns, and a header row. See [usage docs](https://github.com/josenimo/histo/blob/main/docs/usage.md).",
+                    "description": "Path to a comma-separated samplesheet. Its shape depends on use_preprocessing: one row per acquisition cycle when true, one row per sample when false.",
+                    "help_text": "Two shapes are accepted and the correct one is validated at runtime, so no fixed schema is declared here.\n\nuse_preprocessing = true (default): columns sample, cycle_number, image_tiles, and optionally dfp and ffp. Validated against assets/schema_input_cycle.json.\n\nuse_preprocessing = false: columns sample, id, data_path. Validated against assets/schema_input.json. Use this for pre-stitched images, dearrayed TMA cores re-entering the pipeline, and toy_dataset.",
                     "fa_icon": "fas fa-file-csv"
                 },
                 "outdir": {
@@ -452,5 +451,34 @@
         {
             "$ref": "#/$defs/fluorescence_annotation"
         }
-    ]
+    ],
+    "properties": {
+        "marker_sheet": {
+            "type": "string"
+        },
+        "ashlar_args": {
+            "type": "string",
+            "default": "--maximum-shift 30"
+        },
+        "use_preprocessing": {
+            "type": "boolean",
+            "default": true
+        },
+        "use_backsub": {
+            "type": "boolean"
+        },
+        "backsub_args": {
+            "type": "string"
+        },
+        "use_tma_dearray": {
+            "type": "boolean"
+        },
+        "coreograph_args": {
+            "type": "string",
+            "default": "--downsampleFactor 5 --channel 0 --buffer 2"
+        },
+        "require_channel_names": {
+            "type": "boolean"
+        }
+    }
 }

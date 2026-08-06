@@ -24,4 +24,12 @@ process FLUO_ANNOTATION {
         sopa: \$(sopa --version)
     END_VERSIONS
     """
+
+    stub:
+    """
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: stub
+    END_VERSIONS
+    """
 }
