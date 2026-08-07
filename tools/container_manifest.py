@@ -116,9 +116,72 @@ def render(rows: list[list[str]]) -> str:
     return "\n".join(lines) + "\n"
 
 
+def cache_filename(uri: str) -> str:
+    """The exact filename Nextflow will look for in NXF_SINGULARITY_CACHEDIR.
+
+    Mirrors Nextflow's SingularityCache.simpleName: drop the scheme, replace ':'
+    and '/' with '-', append '.img'. Reproduced rather than approximated on
+    purpose. An earlier version of this check matched on the tool name and
+    version appearing anywhere in a directory listing, and reported an image as
+    present when the cache held it under a different URI's name --
+    `labsyspharm-unetcoreograph-2.4.6.img` when Nextflow wanted
+    `docker.io-labsyspharm-unetcoreograph-2.4.6.img`. Same image, same version,
+    and Nextflow still went to the network for it mid-run.
+    """
+    p = uri.find("://")
+    name = uri[p + 3:] if p != -1 else uri
+    ext = ".img"
+    if ".sif:" in name:
+        ext, name = ".sif", name.replace(".sif:", "-")
+    elif name.endswith(".sif"):
+        ext, name = ".sif", name[:-4]
+    return name.replace(":", "-").replace("/", "-") + ext
+
+
+def check_cache(rows: list[list[str]], cachedir: Path) -> int:
+    missing = []
+    print(f"cache: {cachedir}\n")
+    for singularity, docker, _conda, modules in rows:
+        # Under a singularity profile Nextflow prefers the https URI when the
+        # module offers one, and falls back to the docker URI otherwise.
+        uri = singularity or docker
+        want = cache_filename(uri)
+        target = cachedir / want
+        # exists() follows symlinks, which is what Nextflow needs too: a dangling
+        # symlink is a miss even though `ls` shows the name.
+        if target.exists():
+            print(f"  ok      {want}")
+        else:
+            print(f"  MISSING {want}")
+            missing.append((want, uri, modules, target.is_symlink()))
+
+    if not missing:
+        print(f"\nAll {len(rows)} images present. No runtime pull will happen.")
+        return 0
+
+    print(f"\n{len(missing)} image(s) missing. Nextflow WILL pull these at run time,")
+    print("which on this cluster means a long job dying at an unpredictable point.\n")
+    for want, uri, modules, dangling in missing:
+        print(f"  {want}")
+        print(f"    needed by : {modules}")
+        if dangling:
+            print("    NOTE      : a symlink of this name exists but its target is gone")
+        if uri.startswith("http"):
+            print(f"    fetch     : singularity pull --dir '{cachedir}' '{want}' '{uri}'")
+        else:
+            print(f"    fetch     : singularity pull --dir '{cachedir}' '{want}' 'docker://{uri}'")
+    print("\nIf the image is already in the cache under a different name, symlink rather")
+    print("than re-pull; Nextflow resolves symlinks:")
+    print(f"  ln -s <existing>.img '{cachedir}/{missing[0][0]}'")
+    return 1
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true", help="verify the manifest is current")
+    ap.add_argument("--check-cache", metavar="DIR", nargs="?", const="",
+                    help="verify every image is in the Singularity cache under the exact "
+                         "name Nextflow expects (default: $NXF_SINGULARITY_CACHEDIR)")
     args = ap.parse_args()
 
     rows = collect()
@@ -128,6 +191,15 @@ def main() -> int:
         return 1
 
     content = render(rows)
+
+    if args.check_cache is not None:
+        import os
+        cachedir = args.check_cache or os.environ.get("NXF_SINGULARITY_CACHEDIR", "")
+        if not cachedir:
+            print("NXF_SINGULARITY_CACHEDIR is not set and no directory was given.",
+                  file=sys.stderr)
+            return 2
+        return check_cache(rows, Path(cachedir))
 
     if args.check:
         current = MANIFEST.read_text() if MANIFEST.exists() else ""

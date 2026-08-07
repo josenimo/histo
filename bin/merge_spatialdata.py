@@ -130,7 +130,13 @@ def merge(output_zarr: Path, input_zarrs: list[Path]) -> dict:
 
         for family in RASTER_AND_GEOMETRY:
             for name, element in getattr(sdata, family).items():
-                new_name = f"{core}{SEP}{name}"
+                # sopa names the image element after the sample, which for a core is
+                # already the core ID, so prefixing produced
+                # `exemplar-002_core001__exemplar-002_core001`. Skip the prefix when
+                # the element is already named for its core: the point of prefixing is
+                # to make core identity unambiguous, and a name that IS the core ID is
+                # as unambiguous as it gets.
+                new_name = name if name == core else f"{core}{SEP}{name}"
                 rename_map[name] = new_name
                 merged[new_name] = element
                 # Evaluates and releases this element's dask graph before the
