@@ -33,8 +33,10 @@ HEADER = ["singularity_uri", "docker_uri", "conda", "modules"]
 
 # The container directive spans several lines and holds two quoted URIs in a
 # ternary. Grab the whole directive, then pull the quoted strings out of it.
-CONTAINER_BLOCK = re.compile(r"^\s*container\s+(.*?)(?=^\s*(?:input|output|script|stub|when|label|tag|conda|publishDir|process|\})\b)",
-                             re.MULTILINE | re.DOTALL)
+CONTAINER_BLOCK = re.compile(
+    r"^\s*container\s+(.*?)(?=^\s*(?:input|output|script|stub|when|label|tag|conda|publishDir|process|\})\b)",
+    re.MULTILINE | re.DOTALL,
+)
 QUOTED = re.compile(r"'([^']+)'")
 SIMPLE = re.compile(r"^\s*container\s+['\"]([^'\"]+)['\"]\s*$", re.MULTILINE)
 
@@ -94,12 +96,14 @@ def collect() -> list[list[str]]:
 
     rows = []
     for (singularity, docker), entry in by_image.items():
-        rows.append([
-            singularity,
-            docker,
-            ";".join(sorted(entry["conda"])),
-            ",".join(sorted(entry["modules"])),
-        ])
+        rows.append(
+            [
+                singularity,
+                docker,
+                ";".join(sorted(entry["conda"])),
+                ",".join(sorted(entry["modules"])),
+            ]
+        )
     # Sorted on the docker URI: it is the readable one, and it keeps the file
     # diffable when a single image is bumped.
     return sorted(rows, key=lambda r: (r[1], r[0]))
@@ -129,7 +133,7 @@ def cache_filename(uri: str) -> str:
     and Nextflow still went to the network for it mid-run.
     """
     p = uri.find("://")
-    name = uri[p + 3:] if p != -1 else uri
+    name = uri[p + 3 :] if p != -1 else uri
     ext = ".img"
     if ".sif:" in name:
         ext, name = ".sif", name.replace(".sif:", "-")
@@ -179,33 +183,43 @@ def check_cache(rows: list[list[str]], cachedir: Path) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--check", action="store_true", help="verify the manifest is current")
-    ap.add_argument("--check-cache", metavar="DIR", nargs="?", const="",
-                    help="verify every image is in the Singularity cache under the exact "
-                         "name Nextflow expects (default: $NXF_SINGULARITY_CACHEDIR)")
+    ap.add_argument(
+        "--check-cache",
+        metavar="DIR",
+        nargs="?",
+        const="",
+        help="verify every image is in the Singularity cache under the exact "
+        "name Nextflow expects (default: $NXF_SINGULARITY_CACHEDIR)",
+    )
     args = ap.parse_args()
 
     rows = collect()
     if not rows:
-        print("No containers found. The parser is probably broken, which is worse "
-              "than an empty pipeline; refusing to write an empty manifest.", file=sys.stderr)
+        print(
+            "No containers found. The parser is probably broken, which is worse "
+            "than an empty pipeline; refusing to write an empty manifest.",
+            file=sys.stderr,
+        )
         return 1
 
     content = render(rows)
 
     if args.check_cache is not None:
         import os
+
         cachedir = args.check_cache or os.environ.get("NXF_SINGULARITY_CACHEDIR", "")
         if not cachedir:
-            print("NXF_SINGULARITY_CACHEDIR is not set and no directory was given.",
-                  file=sys.stderr)
+            print("NXF_SINGULARITY_CACHEDIR is not set and no directory was given.", file=sys.stderr)
             return 2
         return check_cache(rows, Path(cachedir))
 
     if args.check:
         current = MANIFEST.read_text() if MANIFEST.exists() else ""
         if current != content:
-            print(f"{MANIFEST.name} is out of date. Run tools/container_manifest.py "
-                  f"and commit the result.", file=sys.stderr)
+            print(
+                f"{MANIFEST.name} is out of date. Run tools/container_manifest.py and commit the result.",
+                file=sys.stderr,
+            )
             return 1
         print(f"{MANIFEST.name} is current ({len(rows)} images).")
         return 0
