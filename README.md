@@ -3,11 +3,9 @@
 Processing, segmentation and quantification of H&E and multiplex immunofluorescence (mIF) images.
 
 > [!WARNING]
-> **Under construction, not yet usable.** This pipeline is at version `0.1.0dev` and is being
-> assembled. The downstream half is currently an unmodified import of [nf-core/sopa](https://github.com/nf-core/sopa),
-> and the preprocessing half does not exist yet. Do not use it for analysis. See
-> [ROADMAP.md](ROADMAP.md) for the plan and the [open issues](https://github.com/josenimo/histo/issues)
-> for progress.
+> **Runs end to end, but is pre-release at `0.1.0dev`.** Both halves work on real data: mIF and TMA
+> slides have been processed from raw cycles to a quantified SpatialData object. There are no
+> regression tests yet, and parameter names may still change. Check your results.
 
 [![Nextflow](https://img.shields.io/badge/version-%E2%89%A525.10.4-green?style=flat&logo=nextflow&logoColor=white&color=%230DC09D&link=https%3A%2F%2Fnextflow.io)](https://www.nextflow.io/)
 [![nf-test](https://img.shields.io/badge/unit_tests-nf--test-337ab7.svg)](https://www.nf-test.com)
@@ -34,28 +32,50 @@ This is a **personal pipeline. It is not an nf-core pipeline** and is not affili
 endorsed by the nf-core community. It follows nf-core conventions because they genuinely help with
 reproducibility, and to keep open the option of contributing modules upstream later.
 
-## Planned steps
+## Steps
 
 Preprocessing, from nf-core/mcmicro:
 
-1. Illumination correction (BaSiCPy) — required
-2. Stitching and registration (Ashlar) — required
+1. Illumination correction (BaSiCPy)
+2. Stitching and registration (Ashlar)
 3. Background subtraction — optional, `--use_backsub`
 4. TMA dearray (UNetCoreograph) — optional, `--use_tma_dearray`
 
 Downstream, from nf-core/sopa:
 
 5. Conversion to a SpatialData Zarr object
-6. Optional tissue segmentation, to skip empty tiles
-7. Tiled cell segmentation with Cellpose, parallelised per tile
-8. Aggregation of channel intensities per cell
-9. QC report
+6. Channel naming from the marker sheet
+7. Optional tissue segmentation, to skip empty tiles
+8. Tiled cell segmentation with Cellpose or StarDist, parallelised per tile
+9. Aggregation of channel intensities per cell
+10. QC report, and for a TMA, a merged object per slide
 
 ## Usage
 
-Not yet. When the pipeline is runnable this section will describe the samplesheet format and the
-parameters. Parameters will be supplied with `-params-file params.yml`, validated against
-`nextflow_schema.json`.
+```bash
+nextflow run josenimo/histo -r dev \
+    -profile singularity,size_small,slurm \
+    -params-file params.yml
+```
+
+See [docs/usage.md](docs/usage.md) for the samplesheet format, parameters and defaults,
+[docs/output.md](docs/output.md) for what comes out, and [docs/containers.md](docs/containers.md)
+for pre-staging images.
+
+## What is likely to change
+
+Expect breaking changes before `1.0.0`.
+
+- **Marker sheet** becomes a samplesheet column rather than a single global file, so that samples can
+  differ.
+- **Resource profiles** are estimates apart from `size_tiny`, and will be rewritten from real runs.
+- **Aggregation** currently reports mean intensity per cell; more per-cell metrics are being
+  considered.
+- **H&E support** is planned; only `ome_tif` mIF input works today.
+
+Pixel size is deliberately **not** written into the Zarr: SpatialData's coordinate-system model is a
+poor fit for it, so images stay in pixel units. Full reasoning and progress in
+[ROADMAP.md](ROADMAP.md) and the [open issues](https://github.com/josenimo/histo/issues).
 
 ## Credits
 

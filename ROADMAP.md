@@ -669,6 +669,34 @@ which exits 0 and silently yields an empty version.
 
 ---
 
+## 8b. Decisions closed 2026-08-07
+
+**Channel names: done.** `SET_CHANNEL_NAMES` sets them from the marker sheet immediately after
+conversion, using `SpatialData.set_channel_names(..., write=True)`. Free at any image size because
+names live in ~5 KB of group metadata at `images/<element>/zarr.json`. The table inherits them, since
+AGGREGATE reads names off the image. §6 is closed apart from the optional TIFF injection.
+
+**OME-TIFF injection: dropped.** `tiffcomment -set` patches the header in place in constant time
+(13 bytes changed on a 2.7 GB file, 0.14 s over the read baseline), but a Nextflow task must not
+mutate its staged input, so it would require copying the whole image. Not worth it for QuPath
+convenience alone. Note for the record: Ashlar writes no names, backsub writes them correctly from
+markers.csv, and Coreograph discards them again.
+
+**Pixel size in the Zarr: dropped.** SpatialData has no good model for physical scale — carrying it
+as an extra coordinate system is a poor adaptation, and redefining `global` would silently reinterpret
+`patch_width_pixel` as microns. Images stay in pixel units. Revisit only if SpatialData grows a
+first-class representation.
+
+**Tiled segmentation is correct.** exemplar001 gave 9,855 cells as a single patch and 9,896 across six
+(`patch_width_pixel: 1500`), a 0.4% difference. Boundary resolution works; the size-independence
+claim the whole downstream design rests on is verified on real data.
+
+**`require_channel_names` and the log-grep guard: removed.** The guard tested a sopa log message that
+only correlated with the property we cared about, and the correlation did not hold. `SET_CHANNEL_NAMES`
+checks the marker sheet against the image's channel count instead.
+
+---
+
 ## 8. Open decisions
 
 **Physical pixel size in the Zarr.** You want it in the image metadata. sopa does not put it there;

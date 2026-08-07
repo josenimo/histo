@@ -1,34 +1,71 @@
 # josenimo/histo: Usage
 
-> [!WARNING]
-> **The pipeline is not runnable yet.** It is at `0.1.0dev`. The downstream half is an unmodified
-> import of nf-core/sopa and the preprocessing half does not exist. This page will be written when the
-> input format is settled, which is Phase 2 of [ROADMAP.md](../ROADMAP.md).
+## Quick start
 
-This page was deliberately emptied rather than rebranded. The previous version documented
-nf-core/sopa's samplesheet format for spatial transcriptomics platforms (Xenium, MERSCOPE, CosMx,
-Visium HD), none of which is in scope here. Documenting an input format that is about to change would
-be worse than documenting nothing. The original is recoverable from commit `33e0863`.
-
-## What will go here
-
-- The samplesheet format, once the multi-cycle mIF input shape is decided.
-- The parameters, which will be supplied with `-params-file params.yml` and validated against
-  `nextflow_schema.json`. Parameter documentation is generated from that schema rather than
-  maintained here by hand.
-- Container pre-staging, which now lives in [containers.md](containers.md).
-
-## Choosing `patch_width_pixel`
-
-This one parameter decides whether segmentation parallelises at all, and it is deliberately **not**
-computed for you. It affects results at patch boundaries as well as runtime, so an automatically
-chosen value would mean the same slide segmenting slightly differently on different hardware.
-
-Pick it so the image yields roughly **16 to 200 patches**:
-
+```bash
+nextflow run josenimo/histo -r dev \
+    -profile singularity,size_small,slurm \
+    -params-file params.yml
 ```
-patch_width_pixel = sqrt(width * height / target_patches)
+
+Always give three profiles: a container engine, a size, and an executor.
+
+Parameters go in `-params-file`, never in `-c`. Custom config files can set anything **except**
+parameters.
+
+## Inputs
+
+Two files: a samplesheet and a marker sheet.
+
+**Samplesheet**, one row per acquisition cycle:
+
+```csv
+sample,cycle_number,image_tiles
+mysample,1,/abs/path/cycle01.ome.tiff
+mysample,2,/abs/path/cycle02.ome.tiff
 ```
+
+Optional `dfp` and `ffp` columns supply pre-computed illumination profiles. If you give them for one
+cycle you must give them for all; otherwise BaSiCPy computes them.
+
+**Marker sheet**, one row per channel, `channel_number` running 1..N without gaps:
+
+```csv
+channel_number,cycle_number,marker_name,filter
+1,1,DNA_1,DAPI
+2,1,CD45,FITC
+```
+
+`--use_backsub` additionally needs `exposure` and `background` columns.
+
+Paths must be absolute.
+
+## Parameters
+
+Only `input`, `outdir` and a segmentation backend are required. Everything below has a default.
+
+| Parameter                     | Default              | Change it when                                                                                         |
+| ----------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------ |
+| `use_preprocessing`           | `true`               | Your image is already stitched. Then the samplesheet is one row per sample with a `data_path` column.  |
+| `marker_sheet`                | none                 | Required when `use_preprocessing` is true.                                                             |
+| `ashlar_args`                 | `--maximum-shift 30` | Stitching misaligns.                                                                                   |
+| `use_backsub`                 | `false`              | You have background channels to subtract.                                                              |
+| `use_tma_dearray`             | `false`              | Your slide is a tissue microarray. Each core is then processed alone and the results merged per slide. |
+| `use_cellpose`                | `false`              | Exactly one of `use_cellpose` or `use_stardist` must be true.                                          |
+| `cellpose_channels`           | none                 | Always. Use a marker name, e.g. `"DNA_1"`.                                                             |
+| `cellpose_diameter`           | none                 | Cells are not ~30 px across.                                                                           |
+| `patch_width_pixel`           | none                 | Always. See below.                                                                                     |
+| `patch_overlap_pixel`         | none                 | Set to roughly twice a cell diameter.                                                                  |
+| `use_tissue_segmentation`     | `false`              | Large empty areas you want skipped.                                                                    |
+| `use_fluorescence_annotation` | `false`              | You want marker-based cell typing.                                                                     |
+| `aggregate_channels`          | none                 | Set `true` to get per-cell channel intensities.                                                        |
+
+Full list with descriptions: `nextflow run josenimo/histo -r dev --help`.
+
+### Choosing `patch_width_pixel`
+
+This decides whether segmentation parallelises, and it is not automatic. Aim for **16 to 200
+patches**: `patch_width_pixel = sqrt(width * height / target_patches)`.
 
 | Stitched image | 2000 | 5000 | 8000 | 10000 |
 | -------------- | ---- | ---- | ---- | ----- |
@@ -37,31 +74,65 @@ patch_width_pixel = sqrt(width * height / target_patches)
 | 50k × 50k      | 625  | 100  | 49   | 25    |
 | 115k × 115k    | 3364 | 529  | 225  | 144   |
 
-Both ends of that table are failure modes. **One patch means no parallelism**, which discards the
-main reason this pipeline uses sopa — a 3138 × 2511 image at the default 5000 produces exactly one
-segmentation task. **Thousands of patches** means thousands of container starts and scheduler
-submissions, which on a busy queue costs more than the segmentation does.
+One patch means no parallelism at all. Thousands means the scheduler costs more than the work.
+Memory is not the constraint — a 5000 px patch is about 50 MB.
 
-Memory is not the deciding factor. A 5000-pixel patch of one channel is about 50 MB, so patch size is
-a task-count decision, not a memory one. Aim for a few times your cluster's concurrency
-(`executor.queueSize`, currently 50) and no more.
+Get the dimensions with `scratch/inspect-ome.py stitched.ome.tif`.
 
-To get the dimensions before you run:
+## Profiles
 
-```bash
-scratch/inspect-ome.py stitched.ome.tif          # on an existing stitched image
-showinf -nopix -omexml-only raw_cycle01.ome.tiff # on a raw cycle, then multiply by the tile grid
+**Size** — pick by stitched image size. Only `size_tiny` is derived from measurement; the rest are
+estimates and will change.
+
+| Profile       | For                    |
+| ------------- | ---------------------- |
+| `size_tiny`   | under ~1 GB, test data |
+| `size_small`  | up to ~10 GB           |
+| `size_medium` | ~10–40 GB              |
+| `size_huge`   | ~40 GB and up          |
+
+**Executor** — `slurm`, or omit for local execution. Without it every task runs on the machine you
+launched from.
+
+**Containers** — `singularity` on the cluster. Images must be pre-staged; see
+[containers.md](containers.md).
+
+## Example
+
+```yaml
+input: /abs/path/samplesheet.csv
+marker_sheet: /abs/path/markers.csv
+outdir: /abs/path/results
+
+use_preprocessing: true
+technology: ome_tif
+
+use_cellpose: true
+cellpose_channels: "DNA_1"
+cellpose_diameter: 35
+patch_width_pixel: 1500
+patch_overlap_pixel: 50
+
+aggregate_channels: true
 ```
 
-`patch_overlap_pixel` is a different question: set it to roughly twice the diameter of a cell, so
-that cells straddling a boundary appear whole in at least one patch.
+## Running on the cluster
 
-## Meanwhile
+Launch from a directory that is **not** the pipeline clone, so run artifacts do not land in the
+source tree. Nextflow submits the SLURM jobs itself; you never write an sbatch script. Run it inside
+`tmux` so it outlives your session.
 
-For the mechanics of running any Nextflow pipeline — `-profile`, `-resume`, `-c`, configuration and
-resource requests — see the [Nextflow documentation](https://www.nextflow.io/docs/latest/) and
-[nf-core's running-pipelines docs](https://nf-co.re/docs/usage/getting_started/introduction). Those
-are maintained upstream and duplicating them here would only let them drift.
+```bash
+mkdir -p ~/runs/myrun && cd ~/runs/myrun
+export NXF_OFFLINE=true
+nextflow run /path/to/histo -profile singularity,size_small,slurm -params-file params.yml -resume
+```
 
-One rule that does apply already: supply parameters via `-params-file` or the CLI, never via `-c`.
-Custom config files can set any configuration **except** parameters.
+`NXF_OFFLINE` stops a launch-time fetch of a config this pipeline does not use.
+
+Validate before submitting — this catches bad paths and parameter types in seconds rather than after
+a queue wait:
+
+```bash
+nextflow run /path/to/histo -profile laptop -stub -params-file params.yml
+```
