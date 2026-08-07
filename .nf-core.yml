@@ -45,6 +45,25 @@ lint:
     # nf-core/sopa one, as MIT requires for derivative works. Commit 82c4466.
     - LICENSE
 
+    # .gitignore diverges from the template on purpose:
+    #   /local/ -> /scratch/  a bare `local/` matched modules/local/ at any depth
+    #                         and silently ignored a whole module directory
+    #   fixture/              43 MB test fixture; git keeps binaries forever, so it
+    #                         lives in a separate test-data repository
+    #   .params_*.json        written into the launch directory by a run; one was
+    #                         committed by accident because it is a dotfile
+    - .gitignore
+
+  # tests/preprocess_images.nf.test is a `nextflow_workflow` test of a subworkflow,
+  # not a pipeline test. Both checks in this rule assume a pipeline:
+  #   - `outdir` is meaningless, the subworkflow publishes nothing
+  #   - there is no versions.yml to snapshot; the modules it calls emit versions on
+  #     the `versions` topic, which is collected in workflows/histo.nf, so the
+  #     subworkflow has no versions output at all
+  # Listing the file skips only that file; the other test files stay checked.
+  nf_test_content:
+    - tests/preprocess_images.nf.test
+
   multiqc_config: false
 
 nf_core_version: 4.0.3
