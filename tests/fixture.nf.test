@@ -3,8 +3,15 @@
 // CLUSTER ONLY. Needs all seven containers and the ~43 MB fixture, so it will not
 // run on a laptop and does not run in CI. Tagged `fixture` and excluded there.
 //
-//     export HISTO_FIXTURE=/fast/AG_Coscia/Jose/HISTO/test3_fixture
-//     nf-test test tests/fixture.nf.test --profile singularity,size_tiny,slurm
+//     export HISTO_FIXTURE=/fast/AG_Coscia/$USER/HISTO/test3_fixture
+//     nf-test test tests/fixture.nf.test \
+//         --profile test_fixture,singularity,size_tiny,slurm
+//
+// `test_fixture` must be repeated on the command line even though it is declared
+// below. nf-test's --profile REPLACES the `profile` directive rather than adding to
+// it, so passing only the execution profiles silently drops this one and the run
+// fails with "Missing required parameter(s): input" -- an error that says nothing
+// about profiles.
 //
 // Without HISTO_FIXTURE the profile throws immediately and says so.
 //

@@ -35,6 +35,22 @@ under `-stub`, so `tests/stub_bin` must be on PATH.
 
 The full chain on a small real dataset.
 
+```bash
+export HISTO_FIXTURE=/fast/AG_Coscia/$USER/HISTO/test3_fixture
+export TMPDIR=/fast/AG_Coscia/$USER/tmp && mkdir -p "$TMPDIR"
+export NXF_TEMP="$TMPDIR" NXF_OPTS="-Djava.io.tmpdir=$TMPDIR" NXF_OFFLINE=true
+
+nf-test test tests/fixture.nf.test --profile test_fixture,singularity,size_tiny,slurm
+```
+
+`test_fixture` goes on the command line even though the test file declares it: nf-test's
+`--profile` replaces that directive rather than adding to it. Omit it and the run fails
+with `Missing required parameter(s): input`, which does not mention profiles at all.
+
+The temp variables are not optional on this cluster. `/tmp` on the login node is small
+and shared, and a run that overruns it fails with `No space left on device` pointing at
+a `/tmp/nxf-...` path, which reads like a quota problem and is not one.
+
 **The fixture is not in this repository.** It is a 2×2 tile crop of exemplar001:
 two cycles, two channels each, 1280×1080 tiles, uint16, 0.65 µm/px, about 43 MB. Git
 keeps every version of a binary forever, so a fixture that size belongs in a separate
