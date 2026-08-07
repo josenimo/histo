@@ -19,16 +19,11 @@ class TestCacheFilename:
             cache_filename("docker.io/labsyspharm/unetcoreograph:2.4.6")
             == "docker.io-labsyspharm-unetcoreograph-2.4.6.img"
         )
-        assert (
-            cache_filename("labsyspharm/unetcoreograph:2.4.6")
-            == "labsyspharm-unetcoreograph-2.4.6.img"
-        )
+        assert cache_filename("labsyspharm/unetcoreograph:2.4.6") == "labsyspharm-unetcoreograph-2.4.6.img"
 
     def test_https_scheme_stripped(self):
         assert (
-            cache_filename(
-                "https://depot.galaxyproject.org/singularity/ashlar:1.19.0--pyhdfd78af_0"
-            )
+            cache_filename("https://depot.galaxyproject.org/singularity/ashlar:1.19.0--pyhdfd78af_0")
             == "depot.galaxyproject.org-singularity-ashlar-1.19.0--pyhdfd78af_0.img"
         )
 
@@ -37,9 +32,7 @@ class TestCacheFilename:
         got = cache_filename(
             f"https://community-cr-prod.seqera.io/docker/registry/v2/blobs/sha256/70/{sha}/data"
         )
-        assert got == (
-            f"community-cr-prod.seqera.io-docker-registry-v2-blobs-sha256-70-{sha}-data.img"
-        )
+        assert got == (f"community-cr-prod.seqera.io-docker-registry-v2-blobs-sha256-70-{sha}-data.img")
 
     def test_ghcr_uri(self):
         assert (

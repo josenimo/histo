@@ -23,6 +23,10 @@ histo_*.txt
 # local test imagery. Gigabytes; never committed. Phase 6 puts small fixtures in
 # a separate test-data repository instead.
 local_test_datasets/
+# The real test fixture: ~43 MB of 2x2-tile exemplar001. Git keeps every version of
+# a binary forever, so this goes in a separate test-data repository fetched at test
+# time. Stub tests use the few-hundred-byte placeholders in tests/stub_data instead.
+fixture/
 # Scratch space: params files with absolute paths, diagnostic scripts, runbooks,
 # tool inputs. See scratch/README.md, itself ignored.
 #

@@ -1,0 +1,7 @@
+Placeholder, not an image.
+
+Stub runs stage their inputs but never read them, so topology tests need a file
+that exists and nothing more. Keeping these at a few hundred bytes rather than
+using the real fixture keeps 43 MB out of the repository's permanent history.
+
+The real 2x2-tile fixture lives outside this repo; see tests/README.md.

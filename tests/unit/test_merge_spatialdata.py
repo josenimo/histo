@@ -83,9 +83,7 @@ class TestElementNaming:
 
     def test_image_named_after_the_core_is_not_doubled(self):
         """sopa names the image after the sample, which for a core IS the core ID."""
-        assert self.new_name("exemplar-002_core001", "exemplar-002_core001") == (
-            "exemplar-002_core001"
-        )
+        assert self.new_name("exemplar-002_core001", "exemplar-002_core001") == ("exemplar-002_core001")
 
     def test_names_stay_unique_across_cores(self):
         cores = ["s_core001", "s_core002", "s_core003"]

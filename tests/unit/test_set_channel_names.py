@@ -72,9 +72,7 @@ def make_store(tmp_path, element="img", labels=("Channel:0:0", "Channel:0:1")):
     d = tmp_path / "s.zarr" / "images" / element
     d.mkdir(parents=True)
     (d / "zarr.json").write_text(
-        json.dumps(
-            {"attributes": {"ome": {"omero": {"channels": [{"label": x} for x in labels]}}}}
-        )
+        json.dumps({"attributes": {"ome": {"omero": {"channels": [{"label": x} for x in labels]}}}})
     )
     return tmp_path / "s.zarr"
 
