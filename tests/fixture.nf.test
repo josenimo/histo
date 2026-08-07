@@ -1,0 +1,89 @@
+// The whole pipeline on a small real dataset.
+//
+// CLUSTER ONLY. Needs all seven containers and the ~43 MB fixture, so it will not
+// run on a laptop and does not run in CI. Tagged `fixture` and excluded there.
+//
+//     export HISTO_FIXTURE=/fast/AG_Coscia/Jose/HISTO/test3_fixture
+//     nf-test test tests/fixture.nf.test --profile singularity,size_tiny,slurm
+//
+// Without HISTO_FIXTURE the profile throws immediately and says so.
+//
+// Assertions are on properties, not checksums. Cellpose output moves with version
+// and hardware, so a snapshot of segmentation results would fail for reasons that
+// have nothing to do with this pipeline. Everything below either cannot drift
+// (channel names, element names, patch count) or is given a tolerance.
+//
+// Baseline recorded 2026-08-07 from a run on max-login: 8990 cells, 4 channels,
+// 2112 x 2510 stitched, 9 patches, 18 tasks.
+
+nextflow_pipeline {
+
+    name "Fixture: full pipeline on real data"
+    script "../main.nf"
+    profile "test_fixture"
+    tag "fixture"
+
+    test("mIF fixture reproduces its baseline") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            def zarr = "$outputDir/exemplar-001.zarr"
+            def slurp = new groovy.json.JsonSlurper()
+
+            def channels = slurp
+                .parse(file("${zarr}/images/exemplar-001/zarr.json"))
+                .attributes.ome.omero.channels
+                .collect { it.label }
+
+            def cells = slurp.parse(file("${zarr}/tables/table/X/zarr.json")).shape[0]
+            def imageShape = slurp.parse(file("${zarr}/images/exemplar-001/s0/zarr.json")).shape
+
+            def cellposeTasks = workflow.trace.succeeded().findAll {
+                it.name.contains("PATCH_SEGMENTATION_CELLPOSE")
+            }
+
+            assertAll(
+                { assert workflow.success },
+
+                // Exactly the marker sheet, in channel_number order. This is the one
+                // assertion that cannot drift: if it fails, SET_CHANNEL_NAMES broke or
+                // was skipped, and every downstream column name is wrong.
+                { assert channels == ['DNA_6', 'ELANE', 'DNA_7', 'CD11B'] },
+
+                // Two cycles of two channels, stitched from a 2x2 tile grid.
+                { assert imageShape == [4, 2112, 2510] },
+
+                // Nine patches, so segmentation genuinely parallelised. One task here
+                // would mean the image became a single patch and boundary resolution
+                // went untested, which is how the first real run silently behaved.
+                { assert cellposeTasks.size() == 9 },
+
+                // +/- 2% of the recorded baseline. Cellpose finds slightly different
+                // cells across versions and hardware; a bigger swing than this means
+                // something changed that is worth understanding.
+                { assert cells > 8810 && cells < 9170 },
+
+                // The elements downstream analysis expects.
+                { assert file("${zarr}/images/exemplar-001").exists() },
+                { assert file("${zarr}/shapes/cellpose_boundaries").exists() },
+                { assert file("${zarr}/shapes/image_patches").exists() },
+                { assert file("${zarr}/tables/table").exists() },
+                { assert file("$outputDir/exemplar-001_analysis_summary.html").exists() },
+                { assert file("$outputDir/preprocessing/registration/exemplar-001.ome.tif").exists() },
+
+                // Provenance for every process that ran. versions.yml exists so that a
+                // result can be traced to the tools that produced it; a missing entry
+                // means a module lost its version capture.
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('ASHLAR') },
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('BASICPY') },
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('SET_CHANNEL_NAMES') },
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('AGGREGATE') }
+            )
+        }
+    }
+}
