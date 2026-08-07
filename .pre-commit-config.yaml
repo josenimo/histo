@@ -78,9 +78,9 @@ repos:
     hooks:
       - id: ruff-check
         args: [--fix]
-        files: ^bin/.*\.py$
+        files: ^(bin|tools|tests/unit)/.*\.py$
       - id: ruff-format
-        files: ^bin/.*\.py$
+        files: ^(bin|tools|tests/unit)/.*\.py$
 
   # ---------------------------------------------------------------------------
   # ADDED: shell. submit_slurm.sh, run_coreograph_single_cycle.sh and

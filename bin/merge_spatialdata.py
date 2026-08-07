@@ -31,7 +31,10 @@ import json
 import sys
 from pathlib import Path
 
-import spatialdata as sd
+# spatialdata is imported inside merge() rather than here, so that the pure logic in
+# this file -- core IDs, element naming, table region retargeting -- can be unit
+# tested without dask, xarray and zarr present. Those are the parts with the
+# interesting failure modes.
 
 SEP = "__"
 
@@ -90,6 +93,8 @@ def retarget_table(table, rename_map: dict[str, str], core: str):
 
 
 def merge(output_zarr: Path, input_zarrs: list[Path]) -> dict:
+    import spatialdata as sd
+
     if output_zarr.exists():
         # Deliberately not deleting. Inside a Nextflow work directory this
         # cannot happen, and anywhere else an unexpected pre-existing store is

@@ -956,6 +956,63 @@ Carried forward: what was deferred out of this phase, and to where.
 
 ### Entries
 
+### Phase 6: Testing (closed 2026-08-07)
+
+Commits: on `feat/tests`.
+
+Built: four layers of checking, documented in README and `tests/README.md`.
+
+- **30 unit tests** over `bin/` and `tools/`. No containers, no data, seconds. In CI.
+- **2 stub tests** over `PREPROCESS_IMAGES` topology, using few-hundred-byte placeholders. In CI.
+- **1 fixture test** running the whole pipeline on a 2×2-tile crop of exemplar001, asserted
+  against a recorded baseline. 380 s on the cluster, by hand.
+- **`unit-tests.yml`** added; `nf-test.yml` restricted to `--tag stub`.
+
+Lint at close: **241 passed, 35 ignored, 5 warnings, 0 failed.**
+
+Deviated:
+
+- **The fixture is not in the repository.** 43 MB of binary against a 3.1 MB repo, kept forever
+  by git. It lives outside and is located by `HISTO_FIXTURE`.
+- **Stub tests are written against the subworkflow, not the pipeline.** The pipeline entry
+  point needs a samplesheet whose relative paths resolve against a directory nf-test controls;
+  the workflow block is Groovy and can use `${projectDir}` directly, so the question disappears.
+- **No TMA fixture.** Coreograph is a UNet with scale assumptions, so a cropped TMA might fail
+  to detect cores and produce a red test that reflects the fixture rather than the pipeline.
+  Covered instead by the stub fan-out test, the merge unit tests, and manual cluster runs.
+- **Snapshots rejected in favour of property assertions.** Cellpose output moves with version
+  and hardware. Channel names, element names and patch counts cannot drift; cell count gets ±2%.
+
+Learned:
+
+- **Two of the inherited nf-test files were broken independently of their snapshots.** Both
+  referenced `nf_core_sopa_software_versions.yml`, gone since the rebrand.
+- **`nf_test_content` lint assumes a pipeline test.** It requires an `outdir` param and the
+  string `versions.yml` in every `tests/*.nf.test`, neither of which a subworkflow test has.
+  Exempted per-file with a reason. Both checks are regexes over the file text, so they could
+  have been satisfied by a comment — which would have passed while testing nothing.
+- **nf-test's `--profile` replaces the test file's `profile` directive; `--profile=+x` appends.**
+  Passing only the execution profiles silently dropped `test_fixture` and surfaced as
+  "Missing required parameter(s): input".
+- **Nextflow config files take config statements only.** A top-level `def` fails with
+  "Variable declarations cannot be mixed with config statements". The fix was to make the
+  _value_ self-explanatory — an unset `HISTO_FIXTURE` yields the path
+  `HISTO_FIXTURE_IS_NOT_SET/samplesheet_fixture.csv` — rather than adding code to explain it.
+  A value cannot break; logic can.
+- **`/tmp` on the login node is small and shared.** `TMPDIR`, `NXF_TEMP` and
+  `-Djava.io.tmpdir` all need setting; the JVM one fails first and least helpfully.
+- **Four consecutive failures pointed somewhere other than the cause.** Unset variable reported
+  as a missing parameter, numeric string as a type error, full `/tmp` as no space on device,
+  dropped profile as a missing parameter. `nextflow config . -profile X` takes a second and
+  separates "the profile is not loading" from "the pipeline is wrong".
+
+Carried forward:
+
+- `default.nf.test` and `cellpose.nf.test` still snapshot sopa's outputs. Rewrite as property
+  assertions rather than regenerating.
+- No real-data test for the TMA path, background subtraction, or the `use_preprocessing = false`
+  entry point.
+
 ### Phase 4: Resource profiles (closed 2026-08-06)
 
 Commits: see `feat/size-profiles`.

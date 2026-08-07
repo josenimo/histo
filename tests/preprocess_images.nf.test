@@ -1,0 +1,124 @@
+// Channel topology of the preprocessing half, under -stub.
+//
+// These assert wiring, not correctness: no real tool runs, so nothing here says an
+// image was stitched well. What they do catch is the class of bug that has actually
+// happened -- cycles grouped wrongly, a TMA fan-out that loses core identity, an
+// emit that nothing consumes.
+//
+// Tested at subworkflow level rather than through the pipeline on purpose. The
+// pipeline entry point needs a samplesheet, whose relative paths resolve against a
+// working directory nf-test controls; here the inputs are built in Groovy and can
+// use ${projectDir} directly.
+//
+// -profile laptop is required: ASHLAR and BACKSUB declare their versions with
+// eval(), which Nextflow evaluates in the task environment even under -stub, so the
+// binaries must exist. The laptop profile puts tests/stub_bin on PATH.
+
+nextflow_workflow {
+
+    name "PREPROCESS_IMAGES"
+    script "../subworkflows/local/preprocess_images/main.nf"
+    workflow "PREPROCESS_IMAGES"
+    profile "laptop"
+    options "-stub"
+    tag "stub"
+    tag "preprocess"
+
+    test("two cycles are grouped into one stitched image") {
+
+        when {
+            params {
+                use_backsub = false
+                use_tma_dearray = false
+            }
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'testsample', cycle_number: 1 ],
+                        file("\${projectDir}/tests/stub_data/cycle01.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ],
+                    [
+                        [ id: 'testsample', cycle_number: 2 ],
+                        file("\${projectDir}/tests/stub_data/cycle02.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ]
+                )
+                input[1] = Channel.of([
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DNA_6'  ],
+                    [ channel_number: 2, cycle_number: 1, marker_name: 'ELANE'  ],
+                    [ channel_number: 3, cycle_number: 2, marker_name: 'DNA_7'  ],
+                    [ channel_number: 4, cycle_number: 2, marker_name: 'CD11B'  ]
+                ])
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                // Two cycles in, one stitched image out. If grouping broke, this is 2.
+                { assert workflow.out.images.size() == 1 },
+                // The effective marker sheet must be emitted even without backsub;
+                // SET_CHANNEL_NAMES consumes it and a missing emit is a compile error
+                // that only shows up when the caller runs.
+                { assert workflow.out.markers.size() == 1 }
+            )
+        }
+    }
+
+    test("a TMA fans out into cores that remember their slide") {
+
+        when {
+            params {
+                use_backsub = false
+                use_tma_dearray = true
+            }
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'testslide', cycle_number: 1 ],
+                        file("\${projectDir}/tests/stub_data/cycle01.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ],
+                    [
+                        [ id: 'testslide', cycle_number: 2 ],
+                        file("\${projectDir}/tests/stub_data/cycle02.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ]
+                )
+                input[1] = Channel.of([
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DNA_6'  ],
+                    [ channel_number: 2, cycle_number: 1, marker_name: 'ELANE'  ],
+                    [ channel_number: 3, cycle_number: 2, marker_name: 'DNA_7'  ],
+                    [ channel_number: 4, cycle_number: 2, marker_name: 'CD11B'  ]
+                ])
+                """
+            }
+        }
+
+        then {
+            def metas = workflow.out.images.collect { it[0] }
+
+            assertAll(
+                { assert workflow.success },
+                // The Coreograph stub emits two cores, so one slide becomes two samples.
+                { assert workflow.out.images.size() == 2 },
+                // Core IDs carry the slide name and a zero-padded index, and must not
+                // keep an extension. `.ome` survived here once, and that ID goes on to
+                // become the zarr directory name and every merged element prefix.
+                { assert metas.every { it.id ==~ /testslide_core\d{3}/ } },
+                // meta.slide is what MERGE_SPATIALDATA groups on. Without it every core
+                // groups under a null key and unrelated slides merge together.
+                { assert metas.every { it.slide == 'testslide' } },
+                { assert metas.collect { it.id }.toSet().size() == 2 }
+            )
+        }
+    }
+}
