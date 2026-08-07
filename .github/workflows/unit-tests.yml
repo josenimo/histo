@@ -1,0 +1,37 @@
+name: Unit tests
+
+# The cheapest tests in the repository: pure Python, no containers, no imaging
+# data, a few seconds. They cover the logic in bin/ and tools/ -- marker sheet
+# parsing, core naming, table relinking, container cache filenames -- which is
+# where several real bugs have lived.
+#
+# Separate from nf-test on purpose. These need nothing but Python, so they should
+# stay fast and always green; a failure here is a genuine logic error rather than
+# an environment problem.
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install
+        run: pip install pytest pandas
+
+      - name: Run
+        run: pytest tests/unit -v
