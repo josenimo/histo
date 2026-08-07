@@ -1,5 +1,9 @@
 .nextflow*
 work/
+# Written into the launch directory by a run. Harmless, but one was committed by
+# accident because it is a dotfile and easy to miss in `git status`. Launching from
+# a separate run directory rather than the repo avoids producing them here at all.
+.params_*.json
 data/
 results/
 .DS_Store
