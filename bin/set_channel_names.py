@@ -75,6 +75,51 @@ def read_marker_names(path: Path) -> list[str]:
     return names
 
 
+def channel_labels(sdata_path: Path, element: str) -> list[str]:
+    """The channel names currently on an image element.
+
+    `SpatialData.set_channel_names` is a method but there is no matching getter on
+    the object -- the API is asymmetric, which cost a cluster round trip to find
+    out. `spatialdata.get_channel_names` is tried first in case it exists as a
+    module-level utility in this version.
+
+    The fallback reads the store directly. That is more brittle in principle, but
+    it is the layout verified against real pipeline output: channel names live in
+    `images/<element>/zarr.json` under `attributes.ome.omero.channels[].label`, and
+    nowhere else. If a future spatialdata changes that, this raises rather than
+    quietly returning nothing.
+    """
+    try:
+        import spatialdata
+
+        return [str(c) for c in spatialdata.get_channel_names(sd_read(sdata_path)[element])]
+    except Exception:
+        pass
+
+    meta = Path(sdata_path) / "images" / element / "zarr.json"
+    if not meta.exists():
+        raise FileNotFoundError(
+            f"cannot read channel names: {meta} does not exist. Either '{element}' is "
+            f"not an image element, or the store layout has changed."
+        )
+    import json
+
+    attrs = json.loads(meta.read_text()).get("attributes", {})
+    channels = attrs.get("ome", {}).get("omero", {}).get("channels")
+    if channels is None:
+        raise ValueError(
+            f"{meta} has no attributes.ome.omero.channels. The store layout has "
+            f"changed and this script needs updating."
+        )
+    return [c["label"] for c in channels]
+
+
+def sd_read(path: Path):
+    import spatialdata as sd
+
+    return sd.read_zarr(path)
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--sdata", required=True, type=Path, help="SpatialData .zarr store")
@@ -101,7 +146,7 @@ def main() -> int:
             f"Present: {sorted(sdata.images)}"
         )
 
-    before = list(sdata.get_channel_names(element))
+    before = channel_labels(args.sdata, element)
 
     if len(before) != len(names):
         raise ValueError(
@@ -117,7 +162,7 @@ def main() -> int:
     # are untouched, which is what makes this cheap on a 100 GB image.
     sdata.set_channel_names(element, names, write=True)
 
-    after = list(sd.read_zarr(args.sdata).get_channel_names(element))
+    after = channel_labels(args.sdata, element)
     if after != names:
         raise RuntimeError(
             f"channel names did not persist.\n  wanted: {names}\n  on disk: {after}"
