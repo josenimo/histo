@@ -124,11 +124,24 @@ source tree. Nextflow submits the SLURM jobs itself; you never write an sbatch s
 
 ```bash
 mkdir -p ~/runs/myrun && cd ~/runs/myrun
+
+# Keep temporary files off the shared /tmp, which is small and communal. Without
+# this a run dies with "No space left on device" on a path under /tmp, which looks
+# like a disk-quota problem and is not one.
+export TMPDIR=/fast/AG_Coscia/$USER/tmp
+export NXF_TEMP="$TMPDIR"
+export NXF_OPTS="-Djava.io.tmpdir=$TMPDIR"
+mkdir -p "$TMPDIR"
+
+# Stops a launch-time fetch of a config this pipeline does not use.
 export NXF_OFFLINE=true
+
 nextflow run /path/to/histo -profile singularity,size_small,slurm -params-file params.yml -resume
 ```
 
-`NXF_OFFLINE` stops a launch-time fetch of a config this pipeline does not use.
+All three temp variables are needed for different consumers: `TMPDIR` for tools inside
+containers, `NXF_TEMP` for Nextflow's own scratch, and `java.io.tmpdir` for the JVM,
+which is the one that fails first and least helpfully.
 
 Validate before submitting — this catches bad paths and parameter types in seconds rather than after
 a queue wait:
