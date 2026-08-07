@@ -43,9 +43,18 @@ export NXF_TEMP="$TMPDIR" NXF_OPTS="-Djava.io.tmpdir=$TMPDIR" NXF_OFFLINE=true
 nf-test test tests/fixture.nf.test --profile test_fixture,singularity,size_tiny,slurm
 ```
 
-`test_fixture` goes on the command line even though the test file declares it: nf-test's
-`--profile` replaces that directive rather than adding to it. Omit it and the run fails
-with `Missing required parameter(s): input`, which does not mention profiles at all.
+`test_fixture` is repeated on the command line even though the test file declares it,
+because a bare `--profile` **replaces** that directive rather than adding to it. Omit it
+and the run fails with `Missing required parameter(s): input`, which does not mention
+profiles at all.
+
+Prefixing with `+` appends instead, which is what the CI action does:
+
+```bash
+nf-test test tests/fixture.nf.test --profile=+singularity,size_tiny,slurm
+```
+
+Either form works. The explicit list is the one verified on the cluster.
 
 The temp variables are not optional on this cluster. `/tmp` on the login node is small
 and shared, and a run that overruns it fails with `No space left on device` pointing at
