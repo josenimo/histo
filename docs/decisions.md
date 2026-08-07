@@ -42,7 +42,7 @@ place and `REPORT` deletes `.sopa_cache` from it, so a concurrent reader would r
 ## Channel names
 
 Ashlar writes no marker names into its OME-XML. Backsub writes them correctly. Coreograph
-discards them again. So sopa reads the OME channel *IDs* and the feature matrix comes out with
+discards them again. So sopa reads the OME channel _IDs_ and the feature matrix comes out with
 columns called `Channel:0:0`.
 
 **Fixed in the Zarr, immediately after conversion.** `SET_CHANNEL_NAMES` sets them from the
@@ -60,7 +60,7 @@ immutability `-resume` depends on. Avoiding that means copying the whole image, 
 `--channel_names`. sopa has no equivalent hook, so the names have to be in the object.
 
 **The guard that checked for this was removed.** It grepped sopa's log for "Channel names
-couldn't be read", a message that only fires when sopa finds *no* names. It found the IDs, so
+couldn't be read", a message that only fires when sopa finds _no_ names. It found the IDs, so
 the guard never fired and `require_channel_names` gave false confidence. Checking the property
 beats checking a proxy for it.
 

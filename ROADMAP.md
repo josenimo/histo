@@ -1,21 +1,24 @@
 # Roadmap
 
-Status and plan. The reasoning behind the design is in [docs/decisions.md](docs/decisions.md);
-the blow-by-blow is in git history and the [issues](https://github.com/josenimo/histo/issues).
+Status and plan. The reasoning behind the design is in [docs/decisions.md](docs/decisions.md),
+longer-term ideas in [docs/future-ideas.md](docs/future-ideas.md), and the blow-by-blow in git
+history and the [issues](https://github.com/josenimo/histo/issues).
+
+Priorities, in order: transparency, robustness, troubleshootability.
 
 ## Status
 
-| Phase | State |
-| --- | --- |
-| 0. Freeze and diagnose | Done |
-| 1. Scaffold | Done — cloned from nf-core/sopa, rebranded, out-of-scope features removed |
-| 2. Preprocessing half | Done — BaSiCPy, Ashlar, backsub, Coreograph |
-| 3. TMA path | Done — per-core processing, merged per slide |
-| 4. Resource profiles | Done — `size_tiny`/`small`/`medium`/`huge`, `slurm` |
-| 5. Containers | Done — 7 images, manifest, pre-staging documented |
-| 6. Testing | Done — unit, stub and fixture tiers, CI |
-| 7. QC report | Not started |
-| 8. Release 1.0.0 | Not started |
+| Phase                  | State                                                                     |
+| ---------------------- | ------------------------------------------------------------------------- |
+| 0. Freeze and diagnose | Done                                                                      |
+| 1. Scaffold            | Done — cloned from nf-core/sopa, rebranded, out-of-scope features removed |
+| 2. Preprocessing half  | Done — BaSiCPy, Ashlar, backsub, Coreograph                               |
+| 3. TMA path            | Done — per-core processing, merged per slide                              |
+| 4. Resource profiles   | Done — `size_tiny`/`small`/`medium`/`huge`, `slurm`                       |
+| 5. Containers          | Done — 7 images, manifest, pre-staging documented                         |
+| 6. Testing             | Done — unit, stub and fixture tiers, CI                                   |
+| 7. QC report           | Not started                                                               |
+| 8. Release 1.0.0       | Not started                                                               |
 
 Version `0.1.0dev`. Lint: 241 passed, 35 ignored, 5 warnings, 0 failed.
 
@@ -23,7 +26,7 @@ Version `0.1.0dev`. Lint: 241 passed, 35 ignored, 5 warnings, 0 failed.
 
 - mIF, 3 cycles, 12 channels → 9,855 cells.
 - TMA, 2 cycles → 4 cores detected, processed independently, merged to 29,574 cells.
-- 10-cycle TMA with and without background subtraction.
+- 10-cycle TMA, with and without background subtraction.
 - Tiled segmentation is correct: 9,855 cells as one patch versus 9,896 across six, a 0.4%
   difference. Boundary resolution works, which is the claim the whole downstream design rests on.
 - Nothing exceeded 1.7 GB peak RSS across 49 tasks. Ashlar's memory tracks the mosaic's spatial
@@ -39,7 +42,7 @@ Ordered by how much harder each becomes if deferred.
    other people depend on the current format, because changing it later is a breaking change
    with an audience.
 2. **Aggregation beyond the mean.** sopa reports mean intensity per cell. Quantiles, standard
-   deviation and morphology are all reasonable and would need either a patched sopa module or
+   deviation and morphology are all reasonable, and would need either a patched sopa module or
    our own aggregation step. The item with scientific rather than engineering value.
 3. **Explain `obs/slide`.** It appears on non-TMA runs and nothing in this pipeline writes it.
    Worth understanding before `MERGE_SPATIALDATA` starts writing its own slide identity into
@@ -48,6 +51,21 @@ Ordered by how much harder each becomes if deferred.
    core, saturated-pixel fraction per channel, Ashlar registration residual, fraction of
    patches with zero cells. Thresholds need real datasets behind them.
 5. **Phase 8, release.** Tag off `main`, `nf-core pipelines lint --release` first.
+
+## Longer term
+
+Sketched with costs and risks in [docs/future-ideas.md](docs/future-ideas.md).
+
+1. **Read `.czi` metadata** — auto-fill exposure for backsub, and channel names, from the file.
+2. **Dearray across every nuclear channel** — detect cores lost between cycles.
+3. **Imaging QC** — autofluorescence, artefacts, focus. Merge with Phase 7.
+4. **Ashlar registration QC** — lives on an upstream dev branch; revisit when Phase 7 starts.
+5. **Dearray first, process each core in parallel** — the largest change here, and the one that
+   would most improve Ashlar's reliability. Depends on locating cores from a naive
+   stage-position mosaic, without stitching first.
+
+Ideas 1, 2 and 5 all want extra marker sheet columns. Design that schema once, alongside the
+already-planned move to a samplesheet column, rather than breaking the format three times.
 
 ## Open
 
