@@ -54,9 +54,7 @@ def read_marker_names(path: Path) -> list[str]:
 
     for col in ("channel_number", "marker_name"):
         if col not in rows[0]:
-            raise ValueError(
-                f"{path} has no '{col}' column. Columns present: {sorted(rows[0])}"
-            )
+            raise ValueError(f"{path} has no '{col}' column. Columns present: {sorted(rows[0])}")
 
     rows.sort(key=lambda r: int(r["channel_number"]))
     names = [r["marker_name"].strip() for r in rows]
@@ -76,25 +74,22 @@ def read_marker_names(path: Path) -> list[str]:
 
 
 def channel_labels(sdata_path: Path, element: str) -> list[str]:
-    """The channel names currently on an image element.
+    """The channel names currently on an image element, read from the store.
 
-    `SpatialData.set_channel_names` is a method but there is no matching getter on
-    the object -- the API is asymmetric, which cost a cluster round trip to find
-    out. `spatialdata.get_channel_names` is tried first in case it exists as a
-    module-level utility in this version.
+    `SpatialData.set_channel_names` is a method, but there is no matching getter on
+    the object -- the API is asymmetric, which cost a cluster round trip to discover.
 
-    The fallback reads the store directly. That is more brittle in principle, but
-    it is the layout verified against real pipeline output: channel names live in
-    `images/<element>/zarr.json` under `attributes.ome.omero.channels[].label`, and
-    nowhere else. If a future spatialdata changes that, this raises rather than
-    quietly returning nothing.
+    This reads the store directly instead of going through the library. Channel
+    names live in exactly one place, `images/<element>/zarr.json` under
+    `attributes.ome.omero.channels[].label`, verified against real pipeline output.
+    Reading it is a few kilobytes and needs no spatialdata import.
+
+    Every failure raises with a specific message. An earlier version tried a library
+    call first and fell back to this on any exception, which meant a genuine bug in
+    the library path would have been silently swallowed -- the same failure mode as
+    the legacy merge script dropping unreadable cores with a warning.
     """
-    try:
-        import spatialdata
-
-        return [str(c) for c in spatialdata.get_channel_names(sd_read(sdata_path)[element])]
-    except Exception:
-        pass
+    import json
 
     meta = Path(sdata_path) / "images" / element / "zarr.json"
     if not meta.exists():
@@ -102,7 +97,6 @@ def channel_labels(sdata_path: Path, element: str) -> list[str]:
             f"cannot read channel names: {meta} does not exist. Either '{element}' is "
             f"not an image element, or the store layout has changed."
         )
-    import json
 
     attrs = json.loads(meta.read_text()).get("attributes", {})
     channels = attrs.get("ome", {}).get("omero", {}).get("channels")
@@ -112,12 +106,6 @@ def channel_labels(sdata_path: Path, element: str) -> list[str]:
             f"changed and this script needs updating."
         )
     return [c["label"] for c in channels]
-
-
-def sd_read(path: Path):
-    import spatialdata as sd
-
-    return sd.read_zarr(path)
 
 
 def main() -> int:
@@ -135,9 +123,7 @@ def main() -> int:
     if args.element:
         element = args.element
         if element not in sdata.images:
-            raise ValueError(
-                f"no image element '{element}'. Present: {sorted(sdata.images)}"
-            )
+            raise ValueError(f"no image element '{element}'. Present: {sorted(sdata.images)}")
     elif len(sdata.images) == 1:
         element = next(iter(sdata.images))
     else:
@@ -158,15 +144,21 @@ def main() -> int:
             f"not the original: backsub can remove background channels."
         )
 
+    # Renames unconditionally, including when the names are already correct.
+    #
+    # This step mutates the store in place, so its input hash changes the moment it
+    # runs and `-resume` can never cache it -- the same property every sopa module
+    # has. It therefore re-executes on every resumed run. Rewriting ~5 KB of metadata
+    # costs nothing, and doing it unconditionally means every run's log carries the
+    # full channel mapping, which is worth more than skipping a write that is free.
+    #
     # write=True persists to the store. Only the group metadata changes; the arrays
     # are untouched, which is what makes this cheap on a 100 GB image.
     sdata.set_channel_names(element, names, write=True)
 
     after = channel_labels(args.sdata, element)
     if after != names:
-        raise RuntimeError(
-            f"channel names did not persist.\n  wanted: {names}\n  on disk: {after}"
-        )
+        raise RuntimeError(f"channel names did not persist.\n  wanted: {names}\n  on disk: {after}")
 
     print(f"[set_channel_names] {args.sdata} :: {element}")
     for i, (b, a) in enumerate(zip(before, after, strict=True)):

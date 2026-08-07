@@ -17,34 +17,21 @@ process TO_SPATIALDATA {
     path "versions.yml"
 
     script:
-    def strict_channels = params.require_channel_names ? 'true' : 'false'
+    // A guard used to live here: it grepped sopa's log for "Channel names couldn't
+    // be read" and, with require_channel_names, made that fatal. It was removed
+    // because it never fired and could not.
+    //
+    // sopa only logs that message when it finds no names at all. What Ashlar
+    // actually produces is Channel elements carrying `id` and no `Name`, so sopa
+    // reads the IDs and reports success while naming every channel `Channel:0:N`.
+    // The guard tested a log message that merely correlated with the property we
+    // cared about, and the correlation did not hold.
+    //
+    // SET_CHANNEL_NAMES now sets the names from the marker sheet immediately after
+    // this step, and fails loudly if the sheet and the image disagree on channel
+    // count. That checks the thing itself rather than a proxy for it.
     """
-    sopa convert ${data_dir} --sdata-path ${meta.sdata_dir} ${argsToSpatialData(meta, fullres_image_file.toString())} 2>&1 | tee sopa_convert.log
-
-    # sopa's ome_tif reader falls back to integer channel names when the OME-XML
-    # has none, and reports it with log.warning only. For an unattended run on a
-    # colleague's data that means every marker name is silently replaced by its
-    # index, and nothing downstream notices: the feature table just has columns
-    # called 0, 1, 2.
-    #
-    # Not fatal by default, because the preprocessing half does not yet write
-    # channel names into the OME-XML it hands over. See ROADMAP.md section 6.
-    # Set require_channel_names to turn this into a hard failure once it does.
-    if grep -q "Channel names couldn't be read" sopa_convert.log; then
-        echo "" >&2
-        echo "########################################################################" >&2
-        echo "# CHANNEL NAMES LOST for ${meta.sample}" >&2
-        echo "#" >&2
-        echo "# sopa could not read channel names from the OME-XML and has replaced" >&2
-        echo "# them with integers. Marker names will NOT appear in the feature table." >&2
-        echo "# See ROADMAP.md section 6 for the fix." >&2
-        echo "########################################################################" >&2
-        echo "" >&2
-        if [ "${strict_channels}" = "true" ]; then
-            echo "require_channel_names is set, so this is fatal." >&2
-            exit 1
-        fi
-    fi
+    sopa convert ${data_dir} --sdata-path ${meta.sdata_dir} ${argsToSpatialData(meta, fullres_image_file.toString())}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

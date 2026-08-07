@@ -85,11 +85,6 @@
                     "default": "--downsampleFactor 5 --channel 0 --buffer 2",
                     "description": "Extra command-line arguments passed through to UNetCoreograph.",
                     "fa_icon": "fas fa-terminal"
-                },
-                "require_channel_names": {
-                    "type": "boolean",
-                    "description": "Fail the run when channel names cannot be read from the OME-XML and sopa falls back to integer names. Off by default because the preprocessing half does not yet write names into the OME-XML; turn it on once it does.",
-                    "fa_icon": "fas fa-exclamation-triangle"
                 }
             }
         },
