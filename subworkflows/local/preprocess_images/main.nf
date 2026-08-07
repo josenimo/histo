@@ -106,9 +106,28 @@ workflow PREPROCESS_IMAGES {
 
         BACKSUB(ch_backsub.image, ch_backsub.markers)
         ch_registered = BACKSUB.out.backsub_tif
+
+        // The sheet that describes what the image now contains. backsub can drop
+        // background channels, so its rewritten markerout is the truthful one and
+        // the input sheet would name channels that no longer exist.
+        ch_effective_markers = BACKSUB.out.markerout.map { _meta, markers -> markers }.first()
     }
     else {
         ch_registered = ASHLAR.out.tif
+
+        // No backsub, so the input sheet still describes the image. Written out as a
+        // file rather than passed as rows, so that whatever consumes it downstream
+        // takes the same shape in both branches.
+        ch_effective_markers = ch_markersheet
+            .map { rows ->
+                [
+                    'channel_number,marker_name',
+                    rows.sort { a, b -> (a.channel_number as int) <=> (b.channel_number as int) }
+                        .collect { r -> "${r.channel_number},${r.marker_name}" },
+                ]
+            }
+            .flatten()
+            .collectFile(name: 'markers_effective.csv', sort: false, newLine: true)
     }
 
     //
@@ -154,5 +173,6 @@ workflow PREPROCESS_IMAGES {
     // and collected in workflows/histo.nf. Nothing to mix here.
 
     emit:
-    images = ch_images // channel: [ val(meta), path(image) ] one per sample, or one per TMA core
+    images  = ch_images             // channel: [ val(meta), path(image) ] one per sample, or one per TMA core
+    markers = ch_effective_markers  // channel: path(csv) describing the channels the images actually have
 }

@@ -13,6 +13,7 @@ include { MAKE_IMAGE_PATCHES      } from '../modules/local/make_image_patches'
 include { TISSUE_SEGMENTATION     } from '../modules/local/tissue_segmentation'
 include { AGGREGATE               } from '../modules/local/aggregate'
 include { MERGE_SPATIALDATA       } from '../modules/local/merge_spatialdata'
+include { SET_CHANNEL_NAMES       } from '../modules/local/set_channel_names'
 include { REPORT                  } from '../modules/local/report'
 include { FLUO_ANNOTATION         } from '../modules/local/fluo_annotation'
 include { CELLPOSE                } from '../subworkflows/local/cellpose'
@@ -58,12 +59,35 @@ workflow HISTO {
     (ch_spatialdata, versions) = TO_SPATIALDATA(ch_input_spatialdata)
     ch_versions = ch_versions.mix(versions)
 
+    // Give the channels their marker names before anything reads them.
+    //
+    // Ashlar writes no names into the OME-XML and Coreograph discards the ones
+    // backsub adds, so sopa names channels after their OME IDs: Channel:0:0 and so
+    // on. This renames them in the store, which costs nothing because channel names
+    // live in ~5 KB of group metadata rather than alongside the pixels.
+    //
+    // It must run before AGGREGATE, which reads channel names off the image when it
+    // builds the feature matrix. Running it here rather than later also means
+    // cellpose_channels can be given a real marker name instead of Channel:0:0.
+    //
+    // Only when preprocessing ran: without it there is no marker sheet describing
+    // the image, and an image entering the pipeline pre-stitched is assumed to carry
+    // its own names already.
+    if (params.use_preprocessing) {
+        SET_CHANNEL_NAMES(ch_spatialdata, PREPROCESS_IMAGES.out.markers)
+        ch_named = SET_CHANNEL_NAMES.out.sdata
+        ch_versions = ch_versions.mix(SET_CHANNEL_NAMES.out.versions)
+    }
+    else {
+        ch_named = ch_spatialdata
+    }
+
     if (params.use_tissue_segmentation) {
-        (ch_tissue_seg, versions) = TISSUE_SEGMENTATION(ch_spatialdata, argsCLI("tissue_segmentation"))
+        (ch_tissue_seg, versions) = TISSUE_SEGMENTATION(ch_named, argsCLI("tissue_segmentation"))
         ch_versions = ch_versions.mix(versions)
     }
     else {
-        ch_tissue_seg = ch_spatialdata
+        ch_tissue_seg = ch_named
     }
 
     if (params.use_cellpose) {
