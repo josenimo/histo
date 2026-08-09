@@ -69,6 +69,18 @@ already-planned move to a samplesheet column, rather than breaking the format th
 
 ## Open
 
+- **Duplicate `cycle_number` is accepted, and silently misaligns illumination profiles.** `meta` is
+  built from `sample` and `cycle_number` alone, so two samplesheet rows sharing both produce
+  identical meta maps. That map is the join key in `preprocess_images/main.nf:48`, so which cycle
+  receives which BaSiCPy profile depends on task completion order, and the `groupTuple` sort in the
+  same file has the same tie. Seen on a real three-cycle run whose sheet numbered the cycles 1, 2, 2:
+  it completed with no guarantee the profiles matched their cycles.
+  `assets/schema_input_cycle.json` already promises "sequential and without gaps" in its
+  `errorMessage`, but JSON Schema validates rows independently and cannot express a cross-row
+  constraint, so that message describes a check that was never written. The check belongs beside
+  `validateIlluminationColumns`, which exists for this category and whose comment names this exact
+  failure mode. Fix the error message in the same change. Quick, and it converts a silent wrong
+  answer into a startup error.
 - **Resource profiles are estimates** apart from `size_tiny`. Rewrite from `peak_rss` and
   `realtime` in the trace once a genuinely large slide has run.
 - **`REPORT` and `FLUO_ANNOTATION` are missing from the three larger size tiers**, so they

@@ -67,6 +67,12 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
 
 ### Known broken
 
+- A samplesheet that repeats a `cycle_number` within a sample is accepted, and the cycle's BaSiCPy
+  profiles may then be attached to the wrong cycle. `meta` carries only `sample` and `cycle_number`,
+  so duplicate rows share a join key and the pairing follows task completion order. The run succeeds
+  and the misalignment is invisible. Found on a real three-cycle run numbered 1, 2, 2. See
+  [ROADMAP.md](ROADMAP.md).
+
 - `tests/*.nf.test.snap` still record `"nf-core/sopa": "v1.0.1"`. Snapshots must not be hand-edited;
   they need regenerating with `nf-test`, which needs real containers on the cluster. Until then
   `nf-test` fails. This blocks the Phase 1 exit criterion.
