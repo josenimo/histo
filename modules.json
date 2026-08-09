@@ -18,7 +18,8 @@
                     "basicpy": {
                         "branch": "master",
                         "git_sha": "001f16039e0577eac8bb373d5209bdc023880151",
-                        "installed_by": ["modules"]
+                        "installed_by": ["modules"],
+                        "patch": "modules/nf-core/basicpy/basicpy.diff"
                     },
                     "coreograph": {
                         "branch": "master",

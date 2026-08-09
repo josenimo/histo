@@ -22,7 +22,7 @@ process BASICPY {
     def args    = task.ext.args   ?: ''
     def prefix  = task.ext.prefix ?: "${meta.id}"
     """
-    /opt/main.py -i $image -o . --output-flatfield $prefix --output-darkfield $prefix $args
+    basicpy_main.py -i $image -o . --output-flatfield $prefix --output-darkfield $prefix $args
     """
 
     stub:
