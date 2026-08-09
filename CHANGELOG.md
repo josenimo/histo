@@ -48,6 +48,16 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
   unguarded on a field the manifest no longer defines.
 - `.devcontainer/`, which configured a GitHub Codespaces environment that is unused.
 
+### Fixed
+
+- BaSiCPy on `.czi` input. Bio-Formats defaults to `zeissczi.autostitch=true`, which merges a tile
+  mosaic into a single stitched image before the field count, leaving BaSiC one field to fit from. It
+  then either failed as single-sited or, with `-ie`, fitted a meaningless profile. The reader now
+  passes `zeissczi.autostitch=false` and `zeissczi.attachments=false` for `.czi` input. This meant
+  vendoring the container's `/opt/main.py` as `bin/basicpy_main.py` and patching
+  `modules/nf-core/basicpy` to call it from `PATH`, recorded with `nf-core modules patch`. Verified
+  on real `.czi` data.
+
 ### Known broken
 
 - `tests/*.nf.test.snap` still record `"nf-core/sopa": "v1.0.1"`. Snapshots must not be hand-edited;

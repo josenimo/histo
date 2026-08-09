@@ -5,6 +5,16 @@
 line-length = 110
 target-version = "py311" # TODO: match the Python in the sopa container
 
+# Vendored third-party scripts, copied verbatim out of a container so the module
+# can patch one thing. Their whole value is being diffable against the image, and
+# both linting and formatting destroy that: ruff-format rewrote basicpy_main.py by
+# 90 lines, turning a 12-line patch into an unreviewable one. Every finding in it
+# is upstream's (PTH122 in the arg parser, F821 on aicsimageio in a code path this
+# pipeline never takes), so there is nothing here for us to fix.
+#
+# The header comment in each excluded file must name the exact image it came from.
+extend-exclude = ["bin/basicpy_main.py"]
+
 [lint]
 select = [
     "E", # pycodestyle errors
