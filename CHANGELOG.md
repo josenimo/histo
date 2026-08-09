@@ -50,6 +50,13 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
 
 ### Fixed
 
+- `SET_CHANNEL_NAMES` no longer fails when `use_backsub` is true. It asked for the image element
+  named after `meta.sample`, but `sopa convert` names the element after the file it converted, and
+  backsub's output carries a `_backsub` suffix. The two agreed only when no step renamed the image,
+  so the run died with `no image element 'sample'. Present: ['sample_backsub']`. The module now lets
+  the script find the sole image element instead. Channel labels always came from the marker sheet,
+  never from the filename, so only the lookup changes.
+
 - BaSiCPy on `.czi` input. Bio-Formats defaults to `zeissczi.autostitch=true`, which merges a tile
   mosaic into a single stitched image before the field count, leaving BaSiC one field to fit from. It
   then either failed as single-sited or, with `-ie`, fitted a meaningless profile. The reader now
