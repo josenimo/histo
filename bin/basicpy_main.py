@@ -243,7 +243,7 @@ def main(args):
         # tile mosaic into a single stitched image (plus pyramid levels, which
         # drop_non_matching_scenes then discards) before the field count below.
         # BaSiC is left with one field and either fails or, with -ie, fits a
-        # meaningless profile. Upstream issue: <url>
+        # meaningless profile.
         reader_kwargs = {}
         if args.input.suffix.lower() == ".czi":
             reader_kwargs["options"] = {
