@@ -98,7 +98,37 @@ def effective_bit_depth(max_value: int) -> int:
     return max(8, math.ceil(math.log2(max_value + 1)))
 
 
-def channel_metrics(hist: Any, dtype_max: int) -> dict[str, Any]:
+def rebin(hist: Any, n_bins: int, upper: int) -> tuple[list[int], float]:
+    """Reduce a full-range histogram to `n_bins` counts over `[0, upper]`.
+
+    For drawing, not for measuring: every number the report states comes from the
+    exact histogram, and this only decides the shape of a sparkline. Kept in the
+    metrics script rather than the renderer so the renderer never needs the pixels.
+
+    `upper` is the caller's choice of where the drawn range ends, and it matters:
+    binning to the dtype's ceiling squeezes every real channel into the left fifth
+    of its axis, because channels peak between 3337 and 19200 out of 65535. The bin
+    width is returned because it differs per channel, and a chart that does not
+    label its axis from it would be lying about the scale.
+    """
+    import numpy as np
+
+    hist = np.asarray(hist)
+    if n_bins < 1:
+        raise ValueError(f"n_bins must be at least 1, got {n_bins}")
+    if upper < 0:
+        raise ValueError(f"upper must be non-negative, got {upper}")
+
+    width = (upper + 1) / n_bins
+    counts = np.zeros(n_bins, dtype=np.int64)
+    # Sum whole bins with reduceat, which needs the start index of each bin.
+    edges = np.minimum((np.arange(n_bins) * width).astype(np.int64), len(hist) - 1)
+    summed = np.add.reduceat(hist[: min(len(hist), int(upper) + 1)], edges[edges <= upper])
+    counts[: len(summed)] = summed
+    return [int(c) for c in counts], float(width)
+
+
+def channel_metrics(hist: Any, dtype_max: int, n_bins: int = 128) -> dict[str, Any]:
     """Per-channel intensity metrics from one channel's full-range histogram.
 
     `fraction_at_dtype_ceiling` is true saturation: pixels the detector could not
@@ -138,6 +168,16 @@ def channel_metrics(hist: Any, dtype_max: int) -> dict[str, Any]:
         "headroom_stops": round(math.log2((dtype_max + 1) / (max_value + 1)), 2) if max_value else None,
     }
     metrics.update(percentiles_from_histogram(hist))
+    # Binned to p99.9, not to the maximum. A channel whose p99 is 5% of its max --
+    # which is most of them, because a handful of bright pixels set the max -- puts
+    # every real pixel in the first few of these bins, and the sparkline becomes an
+    # unreadable spike identical to every other channel's. The tail is not lost: max
+    # and the percentiles are reported exactly, from the unbinned histogram.
+    upper = max(1, min(int(metrics[_pct_key(99.9)]), max_value))
+    counts, width = rebin(hist, n_bins, upper)
+    metrics["histogram"] = counts
+    metrics["histogram_upper"] = upper
+    metrics["histogram_bin_width"] = width
     return metrics
 
 
@@ -167,6 +207,17 @@ def area_metrics(areas: Any, min_cell_area: float) -> dict[str, Any]:
     }
     for p in PERCENTILES:
         out[_pct_key(p)] = float(np.percentile(areas, p))
+
+    # Binned to p99 rather than to the maximum. Cell area is heavy-tailed -- a 12688
+    # px2 outlier against a 1009 median -- so binning to the max puts every real cell
+    # in the first two bins. The overflow count keeps the tail honest rather than
+    # cropping it silently.
+    upper = out[_pct_key(99.0)]
+    counts, edges = np.histogram(areas, bins=48, range=(0.0, upper))
+    out["histogram"] = [int(c) for c in counts]
+    out["histogram_upper"] = float(upper)
+    out["histogram_bin_width"] = float(edges[1] - edges[0])
+    out["n_above_histogram_upper"] = int((areas > upper).sum())
     return out
 
 
@@ -391,6 +442,12 @@ def collect(sdata_path: Path, min_cell_area: float, markers: list[str] | None) -
         counts = cells_per_patch(centroids, bboxes)
         out["patches"] = patch_metrics(counts, n_cells=int(len(areas)))
         out["patches"]["cells_per_patch"] = [int(c) for c in counts]
+        # ilocs is the patch's (x, y) position in the tiling grid, which is what lets
+        # a report lay the counts out as the slide rather than as a list of 72
+        # numbers. An empty patch means much more when its neighbours are visible.
+        if "ilocs" in patches.column_names:
+            out["patches"]["ilocs"] = [[int(v) for v in i] for i in patches.column("ilocs").to_pylist()]
+        out["patches"]["bboxes"] = [[int(v) for v in b] for b in bboxes.tolist()]
     else:
         # Segmentation without tiling leaves no patch element. Absent rather than
         # zero, so a reader can tell "not tiled" from "tiled and empty".
