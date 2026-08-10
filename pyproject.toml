@@ -1,0 +1,42 @@
+# Not a package. This exists so the unit tests have one declared, resolvable set of
+# dependencies instead of a `pip install` line in a workflow file that drifts from
+# what the tests actually import.
+#
+# The pipeline itself does not use this. Every script in bin/ runs inside a
+# container that already provides its dependencies, and adding one here would not
+# change what the container ships. What this pins is the test environment: uv
+# resolves it identically on a laptop and in CI, so "passes locally" means
+# something.
+#
+# `uv run pytest tests/unit` is the whole workflow. uv creates and updates the
+# environment as needed, so there is no activate step and no requirements file to
+# keep in sync.
+
+[project]
+name = "histo-tests"
+version = "0"
+description = "Test-only dependency set for the scripts in bin/ and tools/"
+# Upper bound because pyarrow ships no wheel for 3.14 yet, and without it uv picks
+# the newest interpreter on the machine and the install fails with an ABI-tag error
+# that says nothing about why. `.python-version` pins the exact interpreter so a
+# laptop and CI resolve the same one.
+requires-python = ">=3.11,<3.14"
+dependencies = []
+
+[dependency-groups]
+# zarr and pyarrow are here so the store-reading half of qc_metrics.py can be
+# tested against a store built in a tmp_path, rather than only by running it
+# against real output by hand. They are spatialdata's own dependencies, so this
+# does not add anything the sopa container lacks.
+#
+# pandas is needed by bin/merge_spatialdata.py, not by the tests directly.
+dev = [
+    "pytest>=8",
+    "numpy>=1.26",
+    "pandas>=2",
+    "zarr>=3",
+    "pyarrow>=15",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]

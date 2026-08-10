@@ -8,6 +8,10 @@ name: Unit tests
 # Separate from nf-test on purpose. These need nothing but Python, so they should
 # stay fast and always green; a failure here is a genuine logic error rather than
 # an environment problem.
+#
+# Dependencies come from pyproject.toml's dev group and uv.lock, not from a pip
+# install line here. The line drifted from what the tests import the moment a test
+# needed zarr, and a lockfile is the only version of this that is reproducible.
 
 on:
   push:
@@ -26,12 +30,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-python@v5
+      # No setup-python step. uv reads .python-version and fetches that interpreter
+      # itself, so the version is pinned in one place that local runs also honour
+      # rather than in a workflow input that only CI sees.
+      - uses: astral-sh/setup-uv@v6
         with:
-          python-version: "3.12"
+          enable-cache: true
 
-      - name: Install
-        run: pip install pytest pandas
-
+      # --frozen fails rather than silently re-resolving if uv.lock does not match
+      # pyproject.toml. Without it a stale lockfile would be quietly updated in CI
+      # and the run would pass against dependencies nobody chose.
       - name: Run
-        run: pytest tests/unit -v
+        run: uv run --frozen --group dev pytest tests/unit -v
