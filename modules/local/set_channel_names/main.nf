@@ -19,11 +19,24 @@ process SET_CHANNEL_NAMES {
     path "versions.yml"              , emit: versions
 
     script:
+    // No --element. The channel labels come from the marker sheet; the element name
+    // was only ever an address for which image inside the store to write them onto,
+    // and passing meta.sample tied that address to the input filename.
+    //
+    // Those two agree only by luck. sopa convert names the image element after the
+    // stem of the file it converted, so any step that renames the image breaks the
+    // lookup: with use_backsub the element is {sample}_backsub while meta.sample is
+    // still {sample}, and the run dies with "no image element".
+    //
+    // Without --element the script takes the sole image element and fails if there
+    // is more than one. After conversion there is exactly one, and on the TMA path
+    // each core is its own store, so nothing is weakened: the guard is now "exactly
+    // one image" rather than "an image with this name", which is the property we
+    // actually depend on.
     """
     set_channel_names.py \\
         --sdata ${sdata_path} \\
-        --markers ${markers} \\
-        --element ${meta.sample}
+        --markers ${markers}
 
     cat <<-END_VERSIONS > versions.yml
     "${task.process}":

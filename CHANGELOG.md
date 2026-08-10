@@ -50,6 +50,13 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
 
 ### Fixed
 
+- `SET_CHANNEL_NAMES` no longer fails when `use_backsub` is true. It asked for the image element
+  named after `meta.sample`, but `sopa convert` names the element after the file it converted, and
+  backsub's output carries a `_backsub` suffix. The two agreed only when no step renamed the image,
+  so the run died with `no image element 'sample'. Present: ['sample_backsub']`. The module now lets
+  the script find the sole image element instead. Channel labels always came from the marker sheet,
+  never from the filename, so only the lookup changes.
+
 - BaSiCPy on `.czi` input. Bio-Formats defaults to `zeissczi.autostitch=true`, which merges a tile
   mosaic into a single stitched image before the field count, leaving BaSiC one field to fit from. It
   then either failed as single-sited or, with `-ie`, fitted a meaningless profile. The reader now
@@ -59,6 +66,19 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
   on real `.czi` data.
 
 ### Known broken
+
+- A samplesheet that repeats a `cycle_number` within a sample is accepted, and the cycle's BaSiCPy
+  profiles may then be attached to the wrong cycle. `meta` carries only `sample` and `cycle_number`,
+  so duplicate rows share a join key and the pairing follows task completion order. The run succeeds
+  and the misalignment is invisible. Found on a real three-cycle run numbered 1, 2, 2. See
+  [ROADMAP.md](ROADMAP.md).
+
+- On the TMA path with `use_backsub` set, backsub's `_backsub` filename suffix becomes part of each
+  core's identity. COREOGRAPH derives core IDs from filenames, so `meta.id` is
+  `{sample}_backsub_core001`, and the suffix reaches the zarr directory name, the REPORT filename and
+  cell identity in the merged table. Nothing fails, but the same slide run with and without backsub
+  produces cores that cannot be matched by name. This is the quiet half of the `SET_CHANNEL_NAMES`
+  fix above, and a naming defect rather than a lookup one. See [ROADMAP.md](ROADMAP.md).
 
 - `tests/*.nf.test.snap` still record `"nf-core/sopa": "v1.0.1"`. Snapshots must not be hand-edited;
   they need regenerating with `nf-test`, which needs real containers on the cluster. Until then
