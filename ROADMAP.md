@@ -69,6 +69,20 @@ already-planned move to a samplesheet column, rather than breaking the format th
 
 ## Open
 
+- **`min_area_pixels2` may not be filtering anything.** Measured on the published WSI run: the
+  smallest cell in the table is 4.3 px² and 1% of cells are under 48.6 px², against a `nextflow.config`
+  comment that says leaving the parameter `null` lets sopa derive the floor as `(diameter/2)²`, which
+  for that run's `cellpose_diameter = 35` would be about 306 px². `argsCLI()` skips nulls, so
+  `--min-area` genuinely never reached the CLI and sopa's own default applied. Either that comment
+  describes a derivation sopa does not do, or the floor is applied per patch before
+  `RESOLVE_CELLPOSE` stitches boundaries across patch seams and the fragments it creates are not
+  re-filtered. Both are worth knowing and the two are distinguished by one run with an explicit
+  `--min-area`. Until then the comment is asserting something the data contradicts.
+- **A misspelt parameter does not fail the run.** `pipeline_info/params_*.json` from the published
+  run records both `use_use_tma_dearray` and `use_tma_dearray`, with `validate_params = true`. The
+  typo was accepted and silently ignored, so a run configured with `use_use_tma_dearray = true`
+  would quietly do the opposite of what was asked. nf-core's schema validation can reject unknown
+  parameters; find out why it did not here.
 - **Duplicate `cycle_number` is accepted, and silently misaligns illumination profiles.** `meta` is
   built from `sample` and `cycle_number` alone, so two samplesheet rows sharing both produce
   identical meta maps. That map is the join key in `preprocess_images/main.nf:48`, so which cycle
