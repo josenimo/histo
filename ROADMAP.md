@@ -69,6 +69,16 @@ already-planned move to a samplesheet column, rather than breaking the format th
 
 ## Open
 
+- **Run-level resource QC is deferred, and the reason is structural.** Failed and retried task
+  counts and peak RSS per task all live in `pipeline_info/execution_trace_*.txt`, which Nextflow
+  only finalises when the run ends — so no process inside the DAG can read its own run's trace, and
+  the per-sample QC step cannot produce these numbers. It needs either a `workflow.onComplete` hook
+  or a post-run step, and neither is worth building until the pass/fail gate exists to consume it.
+  A working parser was written and removed in the same branch rather than left unwired; the trace
+  columns are `status`, `attempt` and `peak_rss`, and sizes arrive as `5.1 GB` or as `-` when there
+  is no reading at all, which is every row on macOS without a container engine. Worth having: the
+  published WSI run peaked at 8.7 GB in BASICPY, and `TO_SPATIALDATA` reported exactly 8.00 GiB,
+  which looks like a ceiling rather than a measurement.
 - **`min_area_pixels2` may not be filtering anything.** Measured on the published WSI run: the
   smallest cell in the table is 4.3 px² and 1% of cells are under 48.6 px², against a `nextflow.config`
   comment that says leaving the parameter `null` lets sopa derive the floor as `(diameter/2)²`, which

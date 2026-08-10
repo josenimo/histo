@@ -1,25 +1,18 @@
-"""QC metric arithmetic, and the trace parser.
-
-Only the pure functions are here. They need numpy and nothing else, which keeps
-this file runnable in the CI job that installs pytest and pandas. Reading a real
-store needs zarr and pyarrow, so `read_column`, `collect` and `channel_histograms`
-are exercised against real pipeline output rather than mocked here.
+"""QC metric arithmetic.
 
 The numbers in the expectations come from the published WSI run in scratch/output
 wherever a real value was available, so a regression shows up as a disagreement
-with something that actually happened.
+with something that actually happened rather than with a number someone invented.
 """
 
 import numpy as np
 import pytest
 from qc_metrics import (
-    _parse_size,
     _pct_key,
     area_metrics,
     cells_per_patch,
     channel_metrics,
     effective_bit_depth,
-    parse_trace,
     patch_metrics,
     percentiles_from_histogram,
 )
@@ -235,92 +228,3 @@ class TestPatchMetrics:
 
     def test_untiled_run_has_no_patches(self):
         assert patch_metrics(np.array([], dtype=np.int64), n_cells=0) == {"n_patches": 0}
-
-
-class TestParseSize:
-    def test_gigabytes(self):
-        assert _parse_size("5.1 GB") == int(5.1 * 1024**3)
-
-    def test_megabytes(self):
-        assert _parse_size("889 MB") == 889 * 1024**2
-
-    def test_missing_reading_is_none(self):
-        """macOS without a container engine reports no metrics at all.
-
-        One real trace on this pipeline is entirely dashes, so this must not raise.
-        """
-        assert _parse_size("-") is None
-        assert _parse_size("") is None
-        assert _parse_size(None) is None
-
-    def test_unparseable_is_none(self):
-        assert _parse_size("lots") is None
-        assert _parse_size("5 PARSECS") is None
-
-    def test_bare_number_is_bytes(self):
-        assert _parse_size("1024") == 1024
-
-
-TRACE_HEADER = "task_id\thash\tname\tstatus\texit\tattempt\tpeak_rss\n"
-
-
-def write_trace(tmp_path, *rows):
-    p = tmp_path / "execution_trace_test.txt"
-    p.write_text(TRACE_HEADER + "".join(rows))
-    return p
-
-
-class TestParseTrace:
-    def test_all_completed(self, tmp_path):
-        p = write_trace(
-            tmp_path,
-            "1\tab/cd\tFOO (s)\tCOMPLETED\t0\t1\t5.1 GB\n",
-            "2\tef/gh\tBAR (s)\tCOMPLETED\t0\t1\t1.9 GB\n",
-        )
-        m = parse_trace(p)
-        assert m["n_tasks"] == 2
-        assert m["n_failed"] == 0
-        assert m["by_status"] == {"COMPLETED": 2}
-        assert m["peak_rss_task"] == "FOO (s)"
-
-    def test_failure_named(self, tmp_path):
-        """A named failing task is the difference between useful and not."""
-        p = write_trace(
-            tmp_path,
-            "1\tab/cd\tFOO (s)\tCOMPLETED\t0\t1\t1 GB\n",
-            "2\tef/gh\tBAR (s)\tFAILED\t137\t1\t-\n",
-        )
-        m = parse_trace(p)
-        assert m["n_failed"] == 1
-        assert m["failed_tasks"] == ["BAR (s)"]
-
-    def test_cached_is_not_a_failure(self, tmp_path):
-        """-resume produces CACHED rows, which are successes."""
-        p = write_trace(tmp_path, "1\tab/cd\tFOO (s)\tCACHED\t0\t1\t-\n")
-        m = parse_trace(p)
-        assert m["n_failed"] == 0
-
-    def test_retry_counted(self, tmp_path):
-        """attempt > 1 means errorStrategy retried, which is worth surfacing."""
-        p = write_trace(tmp_path, "1\tab/cd\tFOO (s)\tCOMPLETED\t0\t2\t1 GB\n")
-        m = parse_trace(p)
-        assert m["n_retried"] == 1
-        assert m["retried_tasks"] == ["FOO (s)"]
-
-    def test_all_metrics_missing(self, tmp_path):
-        """The macOS case: rows exist, memory readings do not."""
-        p = write_trace(tmp_path, "1\tab/cd\tFOO (s)\tCOMPLETED\t0\t1\t-\n")
-        m = parse_trace(p)
-        assert m["peak_rss_bytes"] is None
-        assert m["top_memory_tasks"] == []
-
-    def test_top_memory_is_sorted_and_capped(self, tmp_path):
-        rows = [f"{i}\tab/cd\tT{i}\tCOMPLETED\t0\t1\t{i} GB\n" for i in range(1, 8)]
-        m = parse_trace(write_trace(tmp_path, *rows))
-        assert [t["name"] for t in m["top_memory_tasks"]] == ["T7", "T6", "T5", "T4", "T3"]
-
-    def test_no_rows_refused(self, tmp_path):
-        p = tmp_path / "execution_trace_empty.txt"
-        p.write_text(TRACE_HEADER)
-        with pytest.raises(ValueError, match="no task rows"):
-            parse_trace(p)

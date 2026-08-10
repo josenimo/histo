@@ -226,73 +226,6 @@ def patch_metrics(counts: Any, n_cells: int) -> dict[str, Any]:
     }
 
 
-def parse_trace(path: Path) -> dict[str, Any]:
-    """Resource and failure metrics from Nextflow's execution trace.
-
-    Nextflow finalises this file when the run ends, so a process inside the DAG
-    cannot read its own run's trace -- this is for a post-run invocation, and the
-    caller is expected to know the difference.
-
-    Catches the class of problem that has already bitten this pipeline twice: a
-    one-minute REPORT asking for 36 GB, and resource profiles that were estimates
-    for every tier but the smallest. Requested memory is not in the trace, so this
-    reports what was used and leaves the comparison to whoever reads it.
-    """
-    import csv
-
-    rows = list(csv.DictReader(path.read_text().splitlines(), delimiter="\t"))
-    if not rows:
-        raise ValueError(f"{path} has no task rows")
-
-    by_status: dict[str, int] = {}
-    for r in rows:
-        status = r.get("status", "UNKNOWN")
-        by_status[status] = by_status.get(status, 0) + 1
-
-    retried = [r["name"] for r in rows if int(r.get("attempt", "1") or 1) > 1]
-    failed = [r["name"] for r in rows if r.get("status") not in ("COMPLETED", "CACHED")]
-
-    peaks = []
-    for r in rows:
-        rss = _parse_size(r.get("peak_rss", ""))
-        if rss is not None:
-            peaks.append((rss, r["name"]))
-    peaks.sort(reverse=True)
-
-    return {
-        "trace_file": path.name,
-        "n_tasks": len(rows),
-        "by_status": by_status,
-        "n_failed": len(failed),
-        "failed_tasks": failed,
-        "n_retried": len(retried),
-        "retried_tasks": retried,
-        "peak_rss_bytes": peaks[0][0] if peaks else None,
-        "peak_rss_task": peaks[0][1] if peaks else None,
-        "top_memory_tasks": [{"name": n, "peak_rss_bytes": b} for b, n in peaks[:5]],
-    }
-
-
-def _parse_size(text: str) -> int | None:
-    """Nextflow writes sizes as `5.1 GB`, and `-` when it has no reading.
-
-    Returns bytes. macOS without a container engine reports nothing at all, so a
-    missing value is normal and must not be an error -- one real trace on this
-    pipeline is entirely `-`.
-    """
-    text = (text or "").strip()
-    if not text or text == "-":
-        return None
-    units = {"B": 1, "KB": 1024, "MB": 1024**2, "GB": 1024**3, "TB": 1024**4}
-    parts = text.split()
-    try:
-        if len(parts) == 2:
-            return int(float(parts[0]) * units[parts[1].upper()])
-        return int(float(text))
-    except (ValueError, KeyError):
-        return None
-
-
 # --------------------------------------------------------------------------------
 # Reading the store.
 #
@@ -477,12 +410,6 @@ def main() -> int:
         default=10.0,
         help="cells below this area in square pixels are counted as degenerate (default: 10)",
     )
-    ap.add_argument(
-        "--trace",
-        type=Path,
-        help="Nextflow execution trace TSV. Only complete after the run ends, so this is "
-        "for a post-run invocation rather than a process inside the DAG.",
-    )
     args = ap.parse_args()
 
     markers = None
@@ -495,9 +422,6 @@ def main() -> int:
         markers = read_marker_names(args.markers)
 
     metrics = collect(args.sdata, args.min_cell_area, markers)
-
-    if args.trace:
-        metrics["run"] = parse_trace(args.trace)
 
     args.out.write_text(json.dumps(metrics, indent=2, sort_keys=False) + "\n")
 
