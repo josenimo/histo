@@ -128,7 +128,9 @@ def rebin(hist: Any, n_bins: int, upper: int) -> tuple[list[int], float]:
     return [int(c) for c in counts], float(width)
 
 
-def channel_metrics(hist: Any, dtype_max: int, n_bins: int = 128) -> dict[str, Any]:
+def channel_metrics(
+    hist: Any, dtype_max: int, n_bins: int = 512, histogram_upper: int | None = None
+) -> dict[str, Any]:
     """Per-channel intensity metrics from one channel's full-range histogram.
 
     `fraction_at_dtype_ceiling` is true saturation: pixels the detector could not
@@ -168,12 +170,18 @@ def channel_metrics(hist: Any, dtype_max: int, n_bins: int = 128) -> dict[str, A
         "headroom_stops": round(math.log2((dtype_max + 1) / (max_value + 1)), 2) if max_value else None,
     }
     metrics.update(percentiles_from_histogram(hist))
-    # Binned to p99.9, not to the maximum. A channel whose p99 is 5% of its max --
-    # which is most of them, because a handful of bright pixels set the max -- puts
-    # every real pixel in the first few of these bins, and the sparkline becomes an
-    # unreadable spike identical to every other channel's. The tail is not lost: max
-    # and the percentiles are reported exactly, from the unbinned histogram.
-    upper = max(1, min(int(metrics[_pct_key(99.9)]), max_value))
+    # One absolute axis shared by every channel, so the drawings are comparable: two
+    # channels with the same-looking curve really do have the same intensities. An
+    # earlier version binned each channel to its own p99.9, which was readable per row
+    # and meaningless across rows.
+    #
+    # The shared bound is the brightest channel's maximum, not the dtype's ceiling. The
+    # ceiling is the honest limit of what the detector could record, but real channels
+    # reach a fifth of it at most, so binning there puts every distribution in the
+    # leftmost few percent of the axis and all fifteen rows become the same spike --
+    # comparable and unreadable. The caller passes the bound; the ceiling is still
+    # reported separately as dtype_ceiling.
+    upper = dtype_max if histogram_upper is None else histogram_upper
     counts, width = rebin(hist, n_bins, upper)
     metrics["histogram"] = counts
     metrics["histogram_upper"] = upper
@@ -550,6 +558,7 @@ def collect(
     marker_rows: list[dict[str, Any]] | None = None,
     nuclear_pattern: str = "DAPI",
     before_image: Path | None = None,
+    histogram_range: str = "channels-max",
 ) -> dict[str, Any]:
     """Every metric for one sample.
 
@@ -603,8 +612,19 @@ def collect(
         out["channels"]["marker_sheet_names"] = markers
         out["channels"]["matches_marker_sheet"] = image_labels == markers
 
+    # Two passes: the shared histogram bound cannot be known until every channel's
+    # maximum is, and every channel has to be binned to the same one.
+    shared_upper = dtype_max
+    if histogram_range == "channels-max":
+        maxima = []
+        for hist in hists:
+            nonzero = np.nonzero(np.asarray(hist))[0]
+            maxima.append(int(nonzero[-1]) if len(nonzero) else 0)
+        shared_upper = max(1, max(maxima))
+    out["channels"]["histogram_upper"] = int(shared_upper)
+    out["channels"]["histogram_range"] = histogram_range
     for name, hist in zip(channel_names, hists, strict=True):
-        out["channels"]["per_channel"][name] = channel_metrics(hist, dtype_max)
+        out["channels"]["per_channel"][name] = channel_metrics(hist, dtype_max, histogram_upper=shared_upper)
 
     if before_image is not None:
         before_hists, before_max, before_shape = tiff_channel_histograms(before_image)
@@ -701,6 +721,15 @@ def main() -> int:
         "The zarr store only holds the subtracted pixels, so this is the only source.",
     )
     ap.add_argument(
+        "--histogram-range",
+        choices=("channels-max", "dtype"),
+        default="channels-max",
+        help="the shared upper bound for every channel's drawn histogram: the brightest "
+        "channel's maximum, or the dtype's ceiling. Shared either way, so channels stay "
+        "comparable; 'dtype' is the honest detector limit but puts every real channel in the "
+        "leftmost few percent of the axis (default: channels-max)",
+    )
+    ap.add_argument(
         "--nuclear-pattern",
         default="DAPI",
         help="substring identifying nuclear-stain channels in the marker sheet, used to "
@@ -726,6 +755,7 @@ def main() -> int:
         marker_rows=marker_rows,
         nuclear_pattern=args.nuclear_pattern,
         before_image=args.before_image,
+        histogram_range=args.histogram_range,
     )
 
     args.out.write_text(json.dumps(metrics, indent=2, sort_keys=False) + "\n")

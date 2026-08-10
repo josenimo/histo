@@ -42,14 +42,16 @@ from typing import Any
 # unlike red and green. The mask goes on in white over both.
 MARKER_RGB = (1.0, 0.0, 1.0)
 NUCLEAR_RGB = (0.0, 1.0, 0.0)
-# Cyan on the grayscale crops, because the base image is grey -- r == g == b at
-# every pixel -- so a saturated hue cannot be produced by the data and can never be
-# mistaken for a bright nucleus. White would be, and the mask sitting on the exact
-# structure it outlines is where that confusion costs most.
-CROP_MASK_RGB = (0, 229, 255)
-# White on the two-colour snapshots, where magenta and green already occupy the
-# saturated hues.
+# Red at 80% opacity over white nuclei on the crops. The base is grey, so r == g == b
+# at every pixel and a saturated hue cannot be produced by the data -- the mask can
+# never be mistaken for the structure it outlines, which is where that confusion would
+# cost most. The alpha lets the pixels under the line still read.
+CROP_MASK_RGBA = (208, 59, 59, 204)
+# White for the neighbouring cells on a snapshot, yellow for the one the cluster is
+# about: without that, a reader cannot tell which of a dozen outlined cells is the
+# subject.
 MASK_RGB = (255, 255, 255)
+TARGET_MASK_RGB = (255, 214, 0)
 
 
 def read_boundaries(sdata_path: Path, name: str = "cellpose_boundaries") -> Any:
@@ -162,7 +164,12 @@ def composite(planes: list[tuple[Any, tuple[float, float, float]]]) -> Any:
 
 
 def draw_outlines(
-    image: Any, geometries: Any, x0: int, y0: int, colour: tuple[int, int, int] = MASK_RGB
+    image: Any,
+    geometries: Any,
+    x0: int,
+    y0: int,
+    colour: tuple[int, ...] = MASK_RGB,
+    width: int = 1,
 ) -> int:
     """Draw polygon boundaries, outline only, over a PIL image.
 
@@ -175,7 +182,7 @@ def draw_outlines(
     """
     from PIL import ImageDraw
 
-    draw = ImageDraw.Draw(image)
+    draw = ImageDraw.Draw(image, "RGBA" if len(colour) == 4 else None)
     drawn = 0
     for geom in geometries:
         if geom is None or geom.is_empty:
@@ -187,7 +194,7 @@ def draw_outlines(
             points = [(x - x0, y - y0) for x, y in part.exterior.coords]
             if len(points) < 2:
                 continue
-            draw.line(points + [points[0]], fill=colour, width=1)
+            draw.line(points + [points[0]], fill=colour, width=width)
             drawn += 1
     return drawn
 
@@ -231,7 +238,9 @@ def render_crops(
         rgb = composite([(stretch(plane, lo, hi), (1.0, 1.0, 1.0))])
         img = Image.fromarray(rgb, mode="RGB")
         hits = sindex.query(_box(x0, y0, x0 + plane.shape[1], y0 + plane.shape[0]))
-        n_drawn = draw_outlines(img, boundaries.geometry.iloc[hits], x0, y0, CROP_MASK_RGB)
+        img = img.convert("RGBA")
+        n_drawn = draw_outlines(img, boundaries.geometry.iloc[hits], x0, y0, CROP_MASK_RGBA)
+        img = img.convert("RGB")
         name = f"crop_{pick['density_band']}_{pick['grid_x']}_{pick['grid_y']}.png"
         img.save(out_dir / name, optimize=True)
         out.append(
@@ -257,13 +266,58 @@ def _box(x0: float, y0: float, x1: float, y1: float) -> Any:
     return box(x0, y0, x1, y1)
 
 
+def cluster_tree(labels_by_resolution: list[Any], resolutions: list[float]) -> dict[str, Any]:
+    """How clusters split as resolution rises, as nodes and the cells flowing between.
+
+    The clustree idea: one row per resolution, and an edge wherever cells from a
+    cluster at one resolution end up in a cluster at the next. A resolution that only
+    subdivides existing groups produces a clean branching tree; one that reshuffles
+    membership produces crossing edges, and that is the signal that the extra clusters
+    are not refining anything real.
+    """
+    import numpy as np
+
+    levels = []
+    for r, labels in zip(resolutions, labels_by_resolution, strict=True):
+        clusters = sorted({str(v) for v in labels}, key=lambda s: int(s))
+        levels.append(
+            {
+                "resolution": r,
+                "clusters": clusters,
+                "sizes": [int((labels == c).sum()) for c in clusters],
+            }
+        )
+
+    edges = []
+    for i in range(len(labels_by_resolution) - 1):
+        a, b = labels_by_resolution[i], labels_by_resolution[i + 1]
+        for ca in levels[i]["clusters"]:
+            mask = a == ca
+            if not mask.any():
+                continue
+            sub, counts = np.unique(b[mask], return_counts=True)
+            for cb, n in zip(sub, counts, strict=True):
+                edges.append(
+                    {
+                        "level": i,
+                        "from": str(ca),
+                        "to": str(cb),
+                        "n_cells": int(n),
+                        "fraction_of_source": float(n / mask.sum()),
+                    }
+                )
+    return {"levels": levels, "edges": edges}
+
+
 def cluster_cells(
     x: Any,
     channel_names: list[str],
     use_channels: list[str],
     cofactor: float,
-    resolution: float,
+    resolutions: list[float],
     max_cells: int,
+    requested_resolution: float | None = None,
+    stability_floor: float = 0.9,
     seed: int = 0,
 ) -> dict[str, Any]:
     """Leiden clusters on arcsinh-transformed mean intensities.
@@ -286,6 +340,26 @@ def cluster_cells(
     keep = [channel_names.index(c) for c in use_channels]
     values = np.asarray(x, dtype=np.float64)[:, keep]
 
+    # A per-channel cofactor, taken from the channel, instead of one number for all of
+    # them. The cofactor is where arcsinh stops being linear and starts being
+    # logarithmic, so it belongs at the boundary between a channel's noise and its
+    # signal -- and on real data those boundaries differ by more than tenfold between
+    # channels, from CD38 peaking at 3,337 to 647_bg at 19,200. A single cofactor
+    # therefore compresses some channels almost not at all and others into a straight
+    # line, which biases the distances Leiden works on before it starts.
+    #
+    # The median of a channel's positive values estimates that boundary: most cells are
+    # negative for any given marker, so the middle of the positive values sits in the
+    # background rather than in the bright tail. A fixed --arcsinh-cofactor still wins
+    # if given, because a known instrument noise level beats an estimate.
+    if cofactor > 0:
+        cofactors = [float(cofactor)] * values.shape[1]
+    else:
+        cofactors = []
+        for j in range(values.shape[1]):
+            positive = values[:, j][values[:, j] > 0]
+            cofactors.append(float(max(1.0, np.median(positive))) if positive.size else 1.0)
+
     rng = np.random.default_rng(seed)
     n_total = values.shape[0]
     if 0 < max_cells < n_total:
@@ -297,22 +371,110 @@ def cluster_cells(
     import anndata as ad
     import scanpy as sc
 
-    adata = ad.AnnData(np.arcsinh(values / cofactor).astype(np.float32))
+    adata = ad.AnnData(np.arcsinh(values / np.asarray(cofactors)).astype(np.float32))
     adata.var_names = list(use_channels)
     sc.pp.scale(adata, max_value=10)
     sc.pp.neighbors(adata, n_neighbors=15, use_rep="X", random_state=seed)
-    # flavour="igraph" uses igraph's own implementation, which is a direct sopa
+    # The neighbour graph is built once and every resolution reuses it, which is what
+    # makes a sweep affordable: the graph is the expensive part, and Leiden over it is
+    # seconds. flavour="igraph" uses igraph's own implementation, a direct sopa
     # dependency; the default flavour would need leidenalg, which is not.
-    sc.tl.leiden(
-        adata,
-        resolution=resolution,
-        flavor="igraph",
-        n_iterations=2,
-        directed=False,
-        random_state=seed,
-    )
-    labels = adata.obs["leiden"].to_numpy()
+    from sklearn.metrics import adjusted_rand_score, silhouette_score
+
+    scaled_all = np.asarray(adata.X)
+    sweep = []
+    labels_by_resolution = []
+    for r in resolutions:
+        key = f"leiden_{r:g}"
+        sc.tl.leiden(
+            adata,
+            resolution=r,
+            flavor="igraph",
+            n_iterations=2,
+            directed=False,
+            random_state=seed,
+            key_added=key,
+        )
+        lab = adata.obs[key].to_numpy()
+        labels_by_resolution.append(lab)
+        n_clusters = len({str(v) for v in lab})
+
+        # Stability: run the same resolution again from different seeds and measure how
+        # much the partitions agree, as adjusted Rand. This is the criterion that does
+        # not degenerate. Silhouette falls monotonically as resolution rises, so
+        # maximising it always returns the coarsest option on offer -- on this run it
+        # slid from 0.223 at five clusters to 0.079 at forty-three and picked five. A
+        # resolution that reflects real structure lands on the same partition whatever
+        # the seed; one that has gone too fine is cutting an arbitrary line through a
+        # continuum, and the line moves.
+        agreements = []
+        for extra in (seed + 101, seed + 202):
+            sc.tl.leiden(
+                adata,
+                resolution=r,
+                flavor="igraph",
+                n_iterations=2,
+                directed=False,
+                random_state=extra,
+                key_added="_stability",
+            )
+            agreements.append(float(adjusted_rand_score(lab, adata.obs["_stability"].to_numpy())))
+        stability = float(np.mean(agreements)) if agreements else None
+        # Silhouette on a subsample: it is quadratic in the number of cells, and it is
+        # being used to rank resolutions against each other rather than to state an
+        # absolute quality, so a consistent subsample is enough. One cluster has no
+        # silhouette at all, which is why that case is None rather than zero.
+        score = None
+        if 1 < n_clusters < len(lab):
+            score = float(
+                silhouette_score(
+                    scaled_all,
+                    lab,
+                    sample_size=min(5000, len(lab)),
+                    random_state=seed,
+                )
+            )
+        sweep.append(
+            {
+                "resolution": float(r),
+                "n_clusters": n_clusters,
+                "silhouette": score,
+                "stability": stability,
+            }
+        )
+
+    # The finest resolution that is still stable, rather than the best-scoring one.
+    #
+    # "Most variability explained" pulls towards more clusters and every separation
+    # score pulls towards fewer, so neither alone gives an answer worth having. This
+    # takes the most detailed partition that survives a change of seed: past that point
+    # the extra clusters are not reproducible, so whatever they are, they are not
+    # structure. Falls back to the most stable resolution when nothing clears the bar,
+    # and it remains a default rather than a verdict -- the tree is drawn so it can be
+    # overruled.
+    stable = [row for row in sweep if row["stability"] is not None and row["stability"] >= stability_floor]
+    how = "stability"
+    if stable:
+        chosen = max(stable, key=lambda row: row["resolution"])["resolution"]
+    else:
+        # Nothing cleared the bar, and that is itself the finding. On the published run
+        # the best agreement across seeds was 0.596 against a floor of 0.9, so no
+        # resolution gives a reproducible partition and the clusters are a summary of
+        # the staining rather than cell types. Reported as its own outcome instead of
+        # being folded into a silent fallback, because a reader has to know the bar was
+        # never met.
+        how = "stability_fallback"
+        scored = [row for row in sweep if row["stability"] is not None]
+        chosen = max(scored, key=lambda row: row["stability"])["resolution"] if scored else resolutions[0]
+    if requested_resolution is not None:
+        chosen = float(requested_resolution)
+        how = "requested"
+
+    index = min(range(len(resolutions)), key=lambda i: abs(resolutions[i] - chosen))
+    resolution = float(resolutions[index])
+    labels = labels_by_resolution[index]
     order = sorted({str(v) for v in labels}, key=lambda s: int(s))
+    tree = cluster_tree(labels_by_resolution, [float(r) for r in resolutions])
 
     # Mean scaled value per cluster per marker: this is the z-scored matrix the
     # heatmap shows, so a cell above or below the slide's average reads as such.
@@ -334,7 +496,12 @@ def cluster_cells(
     top_above_average = [bool(max(row) > 0) for row in matrix]
     return {
         "resolution": resolution,
-        "arcsinh_cofactor": cofactor,
+        "resolution_chosen_by": how,
+        "stability_floor": stability_floor,
+        "sweep": sweep,
+        "tree": tree,
+        "arcsinh_cofactor": cofactor if cofactor > 0 else None,
+        "arcsinh_cofactors": dict(zip(use_channels, [round(c, 1) for c in cofactors], strict=True)),
         "n_cells_clustered": int(len(sample)),
         "n_cells_total": int(n_total),
         "subsampled": bool(len(sample) < n_total),
@@ -434,7 +601,19 @@ def render_cell_snapshots(
             )
             img = Image.fromarray(rgb, mode="RGB")
             hits = boundaries.sindex.query(_box(x0, y0, x1, y1))
-            draw_outlines(img, boundaries.geometry.iloc[hits], x0, y0)
+            # Neighbours in white, the subject in yellow and twice as thick. Without
+            # this every outlined cell in the frame looks equally like the one the
+            # cluster is about, and the picture cannot support the claim it is making.
+            neighbours = [h for h in hits if int(h) != int(cell)]
+            draw_outlines(img, boundaries.geometry.iloc[neighbours], x0, y0)
+            draw_outlines(
+                img,
+                boundaries.geometry.iloc[[int(cell)]],
+                x0,
+                y0,
+                TARGET_MASK_RGB,
+                width=2,
+            )
             name = f"cell_c{cluster}_{rank}.png"
             img.save(out_dir / name, optimize=True)
             out.append(
@@ -461,18 +640,38 @@ def main() -> int:
     ap.add_argument("--nuclear-pattern", default="DAPI", help="substring naming nuclear channels")
     ap.add_argument("--window", type=int, default=1000, help="crop size in pixels (default: 1000)")
     ap.add_argument("--n-windows", type=int, default=6, help="how many crops (default: 6)")
-    ap.add_argument("--resolution", type=float, default=0.5, help="Leiden resolution (default: 0.5)")
+    ap.add_argument("--cells-per-cluster", type=int, default=5, help="snapshots per cluster (default: 5)")
+    ap.add_argument(
+        "--resolutions",
+        default="0.1,0.2,0.3,0.5,0.8,1.2,1.6,2.0",
+        help="Leiden resolutions to sweep, drawn as a tree. Eight is the cap so the tree "
+        "stays readable (default: 0.1,0.2,0.3,0.5,0.8,1.2,1.6,2.0)",
+    )
+    ap.add_argument(
+        "--resolution",
+        type=float,
+        help="pin the resolution used for the heatmap and the cell snapshots. Omit to let "
+        "the best mean silhouette across the sweep choose it.",
+    )
     ap.add_argument(
         "--arcsinh-cofactor",
         type=float,
-        default=150.0,
-        help="arcsinh cofactor; set near the noise level (default: 150)",
+        default=0.0,
+        help="fixed arcsinh cofactor for every channel. The default of 0 derives one per "
+        "channel from the median of its positive values, which is where noise ends.",
     )
     ap.add_argument(
         "--max-cells",
         type=int,
         default=50000,
         help="subsample for clustering, 0 for all cells (default: 50000)",
+    )
+    ap.add_argument(
+        "--stability-floor",
+        type=float,
+        default=0.9,
+        help="minimum adjusted Rand between seeds for a resolution to count as stable; the "
+        "finest stable resolution is the one used (default: 0.9)",
     )
     ap.add_argument("--skip-clustering", action="store_true", help="render crops only")
     args = ap.parse_args()
@@ -503,6 +702,7 @@ def main() -> int:
         "nuclear_channel": nuclear_channel,
         "crop_mask_colour": "cyan",
         "mask_colour": "white",
+        "target_mask_colour": "yellow",
         "marker_colour": "magenta",
         "nuclear_colour": "green",
     }
@@ -542,17 +742,34 @@ def main() -> int:
             raise ValueError(f"only {len(use)} channel(s) left to cluster on after excluding {excluded}")
 
         x = np.asarray(table["X"][:])
+        resolutions = [float(v) for v in args.resolutions.split(",") if v.strip()]
+        if len(resolutions) > 8:
+            raise ValueError(
+                f"{len(resolutions)} resolutions given; the tree is capped at 8 rows so it stays readable"
+            )
         clustering = cluster_cells(
             x,
             channel_names,
             use,
             cofactor=args.arcsinh_cofactor,
-            resolution=args.resolution,
+            resolutions=sorted(resolutions),
             max_cells=args.max_cells,
+            requested_resolution=args.resolution,
+            stability_floor=args.stability_floor,
         )
-        picks = representative_cells(clustering)
+        picks = representative_cells(clustering, n_per_cluster=args.cells_per_cluster)
         print(
-            f"  clusters   : {len(clustering['clusters'])} at resolution {args.resolution} "
+            "  sweep      : "
+            + ", ".join(
+                f"{row['resolution']:g}->{row['n_clusters']}"
+                + (f" sil={row['silhouette']:.3f}" if row["silhouette"] is not None else "")
+                + (f" stab={row['stability']:.3f}" if row["stability"] is not None else "")
+                for row in clustering["sweep"]
+            )
+        )
+        print(
+            f"  clusters   : {len(clustering['clusters'])} at resolution "
+            f"{clustering['resolution']:g} ({clustering['resolution_chosen_by']}) "
             f"on {clustering['n_cells_clustered']:,} cells, {len(use)} markers"
         )
         index["snapshots"] = render_cell_snapshots(

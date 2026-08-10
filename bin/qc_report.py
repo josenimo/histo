@@ -81,6 +81,12 @@ DARK = {
 # Fixed in both modes, and never reused for a series. Each one always ships with a
 # glyph and a word, because two of them are below 3:1 on the light surface by
 # design and colour must not be carrying the meaning on its own.
+# Edges carrying less than this share of their source cluster are not drawn. A few
+# cells out of thousands is noise, and at high resolution there are hundreds of such
+# edges -- drawing them all buries the branching the tree exists to show. The count
+# dropped is stated under the figure.
+MIN_TREE_FLOW = 0.05
+
 STATUS = {"good": "#0ca30c", "warning": "#fab219", "critical": "#d03b3b"}
 GLYPH = {"good": "&#10003;", "warning": "&#9888;", "critical": "&#10007;"}
 
@@ -630,6 +636,25 @@ details {{ margin-top: 12px; }}
 summary {{ cursor: pointer; color: var(--ink2); font-size: 12px; }}
 .grid2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }}
 @media (max-width: 860px) {{ .grid2 {{ grid-template-columns: 1fr; }} }}
+#lightbox {{
+  position: fixed; inset: 0; background: rgba(0,0,0,0.88); z-index: 20;
+  display: none; align-items: center; justify-content: center; padding: 24px;
+  cursor: zoom-out;
+}}
+#lightbox.open {{ display: flex; }}
+#lightbox img {{
+  max-width: 100%; max-height: calc(100vh - 84px); image-rendering: pixelated;
+  border-radius: 6px;
+}}
+#lightbox figcaption {{
+  position: absolute; bottom: 18px; left: 0; right: 0; text-align: center;
+  color: #fff; font-size: 13px;
+}}
+#lbclose {{
+  position: absolute; top: 14px; right: 18px; color: #fff; background: none;
+  border: 0; font-size: 24px; line-height: 1; cursor: pointer; padding: 4px 8px;
+}}
+figure img {{ cursor: zoom-in; }}
 #tip {{
   position: fixed; pointer-events: none; opacity: 0; transition: opacity .1s;
   background: var(--ink); color: var(--surface); font-size: 12px; padding: 4px 8px;
@@ -665,6 +690,25 @@ JS = """
   ['mouseout', 'focusout', 'scroll'].forEach(function (e) {
     document.addEventListener(e, hide, true);
   });
+  // Click any figure image to open it over a dimmed page. Escape or a click closes.
+  var box = document.getElementById('lightbox');
+  var boxImg = box.querySelector('img');
+  var boxCap = box.querySelector('figcaption');
+  document.addEventListener('click', function (ev) {
+    var img = ev.target.closest('figure img');
+    if (img) {
+      boxImg.src = img.src;
+      var cap = img.closest('figure').querySelector('figcaption');
+      boxCap.innerHTML = cap ? cap.innerHTML : '';
+      box.classList.add('open');
+      return;
+    }
+    if (ev.target.closest('#lightbox')) box.classList.remove('open');
+  });
+  document.addEventListener('keydown', function (ev) {
+    if (ev.key === 'Escape') box.classList.remove('open');
+  });
+
   var btn = document.getElementById('theme');
   btn.addEventListener('click', function () {
     var root = document.documentElement;
@@ -679,49 +723,41 @@ def channel_section(channels: dict[str, Any]) -> str:
     per = channels["per_channel"]
     names = list(per)
 
+    ceiling = next(iter(per.values()))["dtype_ceiling"]
+    shared_upper = channels.get("histogram_upper", ceiling)
     headers = [
         "Channel",
-        "Min",
-        "Max",
-        "Intensity distribution (&radic;count), 0 to the value at its right",
+        f"Intensity distribution &middot; 0 to {thousands(shared_upper)} &middot; &radic;count",
         "Mean",
         "Median",
         "p99",
         "p99.99",
         "Zero px",
-        "At ceiling",
     ]
     rows = []
     for name in names:
         m = per[name]
-        # Each sparkline is binned to its own p99.9, so the axis differs per row.
-        # The upper bound is printed beside it rather than left implicit, and min and
-        # max give the channel's true extent alongside it.
-        upper = m.get("histogram_upper", m["max"])
+        # Every sparkline spans the same absolute range, so the drawings are directly
+        # comparable between rows and the axis can be stated once, in the header.
         rows.append(
             [
                 esc(name),
-                thousands(m["min"]),
-                thousands(m["max"]),
-                sparkline(m["histogram"]) + f'<span class="sparkhi">{esc(thousands(upper))}</span>',
+                sparkline(m["histogram"], width=340.0),
                 f"{m['mean']:,.1f}",
                 thousands(m["p50"]),
                 thousands(m["p99"]),
                 thousands(m["p99_99"]),
                 f"{m['fraction_zero'] * 100:.2f}%",
-                f"{m['fraction_at_dtype_ceiling'] * 100:.3f}%",
             ]
         )
     head_row = "".join(f"<th>{h}</th>" for h in headers)
     body = "".join(
         "<tr>"
-        + f"<td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td class='spark'>{r[3]}</td>"
-        + "".join(f"<td>{c}</td>" for c in r[4:])
+        + f"<td>{r[0]}</td><td class='spark'>{r[1]}</td>"
+        + "".join(f"<td>{c}</td>" for c in r[2:])
         + "</tr>"
         for r in rows
     )
-    ceiling = next(iter(per.values()))["dtype_ceiling"]
-
     # The before-and-after comparison only exists if the pre-subtraction image was
     # given. Without it this stays a single-series chart rather than pretending to a
     # baseline it does not have.
@@ -771,7 +807,14 @@ def channel_section(channels: dict[str, Any]) -> str:
   <h2>Channels</h2>
   <p class="note">Measured on the full-resolution image, every pixel. Percentiles are
   exact rather than interpolated, so each one is a value that genuinely occurs.
-  &ldquo;At ceiling&rdquo; is true saturation, at {thousands(ceiling)}.</p>
+  Every sparkline spans the same absolute range, 0 to {thousands(shared_upper)}, so the
+  shapes are directly comparable between rows: two channels that look alike really do
+  have the same intensities, and a curve hugging the left is a dim channel. That bound is
+  the brightest channel's maximum rather than the dtype's ceiling of
+  {thousands(ceiling)} &mdash; no channel here reaches a third of the ceiling, so binning
+  there would put all fifteen distributions in the leftmost few percent and make them
+  comparable but indistinguishable. <code>--histogram-range dtype</code> does that if the
+  detector limit is what matters.</p>
   <table><thead><tr>{head_row}</tr></thead><tbody>{body}</tbody></table>
 </section>
 
@@ -909,8 +952,8 @@ def crops_section(images: dict[str, Any], asset_dir: Path) -> str:
   <p class="note">{first["width"]}&times;{first["height"]} px windows at full
   resolution, showing <strong>{esc(first["channel"])}</strong> in grey with the
   segmentation boundary drawn in
-  <span style="color:#00b8cc"><strong>cyan</strong></span>, outline only so the pixels
-  under the mask stay visible. Windows are chosen across the density range rather than
+  <span style="color:#d03b3b"><strong>red</strong></span> at 80% opacity, outline only so
+  the pixels under the mask stay visible. Click any crop to enlarge it in place. Windows are chosen across the density range rather than
   at random, because segmentation fails differently in packed tissue than at a sparse
   edge, and a random sample of a mostly-empty slide is mostly background. All crops
   share one display range, {thousands(first["display_min"])}&ndash;{thousands(first["display_max"])},
@@ -996,6 +1039,115 @@ def diverging_legend() -> str:
     return f'<div class="legend">{keys}</div>'
 
 
+def cluster_tree_svg(tree: dict[str, Any], chosen: float) -> str:
+    """The clustree: one row per resolution, edges where cells flow between clusters.
+
+    What it answers is whether the extra clusters at a higher resolution are refining
+    the ones below or reshuffling them. Clean branching means each split takes a group
+    and divides it; edges that cross and re-merge mean membership is being rearranged,
+    which is the signal that resolution has gone past what the data supports.
+
+    Nodes are ordered within a row by their dominant parent's position, so a tree that
+    really is a tree draws without crossings. Node area is proportional to cell count
+    and edge width to the number of cells moving, both square-rooted -- these are counts
+    on a plane, and mapping a count to a radius directly would exaggerate it.
+    """
+    levels = tree.get("levels") or []
+    edges = [e for e in (tree.get("edges") or []) if e["fraction_of_source"] >= MIN_TREE_FLOW]
+    if not levels:
+        return ""
+
+    row_h, top_pad, left_pad, plot_w = 74.0, 26.0, 74.0, 780.0
+    height = top_pad + row_h * len(levels) + 16
+    width = left_pad + plot_w
+
+    # Position each level, ordering by the dominant parent so branches stay untangled.
+    positions: list[dict[str, float]] = []
+    for i, level in enumerate(levels):
+        if i == 0:
+            order = sorted(
+                level["clusters"],
+                key=lambda c: -level["sizes"][level["clusters"].index(c)],
+            )
+        else:
+            parent_x = positions[i - 1]
+            best_parent = {}
+            for e in edges:
+                if e["level"] != i - 1:
+                    continue
+                key = e["to"]
+                if key not in best_parent or e["n_cells"] > best_parent[key][1]:
+                    best_parent[key] = (e["from"], e["n_cells"])
+            order = sorted(
+                level["clusters"],
+                key=lambda c: (
+                    parent_x.get(best_parent.get(c, ("", 0))[0], plot_w / 2),
+                    -level["sizes"][level["clusters"].index(c)],
+                ),
+            )
+        step = plot_w / (len(order) + 1)
+        positions.append({c: step * (j + 1) for j, c in enumerate(order)})
+
+    peak_size = max((max(level["sizes"]) for level in levels), default=1) or 1
+    peak_flow = max((e["n_cells"] for e in edges), default=1) or 1
+
+    out = [
+        f'<svg class="chart" viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" preserveAspectRatio="xMinYMin meet">'
+    ]
+    for e in edges:
+        i = e["level"]
+        x1 = left_pad + positions[i][e["from"]]
+        x2 = left_pad + positions[i + 1][e["to"]]
+        y1 = top_pad + row_h * i
+        y2 = top_pad + row_h * (i + 1)
+        stroke = 0.6 + 5.0 * math.sqrt(e["n_cells"] / peak_flow)
+        out.append(
+            f'<line x1="{x1:.1f}" y1="{y1:.1f}" x2="{x2:.1f}" y2="{y2:.1f}" '
+            f'stroke="var(--wash)" stroke-width="{stroke:.1f}" stroke-linecap="round" '
+            f'opacity="0.65"/>'
+        )
+    for i, level in enumerate(levels):
+        y = top_pad + row_h * i
+        is_chosen = abs(level["resolution"] - chosen) < 1e-9
+        label = f"{level['resolution']:g}"
+        # Built outside the f-string: nesting the same quote character inside one is a
+        # syntax error before Python 3.12, and requires-python allows 3.11.
+        weight = ' font-weight="600"' if is_chosen else ""
+        marker = " &#9666;" if is_chosen else ""
+        out.append(
+            f'<text class="rowlabel" x="{left_pad - 12:.0f}" y="{y + 4:.1f}" '
+            f'text-anchor="end"{weight}>{esc(label)}{marker}</text>'
+        )
+        for c, size in zip(level["clusters"], level["sizes"], strict=True):
+            x = left_pad + positions[i][c]
+            r = 4.0 + 10.0 * math.sqrt(size / peak_size)
+            out.append(
+                f'<circle cx="{x:.1f}" cy="{y:.1f}" r="{r:.1f}" fill="var(--series)" '
+                f'stroke="var(--surface)" stroke-width="2" tabindex="0" '
+                f'data-tip="resolution {esc(label)} &middot; cluster {esc(c)} &middot; '
+                f'{esc(thousands(size))} cells"/>'
+            )
+    out.append(f'<text class="axistitle" x="0" y="{top_pad - 14:.0f}">resolution</text>')
+    out.append("</svg>")
+    return "".join(out)
+
+
+def sweep_table(sweep: list[dict[str, Any]], chosen: float) -> str:
+    rows = []
+    for row in sweep:
+        mark = " &#9666; used" if abs(row["resolution"] - chosen) < 1e-9 else ""
+        rows.append(
+            [
+                f"{row['resolution']:g}{mark}",
+                str(row["n_clusters"]),
+                "&mdash;" if row["silhouette"] is None else f"{row['silhouette']:.3f}",
+                "&mdash;" if row.get("stability") is None else f"{row['stability']:.3f}",
+            ]
+        )
+    return table(["Resolution", "Clusters", "Mean silhouette", "Stability (ARI)"], rows)
+
+
 def clustering_section(images: dict[str, Any], asset_dir: Path) -> str:
     clustering = images.get("clustering")
     if not clustering:
@@ -1020,6 +1172,57 @@ def clustering_section(images: dict[str, Any], asset_dir: Path) -> str:
         if clustering.get("subsampled")
         else ""
     )
+
+    tree_block = ""
+    if clustering.get("tree") and clustering.get("sweep"):
+        chosen = clustering["resolution"]
+        by_word = clustering.get("resolution_chosen_by", "silhouette")
+        floor = clustering.get("stability_floor", 0.9)
+        all_edges = clustering["tree"].get("edges") or []
+        n_all = len(all_edges)
+        n_thin = sum(1 for e in all_edges if e["fraction_of_source"] < MIN_TREE_FLOW)
+        best_stab = max(
+            (r["stability"] for r in clustering["sweep"] if r.get("stability") is not None),
+            default=None,
+        )
+        if by_word == "requested":
+            how = f"pinned to {chosen:g} by hand"
+        elif by_word == "stability_fallback":
+            how = (
+                f"set to {chosen:g}, the most stable resolution on offer &mdash; but note that "
+                f"<strong>no resolution here cleared the bar</strong>. The best agreement across "
+                f"seeds was {best_stab:.3f} against a floor of {floor:g}, so no partition of this "
+                f"slide is reproducible: read these clusters as a summary of the staining, not as "
+                f"cell types"
+            )
+        else:
+            how = (
+                f"chosen as {chosen:g}: the finest resolution whose partition still agrees with "
+                f"itself across a change of random seed, at an adjusted Rand of {floor:g} or better"
+            )
+        tree_block = f"""
+<h3>How resolution changes the answer</h3>
+<p class="note">Each row is one Leiden resolution over the same neighbour graph, and an
+edge is cells moving from a cluster to a cluster below it. Clean branching means a
+resolution is subdividing groups that already existed; edges that cross and re-merge mean
+membership is being rearranged, which is where the extra clusters stop refining anything.
+Resolution was {how}.</p>
+<p class="note">Two criteria are reported and only one decides. <strong>Silhouette</strong>
+measures how separated the clusters are, and on real data it falls monotonically as
+resolution rises &mdash; from 0.223 at five clusters to 0.079 at forty-three on this run
+&mdash; so maximising it would always return the coarsest option and it is shown for
+reference only. <strong>Stability</strong> is how much the partition agrees with itself when
+the random seed changes, as adjusted Rand: a resolution reflecting real structure lands on
+the same answer regardless, while one that has gone too fine is cutting an arbitrary line
+through a continuum and the line moves. Taking the finest resolution that is still stable
+answers &ldquo;how much detail does the data support&rdquo; without either criterion's bias.
+It is still a default, not a verdict &mdash; pin one with <code>--resolution</code>.</p>
+{cluster_tree_svg(clustering["tree"], chosen)}
+<p class="figsub">Edges carrying under {MIN_TREE_FLOW:.0%} of their source cluster are not
+drawn: {n_thin} of {n_all} would be, and at high resolution they bury the branching.</p>
+{details("Show the sweep as a table", sweep_table(clustering["sweep"], chosen))}
+<h3>Marker profile at resolution {chosen:g}</h3>
+"""
 
     snapshots = images.get("snapshots") or []
     by_cluster: dict[str, list[dict[str, Any]]] = {}
@@ -1052,19 +1255,24 @@ def clustering_section(images: dict[str, Any], asset_dir: Path) -> str:
                 f'</span></div><div class="gallery small">{"".join(figs)}</div></div>'
             )
 
+    counts = [len(v) for v in by_cluster.values()]
+    per_cluster = f"{max(counts)} cells" if counts else "Cells"
     snap_section = ""
     if snap_blocks:
         snap_section = f"""
 <section>
   <h2>Representative cells per cluster</h2>
-  <p class="note">Two cells per cluster, each the nearest to its cluster's centre in
-  marker space rather than the brightest &mdash; the brightest cell is usually the most
+  <p class="note">{per_cluster} per cluster, each among the nearest to its cluster's centre
+  in marker space rather than the brightest &mdash; the brightest cell is usually the most
   extreme, which is the opposite of representative. Each is shown in its cluster's own
   top marker (<span style="color:#b5179e"><strong>magenta</strong></span>) &mdash; or,
   where no marker is above the slide average, its least-negative one, said so &mdash; over the
   nuclear stain (<span style="color:#1a7f37"><strong>green</strong></span>), with the
-  segmentation boundary in white. If a cluster's cells do not look like its marker
-  profile claims, the cluster is an artefact.</p>
+  segmentation boundary in white &mdash; except the cell the row is about, which is
+  outlined in <span style="color:#a68000"><strong>yellow</strong></span> and drawn thicker,
+  because otherwise every outlined cell in the frame looks equally like the subject. Click
+  any image to enlarge it. If a cluster's cells do not look like its marker profile claims,
+  the cluster is an artefact.</p>
   {"".join(snap_blocks)}
 </section>
 """
@@ -1072,8 +1280,15 @@ def clustering_section(images: dict[str, Any], asset_dir: Path) -> str:
     return f"""
 <section>
   <h2>Cell clusters by marker intensity</h2>
-  <p class="note">Leiden at resolution {clustering["resolution"]} on arcsinh-transformed
-  mean intensities, cofactor {clustering["arcsinh_cofactor"]:g}, then scaled per marker.
+  <p class="note">Leiden on arcsinh-transformed mean intensities, then scaled per marker.
+  {
+        f"One cofactor of {clustering['arcsinh_cofactor']:g} for every channel."
+        if clustering.get("arcsinh_cofactor")
+        else "The arcsinh cofactor is derived per channel from the median of its positive "
+        "values, which is where that channel's noise ends: the channels differ more than "
+        "tenfold in absolute intensity, so a single cofactor would compress some almost not "
+        "at all and others into a straight line, biasing the distances before Leiden starts."
+    }
   arcsinh rather than log because background subtraction leaves many exact zeros and log
   would need an invented pseudocount. No spatial information is used, so these groups are
   a statement about the staining alone: a run whose markers did not work collapses into
@@ -1086,6 +1301,7 @@ def clustering_section(images: dict[str, Any], asset_dir: Path) -> str:
         if excluded
         else ""
     }</p>
+  {tree_block}
   {diverging_legend()}
   {cluster_heatmap(clustering)}
   {
@@ -1231,6 +1447,10 @@ def build(
 </head>
 <body>
 <div id="tip" role="status" aria-live="polite"></div>
+<div id="lightbox" role="dialog" aria-label="Enlarged image">
+  <button id="lbclose" type="button" aria-label="Close">&times;</button>
+  <img alt=""><figcaption></figcaption>
+</div>
 <div class="wrap">
 <header>
   <div>
