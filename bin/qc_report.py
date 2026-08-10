@@ -57,6 +57,8 @@ LIGHT = {
     "wash": "#9ec5f4",
     "heat": ["#86b6ef", "#5598e7", "#2a78d6", "#1c5cab", "#104281"],
     "heat_ink": ["#0b0b0b", "#0b0b0b", "#ffffff", "#ffffff", "#ffffff"],
+    "div": ["#104281", "#2a78d6", "#9ec5f4", "#f0efec", "#f0a3a3", "#d03b3b", "#8f1f1f"],
+    "div_ink": ["#ffffff", "#ffffff", "#0b0b0b", "#0b0b0b", "#0b0b0b", "#ffffff", "#ffffff"],
 }
 
 DARK = {
@@ -72,6 +74,8 @@ DARK = {
     "wash": "#256abf",
     "heat": ["#184f95", "#256abf", "#3987e5", "#6da7ec", "#b7d3f6"],
     "heat_ink": ["#ffffff", "#ffffff", "#0b0b0b", "#0b0b0b", "#0b0b0b"],
+    "div": ["#9ec5f4", "#3987e5", "#1c5cab", "#383835", "#8f1f1f", "#d03b3b", "#f0a3a3"],
+    "div_ink": ["#0b0b0b", "#0b0b0b", "#ffffff", "#ffffff", "#ffffff", "#ffffff", "#0b0b0b"],
 }
 
 # Fixed in both modes, and never reused for a series. Each one always ships with a
@@ -254,6 +258,7 @@ def column_chart(
     ref_x: float | None = None,
     ref_label: str = "",
     fmt=None,
+    x_ticks: list[float] | None = None,
 ) -> str:
     """A distribution as columns, linear on both axes.
 
@@ -265,7 +270,7 @@ def column_chart(
     if not counts:
         return ""
     fmt = fmt or (lambda v: compact(v))
-    left, bottom, top, right = 54.0, 30.0, 26.0, 8.0
+    left, bottom, top, right = 54.0, 36.0, 26.0, 8.0
     plot_w, plot_h = 800.0, 170.0
     total_w, total_h = left + plot_w + right, top + plot_h + bottom
     peak = max(counts) or 1
@@ -317,13 +322,31 @@ def column_chart(
         f'<line x1="{left:.1f}" y1="{top + plot_h:.1f}" x2="{left + plot_w:.1f}" '
         f'y2="{top + plot_h:.1f}" stroke="var(--axis)" stroke-width="1"/>'
     )
-    out.append(
-        f'<text class="tick" x="{left:.0f}" y="{total_h - 6:.0f}">{esc(fmt(x_min))}</text>'
-        f'<text class="tick" x="{left + plot_w:.0f}" y="{total_h - 6:.0f}" text-anchor="end">'
-        f"{esc(fmt(x_max))}</text>"
-        f'<text class="tick" x="{left + plot_w / 2:.0f}" y="{total_h - 6:.0f}" '
-        f'text-anchor="middle">{esc(x_label)}</text>'
-    )
+    if x_ticks:
+        # Explicit ticks, for an axis whose ends are not enough: on a signed log
+        # ratio a reader needs every integer, because each one is a doubling.
+        for t in x_ticks:
+            if not x_min <= t <= x_max:
+                continue
+            tx = to_x(t)
+            out.append(
+                f'<line x1="{tx:.1f}" y1="{top + plot_h:.1f}" x2="{tx:.1f}" '
+                f'y2="{top + plot_h + 4:.1f}" stroke="var(--axis)" stroke-width="1"/>'
+                f'<text class="tick" x="{tx:.1f}" y="{top + plot_h + 16:.0f}" '
+                f'text-anchor="middle">{esc(fmt(t))}</text>'
+            )
+        out.append(
+            f'<text class="tick" x="{left + plot_w / 2:.0f}" y="{total_h - 2:.0f}" '
+            f'text-anchor="middle">{esc(x_label)}</text>'
+        )
+    else:
+        out.append(
+            f'<text class="tick" x="{left:.0f}" y="{total_h - 6:.0f}">{esc(fmt(x_min))}</text>'
+            f'<text class="tick" x="{left + plot_w:.0f}" y="{total_h - 6:.0f}" text-anchor="end">'
+            f"{esc(fmt(x_max))}</text>"
+            f'<text class="tick" x="{left + plot_w / 2:.0f}" y="{total_h - 6:.0f}" '
+            f'text-anchor="middle">{esc(x_label)}</text>'
+        )
     out.append(f'<text class="axistitle" x="0" y="10">{esc(y_label)}</text>')
     out.append("</svg>")
     return "".join(out)
@@ -515,6 +538,8 @@ def css() -> str:
     def block(p: dict[str, Any]) -> str:
         heat = "".join(f"--heat-{i}:{c};" for i, c in enumerate(p["heat"]))
         heat += "".join(f"--heat-ink-{i}:{c};" for i, c in enumerate(p["heat_ink"]))
+        heat += "".join(f"--div-{i}:{c};" for i, c in enumerate(p["div"]))
+        heat += "".join(f"--div-ink-{i}:{c};" for i, c in enumerate(p["div_ink"]))
         return (
             f"--surface:{p['surface']};--plane:{p['plane']};--ink:{p['ink']};"
             f"--ink2:{p['ink2']};--muted:{p['muted']};--grid:{p['grid']};"
@@ -572,7 +597,7 @@ td {{
   text-align: right; padding: 4px 8px; border-bottom: 1px solid var(--grid);
   font-variant-numeric: tabular-nums; white-space: nowrap;
 }}
-td.spark {{ padding: 0 8px; text-align: left; }}
+td.spark {{ padding: 0 8px; text-align: left; white-space: nowrap; }}\n.sparkhi {{ color: var(--muted); font-size: 11px; margin-left: 6px;\n  font-variant-numeric: tabular-nums; }}\n.spark svg {{ vertical-align: middle; }}
 .chart {{ display: block; overflow: visible; }}
 text {{ font: 11px system-ui, -apple-system, sans-serif; fill: var(--muted); }}
 .tick {{ font-variant-numeric: tabular-nums; }}
@@ -590,6 +615,17 @@ path[tabindex]:focus-visible, rect[tabindex]:focus-visible {{
 .key {{ display: inline-flex; align-items: center; gap: 5px; }}
 .sw {{ width: 12px; height: 12px; border-radius: 3px; display: inline-block; }}
 .dot {{ width: 10px; height: 10px; border-radius: 50%; display: inline-block; }}
+.gallery {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 14px; margin-top: 12px; }}
+.gallery.small {{ grid-template-columns: repeat(auto-fit, minmax(140px, 160px)); }}
+figure {{ margin: 0; }}
+figure img {{ width: 100%; height: auto; display: block; border-radius: 6px;
+  border: 1px solid var(--border); background: #000; }}
+figcaption {{ color: var(--ink2); font-size: 12px; margin-top: 5px; }}
+.figsub {{ color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }}
+.snapgroup {{ margin-top: 16px; }}
+.snaphead {{ font-size: 13px; font-weight: 600; }}
+.muted {{ color: var(--muted); font-weight: 400; }}
 details {{ margin-top: 12px; }}
 summary {{ cursor: pointer; color: var(--ink2); font-size: 12px; }}
 .grid2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }}
@@ -645,27 +681,33 @@ def channel_section(channels: dict[str, Any]) -> str:
 
     headers = [
         "Channel",
-        "Intensity distribution (0&ndash;p99.9, &radic;count)",
+        "Min",
+        "Max",
+        "Intensity distribution (&radic;count), 0 to the value at its right",
         "Mean",
         "Median",
         "p99",
         "p99.99",
-        "Max",
         "Zero px",
         "At ceiling",
     ]
     rows = []
     for name in names:
         m = per[name]
+        # Each sparkline is binned to its own p99.9, so the axis differs per row.
+        # The upper bound is printed beside it rather than left implicit, and min and
+        # max give the channel's true extent alongside it.
+        upper = m.get("histogram_upper", m["max"])
         rows.append(
             [
                 esc(name),
-                sparkline(m["histogram"]),
+                thousands(m["min"]),
+                thousands(m["max"]),
+                sparkline(m["histogram"]) + f'<span class="sparkhi">{esc(thousands(upper))}</span>',
                 f"{m['mean']:,.1f}",
                 thousands(m["p50"]),
                 thousands(m["p99"]),
                 thousands(m["p99_99"]),
-                thousands(m["max"]),
                 f"{m['fraction_zero'] * 100:.2f}%",
                 f"{m['fraction_at_dtype_ceiling'] * 100:.3f}%",
             ]
@@ -673,8 +715,8 @@ def channel_section(channels: dict[str, Any]) -> str:
     head_row = "".join(f"<th>{h}</th>" for h in headers)
     body = "".join(
         "<tr>"
-        + f"<td>{r[0]}</td><td class='spark'>{r[1]}</td>"
-        + "".join(f"<td>{c}</td>" for c in r[2:])
+        + f"<td>{r[0]}</td><td>{r[1]}</td><td>{r[2]}</td><td class='spark'>{r[3]}</td>"
+        + "".join(f"<td>{c}</td>" for c in r[4:])
         + "</tr>"
         for r in rows
     )
@@ -766,15 +808,17 @@ def cycle_ratio_section(ratio: dict[str, Any]) -> str:
 
     median = ratio["median_log2_ratio"]
     lost = ratio["fraction_below_half"] * 100
+    lo, hi = ratio["histogram_min"], ratio["histogram_max"]
     chart = column_chart(
         ratio["histogram"],
         ratio["histogram_bin_width"],
         f"log2({esc(ratio['last_channel'])} / {esc(ratio['first_channel'])})",
         "cells",
-        x_min=ratio["histogram_min"],
+        x_min=lo,
         ref_x=0.0,
         ref_label="no change",
-        fmt=lambda v: f"{v:+.0f}",
+        fmt=lambda v: f"{v:+g}",
+        x_ticks=[float(t) for t in range(math.ceil(lo), math.floor(hi) + 1)],
     )
     summary = table(
         ["Statistic", "Value"],
@@ -815,7 +859,249 @@ def cycle_ratio_section(ratio: dict[str, Any]) -> str:
 """
 
 
-def build(metrics: dict[str, Any]) -> str:
+def inline_png(path: Path) -> str:
+    """A PNG as a data URI.
+
+    The one place this script touches a file other than its JSON, and it does not
+    interpret it: bytes in, base64 out. That keeps the rule that rendering cannot
+    change a measurement, while still producing one file that opens with no network
+    and no sidecar directory to lose.
+    """
+    import base64
+
+    return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
+
+
+def figure(src: str, caption: str, sub: str = "") -> str:
+    subline = f'<div class="figsub">{sub}</div>' if sub else ""
+    return (
+        f'<figure><img src="{src}" alt="{esc(caption)}" loading="lazy">'
+        f"<figcaption>{caption}{subline}</figcaption></figure>"
+    )
+
+
+def crops_section(images: dict[str, Any], asset_dir: Path) -> str:
+    """The segmentation crops, ordered densest first."""
+    crops = images.get("crops") or []
+    if not crops:
+        return ""
+    total = crops[0].get("n_nonempty_windows", 0)
+    figs = []
+    for c in crops:
+        path = asset_dir / c["file"]
+        if not path.exists():
+            continue
+        figs.append(
+            figure(
+                inline_png(path),
+                f"{esc(c['density_band'])} &middot; {thousands(c['n_cells'])} cells",
+                f"({c['x0']:,}, {c['y0']:,}) &middot; {c['width']}&times;{c['height']} px "
+                f"&middot; rank {c['density_rank']} of {total} "
+                f"&middot; {c['n_outlines']} outlines drawn",
+            )
+        )
+    if not figs:
+        return ""
+    first = crops[0]
+    return f"""
+<section>
+  <h2>Segmentation overlay</h2>
+  <p class="note">{first["width"]}&times;{first["height"]} px windows at full
+  resolution, showing <strong>{esc(first["channel"])}</strong> in grey with the
+  segmentation boundary drawn in
+  <span style="color:#00b8cc"><strong>cyan</strong></span>, outline only so the pixels
+  under the mask stay visible. Windows are chosen across the density range rather than
+  at random, because segmentation fails differently in packed tissue than at a sparse
+  edge, and a random sample of a mostly-empty slide is mostly background. All crops
+  share one display range, {thousands(first["display_min"])}&ndash;{thousands(first["display_max"])},
+  so a dim region looks dim instead of being brightened to match. Outline counts exceed
+  cell counts because a cell straddling the frame is still drawn, and a window at the
+  image's right or bottom edge is clipped to what exists, so its stated size is smaller
+  than the rest.</p>
+  <div class="gallery">{"".join(figs)}</div>
+</section>
+"""
+
+
+def cluster_heatmap(clustering: dict[str, Any]) -> str:
+    """Clusters against markers, z-scored, on a diverging ramp.
+
+    Diverging rather than sequential because the value is a signed deviation from the
+    slide's mean for that marker: above and below are opposite things, and the
+    midpoint has to read as "average", which only a neutral grey does. A sequential
+    ramp would make "average" look like "somewhat high".
+    """
+    matrix = clustering.get("matrix") or []
+    markers = clustering.get("channels_used") or []
+    clusters = clustering.get("clusters") or []
+    if not matrix or not markers:
+        return ""
+
+    peak = max((abs(v) for row in matrix for v in row), default=1.0) or 1.0
+    cell_w, cell_h, gap = 66.0, 26.0, 2.0
+    # Horizontal marker labels, not rotated. Rotated ones were clipped to their last
+    # few characters -- "Vimentin" read as "tin" -- and at eight markers the names fit
+    # a 66px column outright, so the rotation bought nothing and cost legibility.
+    label_w, top_band = 112.0, 26.0
+    width = label_w + len(markers) * (cell_w + gap)
+    height = top_band + len(clusters) * (cell_h + gap)
+
+    out = [
+        f'<svg class="chart" viewBox="0 0 {width:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" preserveAspectRatio="xMinYMin meet">'
+    ]
+    for j, marker in enumerate(markers):
+        x = label_w + j * (cell_w + gap) + cell_w / 2
+        out.append(
+            f'<text class="rowlabel" x="{x:.1f}" y="{top_band - 9:.0f}" '
+            f'text-anchor="middle">{esc(marker)}</text>'
+        )
+    for i, cluster in enumerate(clusters):
+        y = top_band + i * (cell_h + gap)
+        size = clustering["cluster_sizes"][i]
+        out.append(
+            f'<text class="rowlabel" x="{label_w - 8:.0f}" y="{y + cell_h / 2 + 4:.1f}" '
+            f'text-anchor="end">{esc(cluster)} ({esc(compact(size))})</text>'
+        )
+        for j, marker in enumerate(markers):
+            value = matrix[i][j]
+            x = label_w + j * (cell_w + gap)
+            step = diverging_step(value, peak)
+            out.append(
+                f'<rect x="{x:.1f}" y="{y:.1f}" width="{cell_w:.1f}" height="{cell_h:.1f}" '
+                f'rx="3" fill="var(--div-{step})" tabindex="0" '
+                f'data-tip="cluster {esc(cluster)} &middot; {esc(marker)}: {value:+.2f}"/>'
+                f'<text class="cellval" x="{x + cell_w / 2:.1f}" y="{y + cell_h / 2 + 4:.1f}" '
+                f'text-anchor="middle" style="fill:var(--div-ink-{step})">{value:+.1f}</text>'
+            )
+    out.append("</svg>")
+    return "".join(out)
+
+
+def diverging_step(value: float, peak: float) -> int:
+    """Which of seven diverging steps a signed value falls in, 3 being the midpoint."""
+    if peak <= 0:
+        return 3
+    fraction = max(-1.0, min(1.0, value / peak))
+    return max(0, min(6, int(round(fraction * 3)) + 3))
+
+
+def diverging_legend() -> str:
+    keys = "".join(
+        f'<span class="key"><span class="sw" style="background:var(--div-{i})"></span>'
+        f"{['much lower', 'lower', 'slightly lower', 'average', 'slightly higher', 'higher', 'much higher'][i]}"
+        f"</span>"
+        for i in range(7)
+    )
+    return f'<div class="legend">{keys}</div>'
+
+
+def clustering_section(images: dict[str, Any], asset_dir: Path) -> str:
+    clustering = images.get("clustering")
+    if not clustering:
+        return ""
+    excluded = clustering.get("excluded_channels") or []
+
+    rows = [
+        [
+            esc(c),
+            thousands(clustering["cluster_sizes"][i]),
+            f"{clustering['cluster_sizes'][i] / max(1, clustering['n_cells_clustered']) * 100:.1f}%",
+            esc(clustering["top_marker"][i])
+            if clustering.get("top_marker_above_average", [True] * 99)[i]
+            else "none above average",
+        ]
+        for i, c in enumerate(clustering["clusters"])
+    ]
+    subsample_note = (
+        f" Clustered on a random {thousands(clustering['n_cells_clustered'])}-cell subsample of "
+        f"{thousands(clustering['n_cells_total'])}, because the neighbour graph costs minutes at "
+        f"full size and cluster structure does not sharpen past a few tens of thousands."
+        if clustering.get("subsampled")
+        else ""
+    )
+
+    snapshots = images.get("snapshots") or []
+    by_cluster: dict[str, list[dict[str, Any]]] = {}
+    for s in snapshots:
+        by_cluster.setdefault(str(s["cluster"]), []).append(s)
+
+    snap_blocks = []
+    for i, cluster in enumerate(clustering["clusters"]):
+        figs = []
+        for s in by_cluster.get(str(cluster), []):
+            path = asset_dir / s["file"]
+            if path.exists():
+                figs.append(
+                    figure(
+                        inline_png(path),
+                        f"cell {thousands(s['cell_index'])}",
+                        f"{s['width']}&times;{s['height']} px",
+                    )
+                )
+        if figs:
+            snap_blocks.append(
+                f'<div class="snapgroup"><div class="snaphead">Cluster '
+                f"{esc(cluster)} &middot; "
+                + (
+                    f"{esc(clustering['top_marker'][i])}"
+                    if clustering.get("top_marker_above_average", [True] * 99)[i]
+                    else f"no marker above average, showing {esc(clustering['top_marker'][i])}"
+                )
+                + f' <span class="muted">({esc(compact(clustering["cluster_sizes"][i]))} cells)'
+                f'</span></div><div class="gallery small">{"".join(figs)}</div></div>'
+            )
+
+    snap_section = ""
+    if snap_blocks:
+        snap_section = f"""
+<section>
+  <h2>Representative cells per cluster</h2>
+  <p class="note">Two cells per cluster, each the nearest to its cluster's centre in
+  marker space rather than the brightest &mdash; the brightest cell is usually the most
+  extreme, which is the opposite of representative. Each is shown in its cluster's own
+  top marker (<span style="color:#b5179e"><strong>magenta</strong></span>) &mdash; or,
+  where no marker is above the slide average, its least-negative one, said so &mdash; over the
+  nuclear stain (<span style="color:#1a7f37"><strong>green</strong></span>), with the
+  segmentation boundary in white. If a cluster's cells do not look like its marker
+  profile claims, the cluster is an artefact.</p>
+  {"".join(snap_blocks)}
+</section>
+"""
+
+    return f"""
+<section>
+  <h2>Cell clusters by marker intensity</h2>
+  <p class="note">Leiden at resolution {clustering["resolution"]} on arcsinh-transformed
+  mean intensities, cofactor {clustering["arcsinh_cofactor"]:g}, then scaled per marker.
+  arcsinh rather than log because background subtraction leaves many exact zeros and log
+  would need an invented pseudocount. No spatial information is used, so these groups are
+  a statement about the staining alone: a run whose markers did not work collapses into
+  one undifferentiated cluster, which nothing else in this report would show. Values are
+  standard deviations from each marker's slide-wide mean.{subsample_note}
+  {
+        f"Excluded from clustering: {esc(', '.join(excluded))} &mdash; background channels are an "
+        f"instrument reading rather than a phenotype, and nuclear stain is in every cell by "
+        f"construction, so neither separates cell types."
+        if excluded
+        else ""
+    }</p>
+  {diverging_legend()}
+  {cluster_heatmap(clustering)}
+  {
+        details(
+            "Show as table",
+            table(["Cluster", "Cells", "Share", "Top marker"], rows),
+        )
+    }
+</section>
+{snap_section}
+"""
+
+
+def build(
+    metrics: dict[str, Any], images: dict[str, Any] | None = None, asset_dir: Path | None = None
+) -> str:
     img = metrics["image"]
     cells = metrics["cells"]
     channels = metrics["channels"]
@@ -983,6 +1269,10 @@ def build(metrics: dict[str, Any]) -> str:
 
 {patch_block}
 
+{crops_section(images, asset_dir) if images and asset_dir else ""}
+
+{clustering_section(images, asset_dir) if images and asset_dir else ""}
+
 <footer>Rendered by <code>bin/qc_report.py</code> from
 <code>{esc(metrics["sample"])}</code> metrics. Self-contained: no external scripts,
 fonts or network access.</footer>
@@ -997,10 +1287,18 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--metrics", required=True, type=Path, help="qc metrics JSON")
     ap.add_argument("--out", required=True, type=Path, help="HTML file to write")
+    ap.add_argument(
+        "--images",
+        type=Path,
+        help="qc_images.json from qc_images.py. Its PNGs are read from the same directory "
+        "and inlined as base64, so the output stays a single self-contained file.",
+    )
     args = ap.parse_args()
 
     metrics = json.loads(args.metrics.read_text())
-    page = build(metrics)
+    images = json.loads(args.images.read_text()) if args.images else None
+    asset_dir = args.images.parent if args.images else None
+    page = build(metrics, images, asset_dir)
     args.out.write_text(page)
 
     print(f"[qc_report] {args.out} ({len(page.encode()) / 1024:.0f} KB)")

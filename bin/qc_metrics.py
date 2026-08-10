@@ -425,7 +425,7 @@ def nuclear_cycle_pair(rows: list[dict[str, Any]], pattern: str = "DAPI") -> tup
     return first, last
 
 
-def cycle_ratio_metrics(first: Any, last: Any, n_bins: int = 64, clip: float = 4.0) -> dict[str, Any]:
+def cycle_ratio_metrics(first: Any, last: Any, n_bins: int = 64, clip: float = 2.0) -> dict[str, Any]:
     """Per-cell log2 ratio of last-cycle to first-cycle nuclear stain.
 
     A cell that detached, or that sits under tissue lost during a wash, keeps its
