@@ -81,6 +81,29 @@ already-planned move to a samplesheet column, rather than breaking the format th
   `validateIlluminationColumns`, which exists for this category and whose comment names this exact
   failure mode. Fix the error message in the same change. Quick, and it converts a silent wrong
   answer into a startup error.
+- **backsub's filename suffix leaks into TMA core identity, and from there into the cell table.**
+  `conf/modules.config` gives BACKSUB `ext.prefix = { "${meta.id}_backsub" }`, and on the TMA path
+  BACKSUB runs before COREOGRAPH, which derives each core's identity from its filename
+  (`preprocess_images/main.nf:155`). So with both `use_backsub` and `use_tma` set, `meta.id` becomes
+  `{sample}_backsub_core001`, and the suffix propagates into `meta.sample`, the zarr directory name,
+  the REPORT filename and the element prefixes `bin/merge_spatialdata.py` writes into the merged
+  store. Nothing crashes: the element name and `meta.sample` agree because both come from the same
+  filename. The cost is that row identity in the final table depends on whether an optional
+  preprocessing step was enabled, so the same slide run with and without backsub yields cores that
+  cannot be matched by name. This is the quiet half of the `SET_CHANNEL_NAMES` fix above; making the
+  lookup filename-independent does not help, because this is a naming defect rather than a lookup
+  one. The suffix is not cosmetic — backsub's input is Ashlar's output, and Nextflow excludes staged
+  inputs from output matching, so identical names fail the task with a missing-output error. The fix
+  is to stage the input as `path(image, stageAs: 'input/*')` and drop the prefix, which leaves the
+  module's own collision guard passing since `$image` renders as `input/{sample}.ome.tif`. Reasoned
+  from the module source, not tested. It costs a second patched nf-core module carried through
+  `nf-core modules update`, and looks upstreamable, which would remove that cost.
+- **`bin/set_channel_names.py` `main()` has no test for element selection.**
+  `tests/unit/test_set_channel_names.py` covers marker sheet parsing and `channel_labels()`, but not
+  the explicit `--element` path, the single-element fallback, or the "more than one image element"
+  error. The pipeline now depends on that fallback, so the least-tested part of the script is the
+  part it relies on. Needs a real spatialdata store rather than the JSON fixture `make_store`
+  builds, so it is slower than the tests beside it.
 - **Resource profiles are estimates** apart from `size_tiny`. Rewrite from `peak_rss` and
   `realtime` in the trace once a genuinely large slide has run.
 - **`REPORT` and `FLUO_ANNOTATION` are missing from the three larger size tiers**, so they
