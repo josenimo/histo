@@ -36,6 +36,12 @@ dev = [
     "pandas>=2",
     "zarr>=3",
     "pyarrow>=15",
+    # tifffile reads the pre-background-subtraction OME-TIFF, which is the only
+    # place the unsubtracted pixels still exist. imagecodecs is its decoder for the
+    # compression Ashlar writes. Both reach the pipeline through spatialdata-io, so
+    # this adds nothing the sopa container lacks.
+    "tifffile>=2024.1",
+    "imagecodecs>=2024.1",
 ]
 
 [tool.pytest.ini_options]

@@ -368,6 +368,164 @@ def channel_histograms(array: Any, band_rows: int = 2048) -> tuple[list[Any], in
     return hists, int(info.max)
 
 
+def read_marker_cycles(path: Path) -> list[dict[str, Any]]:
+    """The marker sheet as rows carrying `cycle_number`, in channel order.
+
+    `read_marker_names` in set_channel_names.py deliberately returns names only,
+    because that is all a rename needs. Cycle membership is what tells the first
+    imaging round from the last, which is the whole point of the photobleaching
+    check, so it is parsed here rather than by widening that function's contract.
+    """
+    import csv
+
+    with path.open(newline="") as fh:
+        rows = list(csv.DictReader(fh))
+    if not rows:
+        raise ValueError(f"{path} has no rows")
+    for col in ("channel_number", "cycle_number", "marker_name"):
+        if col not in rows[0]:
+            raise ValueError(f"{path} has no '{col}' column. Columns present: {sorted(rows[0])}")
+
+    out = []
+    for r in rows:
+        out.append(
+            {
+                "channel_number": int(r["channel_number"]),
+                "cycle_number": int(r["cycle_number"]),
+                "marker_name": r["marker_name"].strip(),
+            }
+        )
+    out.sort(key=lambda r: r["channel_number"])
+    return out
+
+
+def nuclear_cycle_pair(rows: list[dict[str, Any]], pattern: str = "DAPI") -> tuple[str, str] | None:
+    """The nuclear stain of the first and last imaging cycle, by name.
+
+    Every cycle re-images a nuclear stain, which is what makes cross-cycle
+    comparison possible at all: the same structure is present in every round, so a
+    change in its intensity is a change in the sample or the optics rather than in
+    the biology being stained.
+
+    Matched on the marker name rather than on a dedicated column, because the
+    samplesheet has no field saying which channel is nuclear. That makes `pattern`
+    a real assumption and the reason it is an option rather than a constant. Returns
+    None when there is nothing to compare -- a single-cycle run, or no channel whose
+    name matches -- and the caller reports the absence rather than inventing a pair.
+    """
+    needle = pattern.lower()
+    nuclear = [r for r in rows if needle in r["marker_name"].lower()]
+    if not nuclear:
+        return None
+    cycles = sorted({r["cycle_number"] for r in nuclear})
+    if len(cycles) < 2:
+        return None
+    first = next(r["marker_name"] for r in nuclear if r["cycle_number"] == cycles[0])
+    last = next(r["marker_name"] for r in nuclear if r["cycle_number"] == cycles[-1])
+    return first, last
+
+
+def cycle_ratio_metrics(first: Any, last: Any, n_bins: int = 64, clip: float = 4.0) -> dict[str, Any]:
+    """Per-cell log2 ratio of last-cycle to first-cycle nuclear stain.
+
+    A cell that detached, or that sits under tissue lost during a wash, keeps its
+    first-cycle signal and loses its last-cycle signal, so its ratio collapses. A
+    healthy slide gives a single peak near zero; a slide that shed tissue gives a
+    second population to the left of it. Counting cells on that left shoulder is a
+    measure of how much of the sample survived processing, which nothing else in
+    this pipeline reports.
+
+    log2 rather than a raw quotient so that "half" and "double" sit the same
+    distance either side of zero, which a histogram of a raw ratio cannot show. The
+    range is clipped rather than trimmed, and the counts at each end are reported
+    separately, so a long tail is visible instead of quietly rescaling the axis.
+
+    Cells with no first-cycle signal are excluded and counted: their ratio is not
+    large, it is undefined, and averaging them in as a big number would invent
+    photobleaching that did not happen.
+    """
+    import numpy as np
+
+    first = np.asarray(first, dtype=np.float64)
+    last = np.asarray(last, dtype=np.float64)
+    if first.shape != last.shape:
+        raise ValueError(f"channel arrays differ in length: {first.shape} vs {last.shape}")
+    if first.size == 0:
+        raise ValueError("no cells, so no cycle ratio")
+
+    usable = (first > 0) & (last > 0)
+    n_undefined = int((~usable).sum())
+    if not usable.any():
+        return {
+            "n_cells": int(first.size),
+            "n_undefined": n_undefined,
+            "note": "every cell has zero signal in one of the two cycles",
+        }
+
+    ratio = np.log2(last[usable] / first[usable])
+    counts, edges = np.histogram(np.clip(ratio, -clip, clip), bins=n_bins, range=(-clip, clip))
+    return {
+        "n_cells": int(first.size),
+        "n_usable": int(usable.sum()),
+        # Undefined rather than infinite: no first-cycle signal means no baseline.
+        "n_undefined": n_undefined,
+        "median_log2_ratio": float(np.median(ratio)),
+        "mean_log2_ratio": float(ratio.mean()),
+        "p1_log2_ratio": float(np.percentile(ratio, 1)),
+        "p99_log2_ratio": float(np.percentile(ratio, 99)),
+        # A cell at least halved between the first and last cycle.
+        "n_below_half": int((ratio < -1).sum()),
+        "fraction_below_half": float((ratio < -1).mean()),
+        "histogram": [int(c) for c in counts],
+        "histogram_min": -clip,
+        "histogram_max": clip,
+        "histogram_bin_width": float(edges[1] - edges[0]),
+        "n_below_histogram_min": int((ratio < -clip).sum()),
+        "n_above_histogram_max": int((ratio > clip).sum()),
+    }
+
+
+def tiff_channel_histograms(path: Path) -> tuple[list[Any], int, list[int]]:
+    """Exact per-channel histograms of a pyramidal OME-TIFF's full-resolution level.
+
+    For the image as it was before background subtraction, which exists only as the
+    published OME-TIFF -- the zarr store holds the subtracted version, so a
+    before-and-after comparison cannot be made from the store alone.
+
+    Reads one channel at a time. A channel of a real slide is about 500 MB, and
+    reading the file as a single array would be 7 GB for no benefit, since each
+    channel is reduced to a bin count immediately. Measured at roughly 1.2 seconds
+    per channel on the published 6 GB registration output.
+
+    Ashlar writes no channel names into its OME-XML -- verified on that same file,
+    which has no `Name` attribute on any `Channel` -- so this returns histograms in
+    file order and the caller is responsible for deciding what they line up with.
+    """
+    import numpy as np
+    import tifffile
+
+    with tifffile.TiffFile(path) as tf:
+        if not tf.series:
+            raise ValueError(f"{path} has no image series")
+        level = tf.series[0].levels[0]
+        shape = tuple(level.shape)
+        dtype = level.dtype
+
+    if len(shape) != 3:
+        raise ValueError(f"expected a (c, y, x) OME-TIFF, got shape {shape} in {path}")
+
+    info = np.iinfo(dtype)
+    if info.min < 0:
+        raise ValueError(f"{path} has signed dtype {dtype}; exact histograms assume unsigned")
+    n_bins = int(info.max) + 1
+
+    hists = []
+    for c in range(shape[0]):
+        plane = tifffile.imread(path, series=0, level=0, key=c)
+        hists.append(np.bincount(np.asarray(plane).ravel(), minlength=n_bins))
+    return hists, int(info.max), list(shape)
+
+
 def sole_image_element(sdata_path: Path) -> str:
     """The store's only image element.
 
@@ -385,8 +543,21 @@ def sole_image_element(sdata_path: Path) -> str:
     return elements[0]
 
 
-def collect(sdata_path: Path, min_cell_area: float, markers: list[str] | None) -> dict[str, Any]:
-    """Every store-derived metric for one sample."""
+def collect(
+    sdata_path: Path,
+    min_cell_area: float,
+    markers: list[str] | None = None,
+    marker_rows: list[dict[str, Any]] | None = None,
+    nuclear_pattern: str = "DAPI",
+    before_image: Path | None = None,
+) -> dict[str, Any]:
+    """Every metric for one sample.
+
+    Store-derived by default. `before_image` adds the pre-subtraction OME-TIFF,
+    which is the only place the unsubtracted pixels still exist, and `marker_rows`
+    adds the cross-cycle nuclear comparison, which needs cycle membership that the
+    store does not record.
+    """
     import numpy as np
     import pyarrow.parquet as pq
     import zarr
@@ -435,6 +606,62 @@ def collect(sdata_path: Path, min_cell_area: float, markers: list[str] | None) -
     for name, hist in zip(channel_names, hists, strict=True):
         out["channels"]["per_channel"][name] = channel_metrics(hist, dtype_max)
 
+    if before_image is not None:
+        before_hists, before_max, before_shape = tiff_channel_histograms(before_image)
+        out["before"] = {
+            "image": str(before_image),
+            "shape_cyx": before_shape,
+            "n_channels": len(before_hists),
+            # Matched by position, and the report says so. Ashlar writes no channel
+            # names, so there is nothing to match on -- and if background subtraction
+            # dropped channels the two images no longer correspond position for
+            # position, which is why a count mismatch refuses rather than guesses.
+            "matched_by": "position",
+        }
+        if len(before_hists) != len(channel_names):
+            out["before"]["error"] = (
+                f"the pre-subtraction image has {len(before_hists)} channels and the store has "
+                f"{len(channel_names)}. Background subtraction removed channels, so they cannot be "
+                f"paired by position, and the OME-XML carries no names to pair by instead."
+            )
+        else:
+            for name, hist in zip(channel_names, before_hists, strict=True):
+                out["channels"]["per_channel"][name]["before"] = channel_metrics(hist, before_max)
+
+    if marker_rows is not None:
+        pair = nuclear_cycle_pair(marker_rows, nuclear_pattern)
+        cycles = sorted({r["cycle_number"] for r in marker_rows})
+        if pair is None:
+            out["cycle_ratio"] = {
+                "available": False,
+                "reason": (
+                    f"need a channel matching {nuclear_pattern!r} in at least two cycles; "
+                    f"the sheet has {len(cycles)} cycle(s)"
+                ),
+                "nuclear_pattern": nuclear_pattern,
+            }
+        elif pair[0] not in channel_names or pair[1] not in channel_names:
+            out["cycle_ratio"] = {
+                "available": False,
+                "reason": f"{pair} not both present in the table's channels",
+                "nuclear_pattern": nuclear_pattern,
+            }
+        else:
+            # X is the mean intensity per cell per channel, which is what sopa's
+            # aggregation writes. Reading it whole is 17 MB for 142k cells.
+            x = np.asarray(table["X"][:])
+            first_i = channel_names.index(pair[0])
+            last_i = channel_names.index(pair[1])
+            out["cycle_ratio"] = {
+                "available": True,
+                "nuclear_pattern": nuclear_pattern,
+                "first_channel": pair[0],
+                "last_channel": pair[1],
+                "first_cycle": cycles[0],
+                "last_cycle": cycles[-1],
+                **cycle_ratio_metrics(x[:, first_i], x[:, last_i]),
+            }
+
     patches_file = sdata_path / "shapes" / "image_patches" / "shapes.parquet"
     if patches_file.exists():
         patches = pq.read_table(patches_file)
@@ -467,9 +694,22 @@ def main() -> int:
         default=10.0,
         help="cells below this area in square pixels are counted as degenerate (default: 10)",
     )
+    ap.add_argument(
+        "--before-image",
+        type=Path,
+        help="the pre-background-subtraction OME-TIFF, for a before-and-after comparison. "
+        "The zarr store only holds the subtracted pixels, so this is the only source.",
+    )
+    ap.add_argument(
+        "--nuclear-pattern",
+        default="DAPI",
+        help="substring identifying nuclear-stain channels in the marker sheet, used to "
+        "compare the first and last imaging cycle (default: DAPI)",
+    )
     args = ap.parse_args()
 
     markers = None
+    marker_rows = None
     if args.markers:
         # Reuse the sheet parser rather than reimplementing the sort-by-channel_number
         # and blank/duplicate rules, which are load-bearing and already tested.
@@ -477,8 +717,16 @@ def main() -> int:
         from set_channel_names import read_marker_names
 
         markers = read_marker_names(args.markers)
+        marker_rows = read_marker_cycles(args.markers)
 
-    metrics = collect(args.sdata, args.min_cell_area, markers)
+    metrics = collect(
+        args.sdata,
+        args.min_cell_area,
+        markers,
+        marker_rows=marker_rows,
+        nuclear_pattern=args.nuclear_pattern,
+        before_image=args.before_image,
+    )
 
     args.out.write_text(json.dumps(metrics, indent=2, sort_keys=False) + "\n")
 
@@ -492,6 +740,18 @@ def main() -> int:
     if metrics["patches"]:
         p = metrics["patches"]
         print(f"  patches    : {p['n_patches']} ({p['n_empty_patches']} with no cells)")
+    if "before" in metrics:
+        b = metrics["before"]
+        print(f"  before     : {b['n_channels']} channels" + (f" — {b['error']}" if "error" in b else ""))
+    ratio = metrics.get("cycle_ratio")
+    if ratio and ratio.get("available"):
+        print(
+            f"  cycles     : {ratio['first_channel']} -> {ratio['last_channel']}, "
+            f"median log2 {ratio['median_log2_ratio']:+.2f}, "
+            f"{ratio['n_below_half']} cells at least halved"
+        )
+    elif ratio:
+        print(f"  cycles     : unavailable — {ratio['reason']}")
     print(f"  written    : {args.out}")
     return 0
 

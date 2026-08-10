@@ -181,6 +181,29 @@ def minimal_metrics():
                 },
             },
         },
+        "cycle_ratio": {
+            "available": True,
+            "nuclear_pattern": "DAPI",
+            "first_channel": "a",
+            "last_channel": "b",
+            "first_cycle": 1,
+            "last_cycle": 3,
+            "n_cells": 4,
+            "n_usable": 3,
+            "n_undefined": 1,
+            "median_log2_ratio": -0.32,
+            "mean_log2_ratio": -0.41,
+            "p1_log2_ratio": -2.1,
+            "p99_log2_ratio": 0.8,
+            "n_below_half": 1,
+            "fraction_below_half": 0.25,
+            "histogram": [0, 1, 2, 0],
+            "histogram_min": -4.0,
+            "histogram_max": 4.0,
+            "histogram_bin_width": 2.0,
+            "n_below_histogram_min": 0,
+            "n_above_histogram_max": 0,
+        },
         "patches": {
             "n_patches": 2,
             "n_empty_patches": 1,
@@ -235,6 +258,39 @@ class TestBuild:
         m["channels"]["matches_marker_sheet"] = False
         m["channels"]["marker_sheet_names"] = ["x", "y"]
         assert "marker sheet" in build(m).lower()
+
+    def test_cycle_ratio_section_present(self):
+        page = build(minimal_metrics())
+        assert "Nuclear stain across cycles" in page
+        assert "no change" in page
+
+    def test_cycle_ratio_absence_is_stated_not_hidden(self):
+        """An omitted section reads as "nothing wrong", which is not the same thing."""
+        m = minimal_metrics()
+        m["cycle_ratio"] = {"available": False, "reason": "only one cycle"}
+        page = build(m)
+        assert "Nuclear stain across cycles" in page
+        assert "only one cycle" in page
+
+    def test_before_after_uses_a_dumbbell_with_a_legend(self):
+        """Two series means a legend is mandatory."""
+        m = minimal_metrics()
+        for name in m["channels"]["per_channel"]:
+            m["channels"]["per_channel"][name]["before"] = dict(m["channels"]["per_channel"][name])
+        page = build(m)
+        assert "before subtraction" in page
+        assert "after subtraction" in page
+
+    def test_headroom_is_gone(self):
+        """Removed on request: it was not useful for judging a run."""
+        page = build(minimal_metrics())
+        assert "Headroom" not in page
+        assert "Bits used" not in page
+
+    def test_mean_and_median_are_columns(self):
+        page = build(minimal_metrics())
+        assert "<th>Mean</th>" in page
+        assert "<th>Median</th>" in page
 
     def test_untiled_run_omits_the_patch_section(self):
         m = minimal_metrics()

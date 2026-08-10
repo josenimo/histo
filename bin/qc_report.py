@@ -203,7 +203,7 @@ def hbar_chart(
         return ""
     label_w, right_pad, row_h, bar_h = 96.0, 44.0, 22.0, 13.0
     axis_band = 26.0
-    plot_w = 420.0
+    plot_w = 700.0
     height = row_h * len(rows) + axis_band
     total_w = label_w + plot_w + right_pad
     upper = max((v for _, v in rows), default=0.0)
@@ -213,7 +213,7 @@ def hbar_chart(
 
     out = [
         f'<svg class="chart" viewBox="0 0 {total_w:.0f} {height:.0f}" width="100%" '
-        f'height="{height:.0f}" role="img">'
+        f'height="{height:.0f}" role="img" preserveAspectRatio="xMinYMid meet">'
     ]
     for t in ticks:
         x = label_w + t * scale
@@ -245,21 +245,41 @@ def hbar_chart(
     return "".join(out)
 
 
-def column_chart(counts: list[int], bin_width: float, x_label: str, y_label: str) -> str:
-    """A distribution as columns, linear on both axes."""
+def column_chart(
+    counts: list[int],
+    bin_width: float,
+    x_label: str,
+    y_label: str,
+    x_min: float = 0.0,
+    ref_x: float | None = None,
+    ref_label: str = "",
+    fmt=None,
+) -> str:
+    """A distribution as columns, linear on both axes.
+
+    `x_min` exists for the log-ratio histogram, whose axis is centred on zero rather
+    than starting there. `ref_x` draws one labelled reference line -- the median of a
+    ratio, or the no-change point -- because on a signed axis "where is zero" is the
+    first thing a reader needs and a gridline cannot say it.
+    """
     if not counts:
         return ""
+    fmt = fmt or (lambda v: compact(v))
     left, bottom, top, right = 54.0, 30.0, 26.0, 8.0
-    plot_w, plot_h = 560.0, 150.0
+    plot_w, plot_h = 800.0, 170.0
     total_w, total_h = left + plot_w + right, top + plot_h + bottom
     peak = max(counts) or 1
     ticks = nice_ticks(peak, 3)
     slot = plot_w / len(counts)
     bar_w = max(1.0, slot - 2.0)  # the 2px surface gap between adjacent columns
+    x_max = x_min + len(counts) * bin_width
+
+    def to_x(value: float) -> float:
+        return left + (value - x_min) / (x_max - x_min) * plot_w
 
     out = [
         f'<svg class="chart" viewBox="0 0 {total_w:.0f} {total_h:.0f}" width="100%" '
-        f'height="{total_h:.0f}" role="img">'
+        f'height="{total_h:.0f}" role="img" preserveAspectRatio="xMinYMid meet">'
     ]
     for t in ticks:
         y = top + plot_h - (t / ticks[-1]) * plot_h
@@ -274,26 +294,109 @@ def column_chart(counts: list[int], bin_width: float, x_label: str, y_label: str
     for i, c in enumerate(counts):
         h = (c / ticks[-1]) * plot_h if ticks[-1] else 0.0
         x = left + i * slot + (slot - bar_w) / 2
-        lo, hi = i * bin_width, (i + 1) * bin_width
+        lo, hi = x_min + i * bin_width, x_min + (i + 1) * bin_width
         out.append(
             f'<path d="{column_path(x, top + plot_h - h, bar_w, h, radius=2.0)}" '
             f'fill="var(--series)" tabindex="0" '
-            f'data-tip="{esc(f"{lo:,.0f}–{hi:,.0f}")}: {esc(thousands(c))}"/>'
+            f'data-tip="{esc(f"{fmt(lo)} to {fmt(hi)}")}: {esc(thousands(c))}"/>'
         )
+    if ref_x is not None and x_min <= ref_x <= x_max:
+        rx = to_x(ref_x)
+        out.append(
+            f'<line x1="{rx:.1f}" y1="{top:.1f}" x2="{rx:.1f}" y2="{top + plot_h:.1f}" '
+            f'stroke="var(--ink2)" stroke-width="1"/>'
+        )
+        if ref_label:
+            anchor = "start" if rx < left + plot_w * 0.75 else "end"
+            dx = 4 if anchor == "start" else -4
+            out.append(
+                f'<text class="valuelabel" x="{rx + dx:.1f}" y="{top + 10:.0f}" '
+                f'text-anchor="{anchor}">{esc(ref_label)}</text>'
+            )
     out.append(
         f'<line x1="{left:.1f}" y1="{top + plot_h:.1f}" x2="{left + plot_w:.1f}" '
         f'y2="{top + plot_h:.1f}" stroke="var(--axis)" stroke-width="1"/>'
     )
     out.append(
-        f'<text class="tick" x="{left:.0f}" y="{total_h - 6:.0f}">0</text>'
+        f'<text class="tick" x="{left:.0f}" y="{total_h - 6:.0f}">{esc(fmt(x_min))}</text>'
         f'<text class="tick" x="{left + plot_w:.0f}" y="{total_h - 6:.0f}" text-anchor="end">'
-        f"{esc(compact(len(counts) * bin_width))}</text>"
+        f"{esc(fmt(x_max))}</text>"
         f'<text class="tick" x="{left + plot_w / 2:.0f}" y="{total_h - 6:.0f}" '
         f'text-anchor="middle">{esc(x_label)}</text>'
     )
     out.append(f'<text class="axistitle" x="0" y="10">{esc(y_label)}</text>')
     out.append("</svg>")
     return "".join(out)
+
+
+def dumbbell_chart(rows: list[tuple[str, float, float]], unit: str, fmt) -> str:
+    """Before and after per channel, as a connected pair of dots.
+
+    The form for before-and-after on the same measure: the line carries the change
+    and its direction, which paired bars make you compute by comparing two lengths.
+    One hue in two shades rather than two hues, because these are two states of one
+    quantity and not two categories.
+
+    Both dots carry a 2px ring in the surface colour so they stay legible where they
+    overlap -- which is exactly what happens on the background channels, whose value
+    does not change because they were never subtracted.
+    """
+    if not rows:
+        return ""
+    label_w, right_pad, row_h = 96.0, 56.0, 22.0
+    axis_band, plot_w = 26.0, 680.0
+    height = row_h * len(rows) + axis_band
+    total_w = label_w + plot_w + right_pad
+    upper = max((max(b, a) for _, b, a in rows), default=0.0)
+    ticks = nice_ticks(upper if upper > 0 else 1.0)
+    scale = plot_w / (ticks[-1] if ticks[-1] else 1.0)
+
+    out = [
+        f'<svg class="chart" viewBox="0 0 {total_w:.0f} {height:.0f}" width="100%" '
+        f'height="{height:.0f}" role="img" preserveAspectRatio="xMinYMid meet">'
+    ]
+    for t in ticks:
+        x = label_w + t * scale
+        out.append(
+            f'<line x1="{x:.1f}" y1="0" x2="{x:.1f}" y2="{row_h * len(rows):.1f}" '
+            f'stroke="var(--grid)" stroke-width="1"/>'
+            f'<text class="tick" x="{x:.1f}" y="{row_h * len(rows) + 16:.0f}" '
+            f'text-anchor="middle">{esc(fmt(t))}</text>'
+        )
+    for i, (name, before, after) in enumerate(rows):
+        y = i * row_h + row_h / 2
+        xb, xa = label_w + before * scale, label_w + after * scale
+        out.append(
+            f'<text class="rowlabel" x="{label_w - 8:.0f}" y="{y + 4:.1f}" '
+            f'text-anchor="end">{esc(name)}</text>'
+        )
+        out.append(
+            f'<line x1="{min(xb, xa):.1f}" y1="{y:.1f}" x2="{max(xb, xa):.1f}" y2="{y:.1f}" '
+            f'stroke="var(--wash)" stroke-width="2" stroke-linecap="round"/>'
+        )
+        tip = f"{name}: {fmt(before)} before, {fmt(after)} after {unit}"
+        out.append(
+            f'<circle cx="{xb:.1f}" cy="{y:.1f}" r="4.5" fill="var(--wash)" '
+            f'stroke="var(--surface)" stroke-width="2" tabindex="0" data-tip="{esc(tip)}"/>'
+            f'<circle cx="{xa:.1f}" cy="{y:.1f}" r="4.5" fill="var(--series)" '
+            f'stroke="var(--surface)" stroke-width="2" tabindex="0" data-tip="{esc(tip)}"/>'
+        )
+        out.append(
+            f'<text class="valuelabel" x="{max(xb, xa) + 8:.1f}" y="{y + 4:.1f}">{esc(fmt(after))}</text>'
+        )
+    out.append("</svg>")
+    return "".join(out)
+
+
+def two_key_legend(before_label: str, after_label: str) -> str:
+    """Two series means a legend is present, always."""
+    return (
+        f'<div class="legend">'
+        f'<span class="key"><span class="dot" style="background:var(--wash)"></span>'
+        f"{esc(before_label)}</span>"
+        f'<span class="key"><span class="dot" style="background:var(--series)"></span>'
+        f"{esc(after_label)}</span></div>"
+    )
 
 
 def heat_class(value: int, upper: int, n: int = 5) -> int:
@@ -486,6 +589,7 @@ path[tabindex]:focus-visible, rect[tabindex]:focus-visible {{
   color: var(--ink2); }}
 .key {{ display: inline-flex; align-items: center; gap: 5px; }}
 .sw {{ width: 12px; height: 12px; border-radius: 3px; display: inline-block; }}
+.dot {{ width: 10px; height: 10px; border-radius: 50%; display: inline-block; }}
 details {{ margin-top: 12px; }}
 summary {{ cursor: pointer; color: var(--ink2); font-size: 12px; }}
 .grid2 {{ display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }}
@@ -542,30 +646,27 @@ def channel_section(channels: dict[str, Any]) -> str:
     headers = [
         "Channel",
         "Intensity distribution (0&ndash;p99.9, &radic;count)",
-        "Max",
-        "Bits used",
-        "Headroom",
-        "Zero px",
-        "p50",
+        "Mean",
+        "Median",
         "p99",
         "p99.99",
+        "Max",
+        "Zero px",
         "At ceiling",
     ]
     rows = []
     for name in names:
         m = per[name]
-        head = m["headroom_stops"]
         rows.append(
             [
                 esc(name),
                 sparkline(m["histogram"]),
-                thousands(m["max"]),
-                f"{m['effective_bit_depth']}",
-                "&mdash;" if head is None else f"{head:.2f}",
-                f"{m['fraction_zero'] * 100:.2f}%",
+                f"{m['mean']:,.1f}",
                 thousands(m["p50"]),
                 thousands(m["p99"]),
                 thousands(m["p99_99"]),
+                thousands(m["max"]),
+                f"{m['fraction_zero'] * 100:.2f}%",
                 f"{m['fraction_at_dtype_ceiling'] * 100:.3f}%",
             ]
         )
@@ -579,52 +680,137 @@ def channel_section(channels: dict[str, Any]) -> str:
     )
     ceiling = next(iter(per.values()))["dtype_ceiling"]
 
-    zero_rows = [(n, per[n]["fraction_zero"] * 100) for n in names]
-    head_rows = [(n, per[n]["headroom_stops"] or 0.0) for n in names]
+    # The before-and-after comparison only exists if the pre-subtraction image was
+    # given. Without it this stays a single-series chart rather than pretending to a
+    # baseline it does not have.
+    has_before = all("before" in per[n] for n in names)
+    if has_before:
+        zero_chart = two_key_legend("before subtraction", "after subtraction") + dumbbell_chart(
+            [(n, per[n]["before"]["fraction_zero"] * 100, per[n]["fraction_zero"] * 100) for n in names],
+            "of pixels",
+            lambda v: f"{v:.1f}%",
+        )
+        zero_table = table(
+            ["Channel", "Before", "After", "Change"],
+            [
+                [
+                    esc(n),
+                    f"{per[n]['before']['fraction_zero'] * 100:.2f}%",
+                    f"{per[n]['fraction_zero'] * 100:.2f}%",
+                    f"{(per[n]['fraction_zero'] - per[n]['before']['fraction_zero']) * 100:+.2f} pp",
+                ]
+                for n in names
+            ],
+        )
+        zero_note = (
+            "Background subtraction clips at zero, so pixels driven to zero are signal it "
+            "removed. The pair shows how much each channel moved. Channels used only as "
+            "background are never subtracted, so their two dots coincide, which is what a "
+            "correct run looks like."
+        )
+    else:
+        zero_chart = hbar_chart(
+            [(n, per[n]["fraction_zero"] * 100) for n in names],
+            "percent of pixels",
+            lambda v: f"{v:.0f}%",
+        )
+        zero_table = table(
+            ["Channel", "Zero px"],
+            [[esc(n), f"{per[n]['fraction_zero'] * 100:.2f}%"] for n in names],
+        )
+        zero_note = (
+            "Background subtraction clips at zero, so a high fraction here means signal was "
+            "subtracted away. Unsubtracted channels give the baseline. Pass the "
+            "pre-subtraction image to compare before and after directly."
+        )
 
     return f"""
 <section>
   <h2>Channels</h2>
   <p class="note">Measured on the full-resolution image, every pixel. Percentiles are
   exact rather than interpolated, so each one is a value that genuinely occurs.
-  Headroom is how many of the {int(math.log2(ceiling + 1))} bits the dtype provides went
-  unused; &ldquo;at ceiling&rdquo; is true saturation, at {thousands(ceiling)}.</p>
+  &ldquo;At ceiling&rdquo; is true saturation, at {thousands(ceiling)}.</p>
   <table><thead><tr>{head_row}</tr></thead><tbody>{body}</tbody></table>
 </section>
 
 <section>
-  <div class="grid2">
-    <div>
-      <h2>Zero pixels per channel</h2>
-      <p class="note">Background subtraction clips at zero, so a high fraction here
-      means signal was subtracted away. Unsubtracted channels give the baseline.</p>
-      {hbar_chart(zero_rows, "percent of pixels", lambda v: f"{v:.0f}%")}
-      {
-        details(
-            "Show as table",
-            table(
-                ["Channel", "Zero px"],
-                [[esc(n), f"{v:.2f}%"] for n, v in zero_rows],
-            ),
-        )
-    }
-    </div>
-    <div>
-      <h2>Unused headroom per channel</h2>
-      <p class="note">Stops of the dtype's range no pixel reaches. Two stops means
-      the channel uses a quarter of the range it was stored in.</p>
-      {hbar_chart(head_rows, "stops", lambda v: f"{v:.1f}")}
-      {
-        details(
-            "Show as table",
-            table(
-                ["Channel", "Headroom (stops)", "Max value"],
-                [[esc(n), f"{per[n]['headroom_stops']:.2f}", thousands(per[n]["max"])] for n in names],
-            ),
-        )
-    }
-    </div>
-  </div>
+  <h2>Zero pixels per channel</h2>
+  <p class="note">{zero_note}</p>
+  {zero_chart}
+  {details("Show as table", zero_table)}
+</section>
+"""
+
+
+def cycle_ratio_section(ratio: dict[str, Any]) -> str:
+    """The cross-cycle nuclear comparison, or why it could not be made.
+
+    Reports the absence explicitly rather than omitting the section. A missing
+    section reads as "nothing wrong here", and a single-cycle run or an unmatched
+    nuclear pattern is a gap in the QC rather than a clean result.
+    """
+    if not ratio.get("available"):
+        return f"""
+<section>
+  <h2>Nuclear stain across cycles</h2>
+  <p class="note">Not computed: {esc(ratio.get("reason", "unavailable"))}.</p>
+</section>
+"""
+    if "histogram" not in ratio:
+        return f"""
+<section>
+  <h2>Nuclear stain across cycles</h2>
+  <p class="note">{esc(ratio.get("note", "no comparable cells"))}.</p>
+</section>
+"""
+
+    median = ratio["median_log2_ratio"]
+    lost = ratio["fraction_below_half"] * 100
+    chart = column_chart(
+        ratio["histogram"],
+        ratio["histogram_bin_width"],
+        f"log2({esc(ratio['last_channel'])} / {esc(ratio['first_channel'])})",
+        "cells",
+        x_min=ratio["histogram_min"],
+        ref_x=0.0,
+        ref_label="no change",
+        fmt=lambda v: f"{v:+.0f}",
+    )
+    summary = table(
+        ["Statistic", "Value"],
+        [
+            ["First cycle channel", f"{esc(ratio['first_channel'])} (cycle {ratio['first_cycle']})"],
+            ["Last cycle channel", f"{esc(ratio['last_channel'])} (cycle {ratio['last_cycle']})"],
+            ["Cells compared", thousands(ratio["n_usable"])],
+            ["Cells with no signal in one cycle", thousands(ratio["n_undefined"])],
+            ["Median log2 ratio", f"{median:+.3f}"],
+            ["Mean log2 ratio", f"{ratio['mean_log2_ratio']:+.3f}"],
+            ["p1 / p99 log2 ratio", f"{ratio['p1_log2_ratio']:+.2f} / {ratio['p99_log2_ratio']:+.2f}"],
+            [
+                "Cells at least halved",
+                f"{thousands(ratio['n_below_half'])} ({lost:.2f}%)",
+            ],
+            [
+                "Beyond the drawn range",
+                f"{thousands(ratio['n_below_histogram_min'])} below, "
+                f"{thousands(ratio['n_above_histogram_max'])} above",
+            ],
+        ],
+    )
+    return f"""
+<section>
+  <h2>Nuclear stain across cycles</h2>
+  <p class="note">Per cell, the last cycle's nuclear stain over the first cycle's, as
+  log2 &mdash; so &minus;1 is half and +1 is double, at equal distance from no change.
+  Every cycle re-images a nuclear stain, so the same structure is present in each
+  round and a drop is the sample or the optics rather than the biology. A cell that
+  detached or sat under tissue lost in a wash keeps its first-cycle signal and loses
+  its last, which shows up as a left-hand shoulder. Here the median is
+  <strong>{median:+.2f}</strong> and {lost:.2f}% of cells at least halved. Cells with
+  no signal in one of the two cycles are excluded and counted, because their ratio is
+  undefined rather than large.</p>
+  {chart}
+  {details("Show as table", summary)}
 </section>
 """
 
@@ -785,6 +971,8 @@ def build(metrics: dict[str, Any]) -> str:
 </section>
 
 {channel_section(channels)}
+
+{cycle_ratio_section(metrics["cycle_ratio"]) if metrics.get("cycle_ratio") else ""}
 
 <section>
   <h2>Cell area distribution</h2>

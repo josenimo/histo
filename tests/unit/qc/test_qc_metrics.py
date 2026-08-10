@@ -10,6 +10,9 @@ import pytest
 from qc_metrics import (
     _pct_key,
     area_metrics,
+    cycle_ratio_metrics,
+    nuclear_cycle_pair,
+    read_marker_cycles,
     cells_per_patch,
     channel_metrics,
     effective_bit_depth,
@@ -228,3 +231,133 @@ class TestPatchMetrics:
 
     def test_untiled_run_has_no_patches(self):
         assert patch_metrics(np.array([], dtype=np.int64), n_cells=0) == {"n_patches": 0}
+
+
+class TestReadMarkerCycles:
+    def test_parses_cycle_membership(self, tmp_path):
+        p = tmp_path / "m.csv"
+        p.write_text("channel_number,cycle_number,marker_name\n1,1,DAPI_bg\n2,2,CD3e\n3,2,DAPI_5\n")
+        rows = read_marker_cycles(p)
+        assert [r["cycle_number"] for r in rows] == [1, 2, 2]
+        assert [r["marker_name"] for r in rows] == ["DAPI_bg", "CD3e", "DAPI_5"]
+
+    def test_sorted_by_channel_number(self, tmp_path):
+        """File order is not trusted, the same rule the name parser follows."""
+        p = tmp_path / "m.csv"
+        p.write_text("channel_number,cycle_number,marker_name\n3,2,C\n1,1,A\n2,1,B\n")
+        assert [r["marker_name"] for r in read_marker_cycles(p)] == ["A", "B", "C"]
+
+    def test_missing_cycle_column_refused(self, tmp_path):
+        p = tmp_path / "m.csv"
+        p.write_text("channel_number,marker_name\n1,A\n")
+        with pytest.raises(ValueError, match="no 'cycle_number' column"):
+            read_marker_cycles(p)
+
+
+class TestNuclearCyclePair:
+    def rows(self):
+        """The published run's sheet: DAPI in all three cycles."""
+        return [
+            {"channel_number": 5, "cycle_number": 1, "marker_name": "DAPI_bg"},
+            {"channel_number": 7, "cycle_number": 2, "marker_name": "CD3e"},
+            {"channel_number": 10, "cycle_number": 2, "marker_name": "DAPI_5"},
+            {"channel_number": 15, "cycle_number": 3, "marker_name": "DAPI_6"},
+        ]
+
+    def test_first_and_last_cycle(self):
+        assert nuclear_cycle_pair(self.rows()) == ("DAPI_bg", "DAPI_6")
+
+    def test_skips_the_middle_cycle(self):
+        """Only the two ends are compared; DAPI_5 is cycle 2 and not an endpoint."""
+        assert "DAPI_5" not in nuclear_cycle_pair(self.rows())
+
+    def test_case_insensitive(self):
+        rows = [
+            {"channel_number": 1, "cycle_number": 1, "marker_name": "dapi"},
+            {"channel_number": 2, "cycle_number": 2, "marker_name": "Dapi2"},
+        ]
+        assert nuclear_cycle_pair(rows) == ("dapi", "Dapi2")
+
+    def test_single_cycle_has_nothing_to_compare(self):
+        rows = [{"channel_number": 1, "cycle_number": 1, "marker_name": "DAPI"}]
+        assert nuclear_cycle_pair(rows) is None
+
+    def test_no_nuclear_channel_returns_none(self):
+        """Returns None rather than guessing a channel, since the sheet has no flag."""
+        rows = [
+            {"channel_number": 1, "cycle_number": 1, "marker_name": "CD3e"},
+            {"channel_number": 2, "cycle_number": 2, "marker_name": "CD8"},
+        ]
+        assert nuclear_cycle_pair(rows) is None
+
+    def test_pattern_is_configurable(self):
+        rows = [
+            {"channel_number": 1, "cycle_number": 1, "marker_name": "Hoechst_1"},
+            {"channel_number": 2, "cycle_number": 2, "marker_name": "Hoechst_2"},
+        ]
+        assert nuclear_cycle_pair(rows, pattern="hoechst") == ("Hoechst_1", "Hoechst_2")
+
+
+class TestCycleRatioMetrics:
+    def test_no_change_centres_on_zero(self):
+        first = np.array([100.0, 200.0, 300.0])
+        m = cycle_ratio_metrics(first, first.copy())
+        assert m["median_log2_ratio"] == 0.0
+        assert m["n_below_half"] == 0
+
+    def test_halving_is_minus_one(self):
+        """log2 so that half and double sit equidistant from no change."""
+        m = cycle_ratio_metrics(np.array([100.0]), np.array([50.0]))
+        assert m["median_log2_ratio"] == pytest.approx(-1.0)
+
+    def test_at_least_halved_is_counted(self):
+        """A cell that lost more than half its nuclear signal between cycles."""
+        m = cycle_ratio_metrics(
+            np.array([100.0, 100.0, 100.0, 100.0]),
+            np.array([100.0, 90.0, 20.0, 10.0]),
+        )
+        assert m["n_below_half"] == 2
+        assert m["fraction_below_half"] == 0.5
+
+    def test_zero_signal_is_undefined_not_extreme(self):
+        """A cell with no first-cycle signal has no baseline, so it is excluded.
+
+        Dividing by it would invent an enormous ratio and move the median, which
+        would report photobleaching that did not happen.
+        """
+        m = cycle_ratio_metrics(
+            np.array([0.0, 100.0, 100.0]),
+            np.array([50.0, 100.0, 100.0]),
+        )
+        assert m["n_undefined"] == 1
+        assert m["n_usable"] == 2
+        assert m["median_log2_ratio"] == 0.0
+
+    def test_zero_in_the_last_cycle_is_also_undefined(self):
+        m = cycle_ratio_metrics(np.array([100.0, 100.0]), np.array([0.0, 100.0]))
+        assert m["n_undefined"] == 1
+
+    def test_every_cell_undefined_says_so(self):
+        m = cycle_ratio_metrics(np.array([0.0, 0.0]), np.array([1.0, 1.0]))
+        assert "note" in m
+        assert "histogram" not in m
+
+    def test_tail_is_clipped_not_dropped(self):
+        """Counts beyond the drawn range are reported rather than silently binned in."""
+        m = cycle_ratio_metrics(np.array([1.0, 1.0]), np.array([1024.0, 1.0]), clip=4.0)
+        assert m["n_above_histogram_max"] == 1
+        assert sum(m["histogram"]) == 2
+
+    def test_histogram_is_symmetric_about_zero(self):
+        m = cycle_ratio_metrics(np.array([1.0]), np.array([1.0]), n_bins=8, clip=4.0)
+        assert m["histogram_min"] == -4.0
+        assert m["histogram_max"] == 4.0
+        assert m["histogram_bin_width"] == 1.0
+
+    def test_length_mismatch_refused(self):
+        with pytest.raises(ValueError, match="differ in length"):
+            cycle_ratio_metrics(np.array([1.0]), np.array([1.0, 2.0]))
+
+    def test_no_cells_refused(self):
+        with pytest.raises(ValueError, match="no cells"):
+            cycle_ratio_metrics(np.array([]), np.array([]))
