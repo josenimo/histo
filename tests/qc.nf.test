@@ -1,0 +1,145 @@
+// Channel topology of the QC half, under -stub.
+//
+// Asserts wiring, not correctness: no metric is computed here, so nothing in this file
+// says a number is right. What it covers is the fiddly part, which is the optional
+// inputs. The pre-subtraction image exists only when background subtraction ran and the
+// slide was not dearrayed, the marker sheet only when preprocessing ran, and the image
+// directory only when the clustering step is enabled. Each of those is a channel that
+// can be empty, and an empty channel in the wrong place does not fail -- it silently
+// stops the process from running at all, which looks like a missing feature rather than
+// a bug.
+//
+// Tested at subworkflow level for the same reason as preprocess_images: the pipeline
+// entry point needs a samplesheet whose relative paths resolve against a directory
+// nf-test controls, while here the inputs are built in Groovy against ${projectDir}.
+
+nextflow_workflow {
+
+    name "QC"
+    script "../subworkflows/local/qc/main.nf"
+    workflow "QC"
+    profile "laptop"
+    options "-stub"
+    tag "stub"
+    tag "qc"
+
+    test("metrics, images and report all run when everything is supplied") {
+
+        when {
+            params {
+                use_qc_images = true
+            }
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id: 'testsample', sample: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data", checkIfExists: true)
+                ])
+                input[1] = Channel.of(file("\${projectDir}/tests/samplesheet.csv", checkIfExists: true))
+                input[2] = Channel.of([
+                    [ id: 'testsample', sample: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data/cycle01.ome.tiff", checkIfExists: true)
+                ])
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.metrics.size() == 1
+            assert workflow.out.report.size() == 1
+            // The metrics JSON is the machine-readable contract, so it must be emitted
+            // under a name a downstream gate can find.
+            assert workflow.out.metrics.get(0).get(1).endsWith('testsample_qc.json')
+            assert workflow.out.report.get(0).get(1).endsWith('testsample_qc_report.html')
+        }
+    }
+
+    test("a report is still produced with no pre-subtraction image") {
+        // Every run without background subtraction, and every TMA run. The join that
+        // pairs a store with its unsubtracted image has to keep the store when there is
+        // no match, or QC_METRICS never runs and the report silently disappears.
+        when {
+            params {
+                use_qc_images = false
+            }
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id: 'testsample', sample: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data", checkIfExists: true)
+                ])
+                input[1] = Channel.of(file("\${projectDir}/tests/samplesheet.csv", checkIfExists: true))
+                input[2] = Channel.empty()
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.metrics.size() == 1
+            assert workflow.out.report.size() == 1
+        }
+    }
+
+    test("a report is still produced with no marker sheet") {
+        // The pre-stitched input path: use_preprocessing false, so nothing describes the
+        // channels and the marker sheet channel is empty. ifEmpty([]) has to hold, or
+        // the whole QC subworkflow produces nothing.
+        when {
+            params {
+                use_qc_images = false
+            }
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id: 'testsample', sample: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data", checkIfExists: true)
+                ])
+                input[1] = Channel.empty()
+                input[2] = Channel.empty()
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.report.size() == 1
+        }
+    }
+
+    test("every core of a dearrayed slide gets its own report") {
+        // TMA runs process each core as its own store, so QC must fan out rather than
+        // collapse to one report per slide.
+        when {
+            params {
+                use_qc_images = false
+            }
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'slide_core001', sample: 'slide_core001', slide: 'slide' ],
+                        file("\${projectDir}/tests/stub_data", checkIfExists: true)
+                    ],
+                    [
+                        [ id: 'slide_core002', sample: 'slide_core002', slide: 'slide' ],
+                        file("\${projectDir}/tests/stub_data", checkIfExists: true)
+                    ]
+                )
+                input[1] = Channel.of(file("\${projectDir}/tests/samplesheet.csv", checkIfExists: true))
+                input[2] = Channel.empty()
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.report.size() == 2
+            // Sorted on the file name, not the path: the work directory hash sorts
+            // independently of the core it belongs to.
+            def names = workflow.out.report.collect { it.get(1).split('/').last() }.sort()
+            assert names == ['slide_core001_qc_report.html', 'slide_core002_qc_report.html']
+        }
+    }
+}

@@ -172,7 +172,19 @@ workflow PREPROCESS_IMAGES {
     // Versions are emitted on the `versions` topic by all four mcmicro modules,
     // and collected in workflows/histo.nf. Nothing to mix here.
 
+    // Ashlar's output, before background subtraction, for QC to compare against.
+    //
+    // Emitted only when backsub ran and the slide was not dearrayed. Without backsub
+    // there is nothing to compare, and on the TMA path this is the whole slide while
+    // the stores QC reads are single cores, so pairing them would compare a core
+    // against a slide. Empty rather than absent in those cases, so the consumer takes
+    // the same shape either way.
+    ch_unsubtracted = params.use_backsub && !params.use_tma_dearray
+        ? ASHLAR.out.tif
+        : channel.empty()
+
     emit:
-    images  = ch_images             // channel: [ val(meta), path(image) ] one per sample, or one per TMA core
-    markers = ch_effective_markers  // channel: path(csv) describing the channels the images actually have
+    images       = ch_images          // channel: [ val(meta), path(image) ] one per sample, or one per TMA core
+    markers      = ch_effective_markers  // channel: path(csv) describing the channels the images actually have
+    unsubtracted = ch_unsubtracted    // channel: [ val(meta), path(tif) ] Ashlar's output, pre-subtraction
 }

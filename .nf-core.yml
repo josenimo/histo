@@ -54,15 +54,17 @@ lint:
     #                         committed by accident because it is a dotfile
     - .gitignore
 
-  # tests/preprocess_images.nf.test is a `nextflow_workflow` test of a subworkflow,
-  # not a pipeline test. Both checks in this rule assume a pipeline:
+  # Both files are `nextflow_workflow` tests of a subworkflow, not pipeline tests, and
+  # both checks in this rule assume a pipeline:
   #   - `outdir` is meaningless, the subworkflow publishes nothing
-  #   - there is no versions.yml to snapshot; the modules it calls emit versions on
-  #     the `versions` topic, which is collected in workflows/histo.nf, so the
-  #     subworkflow has no versions output at all
-  # Listing the file skips only that file; the other test files stay checked.
+  #   - a versions.yml snapshot asserts nothing here. preprocess_images has no versions
+  #     output at all, because the modules it calls emit on the `versions` topic which is
+  #     collected in workflows/histo.nf. qc does emit versions, but these tests run under
+  #     -stub, so the snapshot would pin the stub blocks' literal "stub" strings.
+  # Listing the files skips only those files; the other test files stay checked.
   nf_test_content:
     - tests/preprocess_images.nf.test
+    - tests/qc.nf.test
 
   multiqc_config: false
 

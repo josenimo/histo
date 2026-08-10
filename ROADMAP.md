@@ -17,7 +17,7 @@ Priorities, in order: transparency, robustness, troubleshootability.
 | 4. Resource profiles   | Done — `size_tiny`/`small`/`medium`/`huge`, `slurm`                       |
 | 5. Containers          | Done — 7 images, manifest, pre-staging documented                         |
 | 6. Testing             | Done — unit, stub and fixture tiers, CI                                   |
-| 7. QC report           | Not started                                                               |
+| 7. QC report           | Metrics, images and report wired in; thresholds still need real datasets  |
 | 8. Release 1.0.0       | Not started                                                               |
 
 Version `0.1.0dev`. Lint: 241 passed, 35 ignored, 5 warnings, 0 failed.
@@ -69,6 +69,40 @@ already-planned move to a samplesheet column, rather than breaking the format th
 
 ## Open
 
+- **Boolean parameters cannot be set from the command line.** `--use_qc false` leaves QC enabled,
+  and so does `--use_qc=false`. Nextflow hands the value over as the string `"false"`, and a
+  non-empty string is truthy in Groovy, so every `if (params.use_*)` in the pipeline takes the
+  wrong branch. Verified against both a new parameter and an existing one: `--use_cellpose false`
+  does not disable Cellpose either, while a params file carrying a real YAML boolean works
+  correctly. So this is not one parameter's bug, it is every boolean switch the pipeline has, and
+  the failure is silent — a run asked to skip background subtraction performs it and reports
+  success. The fix belongs in one place, coercing the declared booleans once at pipeline
+  initialisation beside `validateIlluminationColumns`, rather than at each use site. Until then
+  `docs/output.md` tells users to pass a params file.
+- **Run-level resource QC is deferred, and the reason is structural.** Failed and retried task
+  counts and peak RSS per task all live in `pipeline_info/execution_trace_*.txt`, which Nextflow
+  only finalises when the run ends — so no process inside the DAG can read its own run's trace, and
+  the per-sample QC step cannot produce these numbers. It needs either a `workflow.onComplete` hook
+  or a post-run step, and neither is worth building until the pass/fail gate exists to consume it.
+  A working parser was written and removed in the same branch rather than left unwired; the trace
+  columns are `status`, `attempt` and `peak_rss`, and sizes arrive as `5.1 GB` or as `-` when there
+  is no reading at all, which is every row on macOS without a container engine. Worth having: the
+  published WSI run peaked at 8.7 GB in BASICPY, and `TO_SPATIALDATA` reported exactly 8.00 GiB,
+  which looks like a ceiling rather than a measurement.
+- **`min_area_pixels2` may not be filtering anything.** Measured on the published WSI run: the
+  smallest cell in the table is 4.3 px² and 1% of cells are under 48.6 px², against a `nextflow.config`
+  comment that says leaving the parameter `null` lets sopa derive the floor as `(diameter/2)²`, which
+  for that run's `cellpose_diameter = 35` would be about 306 px². `argsCLI()` skips nulls, so
+  `--min-area` genuinely never reached the CLI and sopa's own default applied. Either that comment
+  describes a derivation sopa does not do, or the floor is applied per patch before
+  `RESOLVE_CELLPOSE` stitches boundaries across patch seams and the fragments it creates are not
+  re-filtered. Both are worth knowing and the two are distinguished by one run with an explicit
+  `--min-area`. Until then the comment is asserting something the data contradicts.
+- **A misspelt parameter does not fail the run.** `pipeline_info/params_*.json` from the published
+  run records both `use_use_tma_dearray` and `use_tma_dearray`, with `validate_params = true`. The
+  typo was accepted and silently ignored, so a run configured with `use_use_tma_dearray = true`
+  would quietly do the opposite of what was asked. nf-core's schema validation can reject unknown
+  parameters; find out why it did not here.
 - **Duplicate `cycle_number` is accepted, and silently misaligns illumination profiles.** `meta` is
   built from `sample` and `cycle_number` alone, so two samplesheet rows sharing both produce
   identical meta maps. That map is the join key in `preprocess_images/main.nf:48`, so which cycle
