@@ -48,6 +48,14 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
   unguarded on a field the manifest no longer defines.
 - `.devcontainer/`, which configured a GitHub Codespaces environment that is unused.
 
+### Added
+
+- QC report, per sample. `QC_METRICS` writes every metric as machine-readable JSON, `QC_IMAGES`
+  renders segmentation overlays and clusters the cells, and `QC_REPORT` renders both as one
+  self-contained HTML file. Published to `<outdir>/qc`. `--use_qc` and `--use_qc_images` switch
+  them; everything else is `ext.args` in `conf/modules.config`. See
+  [docs/output.md](docs/output.md).
+
 ### Fixed
 
 - `SET_CHANNEL_NAMES` no longer fails when `use_backsub` is true. It asked for the image element
@@ -66,6 +74,11 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
   on real `.czi` data.
 
 ### Known broken
+
+- Boolean parameters cannot be set from the command line. `--use_qc false` leaves QC enabled, as
+  does `--use_cellpose false`: Nextflow passes the value as the string `"false"` and a non-empty
+  string is truthy, so every `use_*` switch takes the wrong branch and the run reports success.
+  Pass a params file with a real boolean instead. See [ROADMAP.md](ROADMAP.md).
 
 - A samplesheet that repeats a `cycle_number` within a sample is accepted, and the cycle's BaSiCPy
   profiles may then be attached to the wrong cycle. `meta` carries only `sample` and `cycle_number`,

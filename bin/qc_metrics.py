@@ -500,38 +500,30 @@ def tiff_channel_histograms(path: Path) -> tuple[list[Any], int, list[int]]:
     published OME-TIFF -- the zarr store holds the subtracted version, so a
     before-and-after comparison cannot be made from the store alone.
 
-    Reads one channel at a time. A channel of a real slide is about 500 MB, and
-    reading the file as a single array would be 7 GB for no benefit, since each
-    channel is reduced to a bin count immediately. Measured at roughly 1.2 seconds
-    per channel on the published 6 GB registration output.
+    Opened through `aszarr`, which exposes the TIFF as a zarr array without decoding
+    anything until a slice is asked for. That means the same streamed row-band pass
+    `channel_histograms` already does for the store, so this holds one band rather
+    than one 500 MB channel, and the whole read reuses tested code instead of a
+    second implementation of the same loop. Measured at about 0.03 seconds per band
+    on the published 6 GB registration output.
 
     Ashlar writes no channel names into its OME-XML -- verified on that same file,
     which has no `Name` attribute on any `Channel` -- so this returns histograms in
     file order and the caller is responsible for deciding what they line up with.
     """
-    import numpy as np
     import tifffile
+    import zarr
 
     with tifffile.TiffFile(path) as tf:
         if not tf.series:
             raise ValueError(f"{path} has no image series")
-        level = tf.series[0].levels[0]
-        shape = tuple(level.shape)
-        dtype = level.dtype
-
-    if len(shape) != 3:
-        raise ValueError(f"expected a (c, y, x) OME-TIFF, got shape {shape} in {path}")
-
-    info = np.iinfo(dtype)
-    if info.min < 0:
-        raise ValueError(f"{path} has signed dtype {dtype}; exact histograms assume unsigned")
-    n_bins = int(info.max) + 1
-
-    hists = []
-    for c in range(shape[0]):
-        plane = tifffile.imread(path, series=0, level=0, key=c)
-        hists.append(np.bincount(np.asarray(plane).ravel(), minlength=n_bins))
-    return hists, int(info.max), list(shape)
+        # level=0 is full resolution. Ashlar writes a pyramid, and a QC number taken
+        # from a downsampled level would be quietly wrong rather than absent.
+        array = zarr.open(tf.series[0].aszarr(level=0), mode="r")
+        if array.ndim != 3:
+            raise ValueError(f"expected a (c, y, x) OME-TIFF, got shape {array.shape} in {path}")
+        hists, dtype_max = channel_histograms(array)
+        return hists, dtype_max, list(array.shape)
 
 
 def sole_image_element(sdata_path: Path) -> str:

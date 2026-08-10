@@ -439,6 +439,27 @@
                 }
             },
             "fa_icon": "fas fa-scroll"
+        },
+        "qc_report": {
+            "title": "QC report",
+            "type": "object",
+            "description": "Parameters related to the quality-control metrics and report",
+            "default": "",
+            "properties": {
+                "use_qc": {
+                    "type": "boolean",
+                    "description": "Whether to compute QC metrics and render the QC report",
+                    "help_text": "Writes a machine-readable JSON of metrics next to a self-contained HTML report, per sample, into `<outdir>/qc`. The JSON is the contract an unattended run should read; the HTML is for a person.",
+                    "default": true
+                },
+                "use_qc_images": {
+                    "type": "boolean",
+                    "description": "Whether to include the segmentation crops and the cell clustering in the QC report",
+                    "help_text": "These cost minutes where the metrics cost seconds: the crops rasterise segmentation polygons and the clustering builds a nearest-neighbour graph over every cell. Set false for a metrics-only report. Tuning for this step goes through `ext.args` for QC_IMAGES in conf/modules.config.",
+                    "default": true
+                }
+            },
+            "fa_icon": "fas fa-clipboard-check"
         }
     },
     "allOf": [
@@ -480,6 +501,9 @@
         },
         {
             "$ref": "#/$defs/fluorescence_annotation"
+        },
+        {
+            "$ref": "#/$defs/qc_report"
         }
     ]
 }

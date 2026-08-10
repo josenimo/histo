@@ -38,10 +38,40 @@ Refer to the [SpatialData docs](https://spatialdata.scverse.org/en/stable/) for 
 <details markdown="1">
 <summary>Output files</summary>
 
+- `qc/{sample}_qc.json`
+  - Every QC metric as machine-readable JSON. **This is the file an unattended run should
+    read.** Per-channel intensity statistics measured on every pixel of the full-resolution
+    image, cell-area distribution and the count below a degenerate-cell threshold, channel-name
+    agreement between the image, the table and the marker sheet, cells per segmentation patch,
+    and — when background subtraction ran on a non-dearrayed slide — the same channel statistics
+    from before subtraction, so the two can be compared. It sets no thresholds and returns no
+    exit code: the numbers that would justify a threshold need more than one dataset behind them.
+- `qc/{sample}_qc_report.html`
+  - The same metrics rendered for a person, plus the images. Self-contained: no external
+    scripts, fonts or network access, so it can be copied anywhere and opened offline.
+    Includes segmentation overlays at full resolution across the density range, a cross-cycle
+    nuclear-stain comparison, a Leiden clustering tree over a resolution sweep, the
+    cluster-by-marker profile, and representative cells per cluster. Every chart has a table
+    view beneath it.
+- `qc/{sample}_qc_images/`
+  - The PNGs the report embeds, kept as files so they can be used on their own. Absent when
+    `--use_qc_images false`.
 - `{sample}_analysis_summary.html`
   - Sopa quality control report: cell counts, area distributions, per-channel intensity summaries.
 
 </details>
+
+The QC report is produced per sample, which on a dearrayed slide means per core. `--use_qc false`
+skips it entirely; `--use_qc_images false` keeps the metrics and the charts but drops the
+clustering and the image crops, which are the slow part. Tuning for the image step — the Leiden
+resolution ladder, the arcsinh cofactor, how many crops — goes through `ext.args` for `QC_IMAGES`
+in `conf/modules.config` rather than through pipeline parameters.
+
+> [!WARNING]
+> Boolean parameters do not currently respond to the command line: `--use_qc false` leaves QC
+> enabled, because Nextflow passes `false` as a string and a non-empty string is true. Use a
+> params file (`use_qc: false`) until this is fixed. This affects every `use_*` parameter in the
+> pipeline, not only these two.
 
 Upstream nf-core/sopa also produced a `{sample}.explorer/` directory holding a Xenium Explorer
 bundle and a standalone `adata.h5ad`. **This pipeline does not export to Xenium Explorer.** The

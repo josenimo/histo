@@ -18,6 +18,7 @@ include { REPORT                  } from '../modules/local/report'
 include { FLUO_ANNOTATION         } from '../modules/local/fluo_annotation'
 include { CELLPOSE                } from '../subworkflows/local/cellpose'
 include { STARDIST                } from '../subworkflows/local/stardist'
+include { QC                      } from '../subworkflows/local/qc'
 
 
 include { argsCLI        } from '../modules/local/utils'
@@ -121,6 +122,25 @@ workflow HISTO {
 
     REPORT(ch_preprocessed)
     ch_versions = ch_versions.mix(REPORT.out.versions)
+
+    // QC chains off REPORT.out.sdata for the same reason MERGE_SPATIALDATA does:
+    // REPORT deletes .sopa_cache from the store, so reading it concurrently would race
+    // a writer. Both would otherwise see the same cells.
+    //
+    // After AGGREGATE, necessarily: the cross-cycle nuclear comparison and the
+    // clustering both read the per-cell intensity matrix, which does not exist until
+    // aggregation has written it.
+    if (params.use_qc) {
+        def ch_qc_markers = params.use_preprocessing
+            ? PREPROCESS_IMAGES.out.markers
+            : channel.empty()
+        def ch_unsubtracted = params.use_preprocessing
+            ? PREPROCESS_IMAGES.out.unsubtracted
+            : channel.empty()
+
+        QC(REPORT.out.sdata, ch_qc_markers, ch_unsubtracted)
+        ch_versions = ch_versions.mix(QC.out.versions)
+    }
 
     // TMA cores are merged only at the very end, once every core has been
     // through every step on its own. Merging earlier would mean segmenting and

@@ -17,7 +17,7 @@ Priorities, in order: transparency, robustness, troubleshootability.
 | 4. Resource profiles   | Done — `size_tiny`/`small`/`medium`/`huge`, `slurm`                       |
 | 5. Containers          | Done — 7 images, manifest, pre-staging documented                         |
 | 6. Testing             | Done — unit, stub and fixture tiers, CI                                   |
-| 7. QC report           | Not started                                                               |
+| 7. QC report           | Metrics, images and report wired in; thresholds still need real datasets  |
 | 8. Release 1.0.0       | Not started                                                               |
 
 Version `0.1.0dev`. Lint: 241 passed, 35 ignored, 5 warnings, 0 failed.
@@ -69,6 +69,16 @@ already-planned move to a samplesheet column, rather than breaking the format th
 
 ## Open
 
+- **Boolean parameters cannot be set from the command line.** `--use_qc false` leaves QC enabled,
+  and so does `--use_qc=false`. Nextflow hands the value over as the string `"false"`, and a
+  non-empty string is truthy in Groovy, so every `if (params.use_*)` in the pipeline takes the
+  wrong branch. Verified against both a new parameter and an existing one: `--use_cellpose false`
+  does not disable Cellpose either, while a params file carrying a real YAML boolean works
+  correctly. So this is not one parameter's bug, it is every boolean switch the pipeline has, and
+  the failure is silent — a run asked to skip background subtraction performs it and reports
+  success. The fix belongs in one place, coercing the declared booleans once at pipeline
+  initialisation beside `validateIlluminationColumns`, rather than at each use site. Until then
+  `docs/output.md` tells users to pass a params file.
 - **Run-level resource QC is deferred, and the reason is structural.** Failed and retried task
   counts and peak RSS per task all live in `pipeline_info/execution_trace_*.txt`, which Nextflow
   only finalises when the run ends — so no process inside the DAG can read its own run's trace, and
