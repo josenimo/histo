@@ -135,15 +135,23 @@ already-planned move to a samplesheet column, rather than breaking the format th
   is no reading at all, which is every row on macOS without a container engine. Worth having: the
   published WSI run peaked at 8.7 GB in BASICPY, and `TO_SPATIALDATA` reported exactly 8.00 GiB,
   which looks like a ceiling rather than a measurement.
-- **`min_area_pixels2` may not be filtering anything.** Measured on the published WSI run: the
-  smallest cell in the table is 4.3 px² and 1% of cells are under 48.6 px², against a `nextflow.config`
-  comment that says leaving the parameter `null` lets sopa derive the floor as `(diameter/2)²`, which
-  for that run's `cellpose_diameter = 35` would be about 306 px². `argsCLI()` skips nulls, so
-  `--min-area` genuinely never reached the CLI and sopa's own default applied. Either that comment
-  describes a derivation sopa does not do, or the floor is applied per patch before
-  `RESOLVE_CELLPOSE` stitches boundaries across patch seams and the fragments it creates are not
-  re-filtered. Both are worth knowing and the two are distinguished by one run with an explicit
-  `--min-area`. Until then the comment is asserting something the data contradicts.
+- **`min_area_pixels2 = null` filters nothing, and the reason is now known.** No cluster run was
+  needed after all; sopa's source answers it. `sopa/segmentation/methods/_cellpose.py` does
+  `if min_area is None: min_area = (diameter / 2) ** 2`, so the derivation `nextflow.config`
+  described is real, but it lives in the Python API. The CLI this pipeline calls declares
+  `min_area: int = typer.Option(0, ...)` in `sopa/cli/segmentation.py`, so `argsCLI()` skipping the
+  null means no `--min-area` is passed and typer supplies 0 rather than the None that would trigger
+  the derivation. Filtering is therefore off, which matches the published WSI run: smallest cell
+  4.3 px², 1% under 48.6 px², against the ~306 px² that `(35/2)²` implies. Neither of the two
+  hypotheses recorded here was right; the comment was describing a real derivation on a code path
+  this pipeline does not use. The comment now says so. **Open decision:** whether to pass
+  `(cellpose_diameter / 2)²` explicitly when the parameter is null, which would reproduce sopa's
+  documented intent in one line of `extractSubArgs`, or to keep filtering off by default. That
+  changes segmentation results, so it is a scientific call rather than a fix. Note also that
+  `sopa/cli/resolve.py` takes a `min_area` in **microns²** while the segmentation CLI takes
+  pixels²; this pipeline only routes to the latter, so there is no unit mismatch today, but there
+  would be if the parameter were ever wired to resolve.
+
 - **A misspelt parameter does not fail the run.** `pipeline_info/params_*.json` from the published
   run records both `use_use_tma_dearray` and `use_tma_dearray`, with `validate_params = true`. The
   typo was accepted and silently ignored, so a run configured with `use_use_tma_dearray = true`
