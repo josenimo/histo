@@ -110,6 +110,10 @@ workflow PREPROCESS_IMAGES {
         // The sheet that describes what the image now contains. backsub can drop
         // background channels, so its rewritten markerout is the truthful one and
         // the input sheet would name channels that no longer exist.
+        //
+        // .first() makes this a value channel, which is what lets one sheet serve
+        // every sample. See the note on the emit below: as a queue channel it would
+        // be consumed once and silently truncate the run.
         ch_effective_markers = BACKSUB.out.markerout.map { _meta, markers -> markers }.first()
     }
     else {
@@ -128,6 +132,7 @@ workflow PREPROCESS_IMAGES {
             }
             .flatten()
             .collectFile(name: 'markers_effective.csv', sort: false, newLine: true)
+            .first()
     }
 
     //
@@ -183,8 +188,21 @@ workflow PREPROCESS_IMAGES {
         ? ASHLAR.out.tif
         : channel.empty()
 
+    // markers is a value channel in both branches, deliberately.
+    //
+    // One marker sheet serves every sample, so a consumer has to be able to read it
+    // once per sample. A queue channel holding a single item is instead paired
+    // element-wise against the images and the process stops at the shorter of the
+    // two, so a dearrayed slide with four cores runs the consumer once, drops three
+    // cores, and exits 0. That is not hypothetical: the same mistake in the QC
+    // subworkflow produced exactly one report for a four-core slide, which is why
+    // `.first()` appears there too.
+    //
+    // Emitting a value channel from here rather than fixing it at each call site
+    // means a new consumer cannot get this wrong.
+
     emit:
     images       = ch_images          // channel: [ val(meta), path(image) ] one per sample, or one per TMA core
-    markers      = ch_effective_markers  // channel: path(csv) describing the channels the images actually have
+    markers      = ch_effective_markers  // value channel: path(csv) describing the channels the images actually have
     unsubtracted = ch_unsubtracted    // channel: [ val(meta), path(tif) ] Ashlar's output, pre-subtraction
 }
