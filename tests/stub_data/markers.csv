@@ -1,0 +1,5 @@
+channel_number,cycle_number,marker_name,channel_role,channel_compartment
+1,1,DNA_6,dna,nuclear
+2,1,ELANE,marker,cytoplasm
+3,2,DNA_7,dna,nuclear
+4,2,CD11B,marker,membrane

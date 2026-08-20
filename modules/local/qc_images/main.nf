@@ -12,8 +12,9 @@ process QC_IMAGES {
 :         'community.wave.seqera.io/library/python_sopa:54a97bc5a187152d' }"
 
     input:
-    tuple val(meta), path(sdata_path)
-    path markers
+    // markers is per sample, carried in the tuple so it is matched by key rather
+    // than broadcast.
+    tuple val(meta), path(sdata_path), path(markers)
 
     output:
     // A directory, because the count of PNGs depends on the number of clusters the data

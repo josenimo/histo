@@ -13,8 +13,9 @@ process QC_METRICS {
     // come in as an input rather than be read from the publish directory, because a
     // task must not depend on another task's published output -- that is not staged,
     // and with -resume it may not exist.
-    tuple val(meta), path(sdata_path), path(unsubtracted)
-    path markers
+    // markers is per sample, carried in the tuple so it is matched by key rather
+    // than broadcast.
+    tuple val(meta), path(sdata_path), path(unsubtracted), path(markers)
 
     output:
     tuple val(meta), path("${meta.sample}_qc.json"), emit: metrics

@@ -22,37 +22,37 @@ include { QC_REPORT  } from '../../../modules/local/qc_report'
 workflow QC {
     take:
     ch_sdata         // channel: [ val(meta), path(sdata) ]
-    ch_markers       // channel: path(csv), or an empty channel
+    ch_markers       // channel: [ val(meta), path(csv) ], or an empty channel
     ch_unsubtracted  // channel: [ val(meta), path(tif) ], or an empty channel
 
     main:
 
     def ch_versions = channel.empty()
 
-    // One marker sheet serves every sample, so it has to reach the process as a value
-    // channel. As a queue channel holding one item, Nextflow pairs it element-wise
-    // against the stores and stops at the shorter one: a dearrayed slide with four cores
-    // produced exactly one report and no error. `.first()` makes it a value channel so
-    // it is broadcast instead, which is the same reason PREPROCESS_IMAGES calls
-    // `.first()` on its own markerout.
+    // join(..., remainder: true) on meta pairs each store with its own marker sheet and
+    // its own pre-subtraction image, and keeps stores that have neither.
     //
-    // ifEmpty([]) covers the pre-stitched path, where preprocessing never ran and
-    // nothing describes the channels; [] collapses to no --markers flag in the module.
-    def markers = ch_markers.ifEmpty([]).first()
-
-    // join() on meta pairs each store with its own pre-subtraction image. remainder
-    // keeps stores that have no match, which is every store when backsub did not run
-    // or the slide was dearrayed, and fills the missing side with null -> [].
-    def ch_metrics_input = ch_sdata
+    // remainder matters for both. The pre-subtraction image exists only when backsub
+    // ran on a slide that was not dearrayed. The marker sheet is absent on the
+    // pre-stitched path, where preprocessing never ran and nothing describes the
+    // channels. A missing side arrives as null and becomes [], which collapses to no
+    // flag at all in the module.
+    //
+    // This used to be one unkeyed sheet made into a value channel with `.first()` so it
+    // could be broadcast. Keyed per sample it is an ordinary join, and the failure that
+    // workaround existed to avoid, a four-core slide producing one report, cannot be
+    // expressed any more.
+    def ch_qc_input = ch_sdata
         .join(ch_unsubtracted, remainder: true)
-        .map { meta, sdata, tif -> [meta, sdata, tif ?: []] }
-        .filter { _meta, sdata, _tif -> sdata }
+        .join(ch_markers, remainder: true)
+        .map { meta, sdata, tif, markers -> [meta, sdata, tif ?: [], markers ?: []] }
+        .filter { _meta, sdata, _tif, _markers -> sdata }
 
-    QC_METRICS(ch_metrics_input, markers)
+    QC_METRICS(ch_qc_input)
     ch_versions = ch_versions.mix(QC_METRICS.out.versions)
 
     if (params.use_qc_images) {
-        QC_IMAGES(ch_sdata, markers)
+        QC_IMAGES(ch_qc_input.map { meta, sdata, _tif, markers -> [meta, sdata, markers] })
         ch_versions = ch_versions.mix(QC_IMAGES.out.versions)
         ch_report_input = QC_METRICS.out.metrics.join(QC_IMAGES.out.images)
     }

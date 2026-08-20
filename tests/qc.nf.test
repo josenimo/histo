@@ -35,7 +35,10 @@ nextflow_workflow {
                     [ id: 'testsample', sample: 'testsample' ],
                     file("\${projectDir}/tests/stub_data", checkIfExists: true)
                 ])
-                input[1] = Channel.of(file("\${projectDir}/tests/samplesheet.csv", checkIfExists: true))
+                input[1] = Channel.of([
+                    [ id: 'testsample', sample: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                ])
                 input[2] = Channel.of([
                     [ id: 'testsample', sample: 'testsample' ],
                     file("\${projectDir}/tests/stub_data/cycle01.ome.tiff", checkIfExists: true)
@@ -69,7 +72,10 @@ nextflow_workflow {
                     [ id: 'testsample', sample: 'testsample' ],
                     file("\${projectDir}/tests/stub_data", checkIfExists: true)
                 ])
-                input[1] = Channel.of(file("\${projectDir}/tests/samplesheet.csv", checkIfExists: true))
+                input[1] = Channel.of([
+                    [ id: 'testsample', sample: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                ])
                 input[2] = Channel.empty()
                 """
             }
@@ -127,7 +133,16 @@ nextflow_workflow {
                         file("\${projectDir}/tests/stub_data", checkIfExists: true)
                     ]
                 )
-                input[1] = Channel.of(file("\${projectDir}/tests/samplesheet.csv", checkIfExists: true))
+                input[1] = Channel.of(
+                    [
+                        [ id: 'slide_core001', sample: 'slide_core001', slide: 'slide' ],
+                        file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                    ],
+                    [
+                        [ id: 'slide_core002', sample: 'slide_core002', slide: 'slide' ],
+                        file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                    ]
+                )
                 input[2] = Channel.empty()
                 """
             }

@@ -20,10 +20,16 @@ Two files: a samplesheet and a marker sheet.
 **Samplesheet**, one row per acquisition cycle:
 
 ```csv
-sample,cycle_number,image_tiles
-mysample,1,/abs/path/cycle01.ome.tiff
-mysample,2,/abs/path/cycle02.ome.tiff
+sample,cycle_number,image_tiles,marker_sheet
+mysample,1,/abs/path/cycle01.ome.tiff,/abs/path/markers_mysample.csv
+mysample,2,/abs/path/cycle02.ome.tiff,/abs/path/markers_mysample.csv
+othersample,1,/abs/path/other_cycle01.ome.tiff,/abs/path/markers_other.csv
 ```
+
+`marker_sheet` is required and names the sheet for that sample. It repeats on every cycle row of a
+sample and every copy must be the same file, because the sheet describes the whole stitched image
+rather than one cycle of it. Two samples may name different sheets, which is the reason this is a
+column rather than a parameter: one run can carry samples with different channel layouts.
 
 Optional `dfp` and `ffp` columns supply pre-computed illumination profiles. If you give them for one
 cycle you must give them for all; otherwise BaSiCPy computes them.
@@ -66,7 +72,6 @@ Only `input`, `outdir` and a segmentation backend are required. Everything below
 | Parameter                     | Default              | Change it when                                                                                         |
 | ----------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------ |
 | `use_preprocessing`           | `true`               | Your image is already stitched. Then the samplesheet is one row per sample with a `data_path` column.  |
-| `marker_sheet`                | none                 | Required when `use_preprocessing` is true.                                                             |
 | `ashlar_args`                 | `--maximum-shift 30` | Stitching misaligns.                                                                                   |
 | `use_backsub`                 | `false`              | You have background channels to subtract.                                                              |
 | `use_tma_dearray`             | `false`              | Your slide is a tissue microarray. Each core is then processed alone and the results merged per slide. |
@@ -120,7 +125,6 @@ launched from.
 
 ```yaml
 input: /abs/path/samplesheet.csv
-marker_sheet: /abs/path/markers.csv
 outdir: /abs/path/results
 
 use_preprocessing: true

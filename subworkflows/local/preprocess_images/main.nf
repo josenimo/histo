@@ -17,7 +17,7 @@ include { COREOGRAPH } from '../../../modules/nf-core/coreograph/main'
 workflow PREPROCESS_IMAGES {
     take:
     ch_cycles // channel: [ val(meta), path(image_tiles), path(dfp), path(ffp) ]
-    ch_markersheet // channel: list of marker rows, or empty
+    ch_markersheet // channel: [ val(meta), path(csv) ] one marker sheet per sample, or empty
 
     main:
 
@@ -76,28 +76,18 @@ workflow PREPROCESS_IMAGES {
     //
     // Background subtraction. Optional, off by default.
     //
-    // backsub wants a marker file with exactly the six columns it reads, so the
-    // sheet is rewritten rather than passed through: nulls become empty strings,
-    // and the extra columns are dropped. Same approach as nf-core/mcmicro.
+    // The sheet is passed through as the user wrote it. backsub reads it with
+    // pd.read_csv and addresses columns by name, so columns it has no use for,
+    // channel_role and channel_compartment among them, are carried through to its
+    // marker output rather than rejected. nf-core/mcmicro rewrites the sheet to six
+    // columns; that is not required, and rewriting it here is what previously forced
+    // the sheet to be a single broadcast file rather than one per sample.
     //
     if (params.use_backsub) {
-        ch_backsub_markers = ch_markersheet
-            .map { rows ->
-                [
-                    'channel_number,cycle_number,marker_name,exposure,background,remove',
-                    rows.collect { r ->
-                        [r.channel_number, r.cycle_number, r.marker_name, r.exposure, r.background, r.remove].join(',')
-                    },
-                ]
-            }
-            .flatten()
-            .map { it.replaceAll('(?<=,|^)null(?=,|$)', '') }
-            .collectFile(name: 'markers_backsub.csv', sort: false, newLine: true)
-
-        // combine() rather than join(): one marker sheet serves every sample, so
-        // it is broadcast against the images rather than matched by key.
+        // join() rather than combine(): each sample brings its own sheet, so the two
+        // are matched by key instead of one sheet being broadcast over every image.
         ASHLAR.out.tif
-            .combine(ch_backsub_markers)
+            .join(ch_markersheet)
             .multiMap { meta, image, markers ->
                 image: [meta, image]
                 markers: [meta, markers]
@@ -107,32 +97,22 @@ workflow PREPROCESS_IMAGES {
         BACKSUB(ch_backsub.image, ch_backsub.markers)
         ch_registered = BACKSUB.out.backsub_tif
 
-        // The sheet that describes what the image now contains. backsub can drop
-        // background channels, so its rewritten markerout is the truthful one and
-        // the input sheet would name channels that no longer exist.
+        // The sheet that describes what the image now contains, per sample.
         //
-        // .first() makes this a value channel, which is what lets one sheet serve
-        // every sample. See the note on the emit below: as a queue channel it would
-        // be consumed once and silently truncate the run.
-        ch_effective_markers = BACKSUB.out.markerout.map { _meta, markers -> markers }.first()
+        // backsub writes a new sheet rather than echoing its input, and the
+        // difference matters twice over: rows whose remove column is set are gone,
+        // and channel_number is renumbered 1..N across what survives. So the input
+        // sheet would both name channels the image no longer has and number the rest
+        // wrongly, which is why this is the sheet everything downstream reads.
+        ch_effective_markers = BACKSUB.out.markerout
     }
     else {
         ch_registered = ASHLAR.out.tif
 
-        // No backsub, so the input sheet still describes the image. Written out as a
-        // file rather than passed as rows, so that whatever consumes it downstream
-        // takes the same shape in both branches.
+        // No backsub, so the sheet from the samplesheet still describes the image
+        // exactly, and it is passed through untouched. Every consumer parses the CSV
+        // by column name and ignores what it does not need.
         ch_effective_markers = ch_markersheet
-            .map { rows ->
-                [
-                    'channel_number,marker_name',
-                    rows.sort { a, b -> (a.channel_number as int) <=> (b.channel_number as int) }
-                        .collect { r -> "${r.channel_number},${r.marker_name}" },
-                ]
-            }
-            .flatten()
-            .collectFile(name: 'markers_effective.csv', sort: false, newLine: true)
-            .first()
     }
 
     //
@@ -169,6 +149,19 @@ workflow PREPROCESS_IMAGES {
                 }
                 [meta + [id: core_id, slide: meta.id], core]
             }
+
+        // Each core inherits its slide's marker sheet. Dearraying cuts the image up
+        // but does not change what was stained, so every core of a slide has the same
+        // channels.
+        //
+        // combine(by: 0) rather than join(): join pairs one item per key and a slide
+        // has many cores, so it would keep the first core and drop the rest. Re-keying
+        // to the core rather than leaving this keyed by slide means every consumer
+        // downstream joins on the same meta it already uses.
+        ch_effective_markers = ch_images
+            .map { meta, _core -> [[id: meta.slide], meta] }
+            .combine(ch_effective_markers.map { meta, sheet -> [meta.subMap('id'), sheet] }, by: 0)
+            .map { _slide, core_meta, sheet -> [core_meta, sheet] }
     }
     else {
         ch_images = ch_registered
@@ -188,21 +181,18 @@ workflow PREPROCESS_IMAGES {
         ? ASHLAR.out.tif
         : channel.empty()
 
-    // markers is a value channel in both branches, deliberately.
+    // markers is keyed the same way images is, one entry per sample or per core.
     //
-    // One marker sheet serves every sample, so a consumer has to be able to read it
-    // once per sample. A queue channel holding a single item is instead paired
-    // element-wise against the images and the process stops at the shorter of the
-    // two, so a dearrayed slide with four cores runs the consumer once, drops three
-    // cores, and exits 0. That is not hypothetical: the same mistake in the QC
-    // subworkflow produced exactly one report for a four-core slide, which is why
-    // `.first()` appears there too.
-    //
-    // Emitting a value channel from here rather than fixing it at each call site
-    // means a new consumer cannot get this wrong.
+    // It used to be a single unkeyed file broadcast to everything, which is a shape
+    // that only works by accident: as a queue channel holding one item it gets paired
+    // element-wise against the images and the consuming process stops at the shorter
+    // of the two, so a four-core slide had its channels named on one core and the
+    // other three vanished with the run reporting success. `.first()` papers over that
+    // by making the channel a value channel; keying it per sample removes the
+    // possibility instead, and is what the sheet being per sample demanded anyway.
 
     emit:
     images       = ch_images          // channel: [ val(meta), path(image) ] one per sample, or one per TMA core
-    markers      = ch_effective_markers  // value channel: path(csv) describing the channels the images actually have
+    markers      = ch_effective_markers  // channel: [ val(meta), path(csv) ] the channels each image actually has
     unsubtracted = ch_unsubtracted    // channel: [ val(meta), path(tif) ] Ashlar's output, pre-subtraction
 }
