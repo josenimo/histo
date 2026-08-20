@@ -116,11 +116,14 @@ workflow PIPELINE_INITIALISATION {
         // Rows arrive as [meta, image_tiles, dfp, ffp, marker_sheet], in schema
         // property order. Read once and used twice: for the cycles themselves, and
         // for the per-sample marker sheets below.
-        cycle_rows = validateMarkerSheetColumn(
-            validateIlluminationColumns(
-                samplesheetToList(params.input, "${projectDir}/assets/schema_input_cycle.json")
-            )
-        )
+        cycle_rows = samplesheetToList(params.input, "${projectDir}/assets/schema_input_cycle.json")
+
+        // Called for their assertions rather than their return value, which is the rows
+        // unchanged. Sequential rather than nested so that adding a fourth check does not
+        // mean another layer of brackets.
+        validateIlluminationColumns(cycle_rows)
+        validateCycleNumbers(cycle_rows)
+        validateMarkerSheetColumn(cycle_rows)
 
         Channel
             .fromList(cycle_rows)
@@ -160,6 +163,9 @@ workflow PIPELINE_INITIALISATION {
     //
     // Sopa params validation
     //
+    rejectSpacedBooleans(workflow.commandLine)
+    rejectStringBooleans(params)
+    rejectUnknownParams(params)
     validateParams(params)
 
     //
@@ -352,6 +358,50 @@ def validateIlluminationColumns(rows) {
 }
 
 //
+// cycle_number must run 1..N per sample, without repeats and without gaps.
+//
+// A repeat is the dangerous case and it has happened: a real three-cycle run whose sheet
+// numbered the cycles 1, 2, 2. meta is built from sample and cycle_number alone, so two
+// rows sharing both produce identical meta maps, and meta is the join key that attaches
+// each cycle's BaSiCPy profile to its image in preprocess_images/main.nf. Which cycle
+// receives which profile then depends on task completion order, and the groupTuple sort
+// beside it ties the same way. The run succeeds with no guarantee that the profiles match
+// their images, which is silent misregistration.
+//
+// assets/schema_input_cycle.json has always promised "sequential and without gaps" in its
+// errorMessage, but JSON Schema validates each row on its own and cannot see across rows,
+// so that message described a check nobody had written. This is that check.
+//
+// Gaps have no known failure mode, unlike repeats. They are rejected anyway because the
+// schema says they are, because cycle_number is an index and an index with a hole in it
+// usually means a cycle went missing on the way to the samplesheet, and because a run
+// that quietly processes two of three cycles is the kind of thing this pipeline exists to
+// make visible. If that ever blocks something legitimate, this is the paragraph to argue
+// with.
+//
+def validateCycleNumbers(rows) {
+    rows.groupBy { it[0].id }.each { sample, cycles ->
+        def numbers = cycles.collect { it[0].cycle_number }.sort()
+        def expected = (1..numbers.size()).toList()
+
+        def repeated = numbers.countBy { it }.findAll { _n, count -> count > 1 }.keySet().sort()
+        assert !repeated : (
+            "Sample '${sample}': cycle_number is repeated: ${repeated}. Cycles are identified " +
+            "by sample and cycle_number together, so two rows sharing both are the same cycle " +
+            "as far as the pipeline can tell, and each cycle's illumination profile would be " +
+            "attached to whichever image finished first. Number the cycles 1..${numbers.size()}."
+        )
+
+        assert numbers == expected : (
+            "Sample '${sample}': cycle_number must run 1..${numbers.size()} without gaps. " +
+            "Got ${numbers}. A gap usually means a cycle is missing from the samplesheet, and " +
+            "the pipeline would process the rest without remarking on it."
+        )
+    }
+    return rows
+}
+
+//
 // The marker sheet is per sample, but the samplesheet has one row per cycle, so the
 // column repeats. All copies must agree.
 //
@@ -469,6 +519,184 @@ def validateMarkersheet(rows, sample = null) {
     }
 
     return rows
+}
+
+//
+// Every parameter the schema declares, as name to definition.
+//
+// Read from nextflow_schema.json so the schema stays the single source of truth: a new
+// parameter is declared once and every check here picks it up without a second edit.
+// Parameters live in the $defs groups, with a handful at the top level.
+//
+def schemaParams() {
+    def schema = new groovy.json.JsonSlurper().parseText(
+        file("${projectDir}/nextflow_schema.json").text
+    )
+    def declared = [:]
+    declared.putAll(schema.properties ?: [:])
+    (schema['$defs'] ?: [:]).each { _group, body ->
+        declared.putAll(body.properties ?: [:])
+    }
+    return declared
+}
+
+//
+// A boolean written with a space is destroyed before the pipeline can see the value.
+//
+// `--use_qc false` does not leave QC enabled through string truthiness, which is what it
+// looks like. Nextflow reads `--use_qc` as a bare flag, sets it to boolean true, and
+// discards the `false` entirely: it is not in params, and it is not in the positional
+// args either. So the run explicitly enables the step the user asked to switch off, and
+// by the time any code runs, `params.use_qc` is indistinguishable from the default.
+//
+// workflow.commandLine is the only place the value survives, which is why this reads a
+// string rather than inspecting params. Taken as an argument rather than read from the
+// global so the check can be tested.
+//
+// `--use_qc true` is rejected too. It happens to produce the right answer, for the same
+// reason `--use_qc false` produces the wrong one, and a form that works for one value
+// and silently inverts the other is worse than one that never works.
+//
+def rejectSpacedBooleans(command_line) {
+    if (!command_line) {
+        return command_line
+    }
+
+    def booleans = schemaParams().findAll { _name, definition -> definition.type == 'boolean' }.keySet()
+
+    // Tokenised rather than matched with a regex, because the command line arrives with
+    // the offending pair quoted as `'--use_qc false'` and because an interpolated slashy
+    // pattern does not survive the Nextflow 26 parser. Quotes become separators, and
+    // tokenize discards the empties that leaves behind.
+    def tokens = command_line.replace("'", " ").replace('"', " ").tokenize(" ")
+
+    def offenders = []
+    tokens.eachWithIndex { token, i ->
+        if (!token.startsWith("--")) {
+            return
+        }
+        def name = token.substring(2)
+        // A following token starting with `-` is the next option, so the flag was bare
+        // and nothing was swallowed. `--use_qc=false` is a single token and is not
+        // matched here; rejectStringBooleans catches that form.
+        if (name in booleans && i + 1 < tokens.size() && !tokens[i + 1].startsWith("-")) {
+            offenders << "  --${name} ${tokens[i + 1]}"
+        }
+    }
+    offenders = offenders.sort()
+
+    if (!offenders) {
+        return command_line
+    }
+
+    error(
+        "Boolean parameter(s) written with a space:\n${offenders.join('\n')}\n\n" +
+        "Nextflow reads the flag on its own and throws the value away, so each of these " +
+        "is enabled regardless of what follows it. The value never reaches the pipeline, " +
+        "which is why this has to be caught here rather than checked after the fact.\n\n" +
+        "Use a params file, where the value is a real boolean:\n\n" +
+        "    nextflow run . -params-file params.yml\n\n" +
+        "To switch a boolean on, a bare flag is enough: `--use_cellpose`."
+    )
+}
+
+//
+// A boolean given as a string is a boolean that will be read the wrong way round.
+//
+// `--use_qc=false` reaches the pipeline as the string "false", and every non-empty
+// string is true in Groovy, so `if (params.use_qc)` takes the enabled branch. This
+// affects every boolean the pipeline declares, not one of them.
+//
+// It cannot be fixed by coercing the value. params is a ScriptBinding$ParamsMap, which
+// ignores writes to a key that is already set: both `params.use_qc = false` and
+// `params.putAll([use_qc: false])` return without error and change nothing. Verified on
+// Nextflow 26.04.6. So the only honest options are to fail or to read the value through
+// a helper at every use site, and failing once at startup beats a helper that someone
+// eventually forgets.
+//
+// A bare `--use_qc` also arrives as a string, "true", and that one is both idiomatic and
+// correct, so only strings that do not mean true are rejected.
+//
+def rejectStringBooleans(params) {
+    def declared = schemaParams()
+    def offenders = declared
+        .findAll { name, definition ->
+            definition.type == 'boolean' &&
+                params.containsKey(name) &&
+                params[name] instanceof CharSequence &&
+                params[name].toString().toLowerCase() != 'true'
+        }
+        .collect { name, _definition -> "  --${name}=${params[name]}" }
+        .sort()
+
+    if (!offenders) {
+        return params
+    }
+
+    error(
+        "Boolean parameter(s) given as text on the command line:\n${offenders.join('\n')}\n\n" +
+        "Nextflow passes these through as strings, and every non-empty string is true in " +
+        "Groovy, so the pipeline would read each of these as enabled and do the opposite " +
+        "of what was asked while reporting success. The value cannot be corrected here " +
+        "because a parameter already set on the command line is not writable. Use a " +
+        "params file instead, where `false` is a real boolean:\n\n" +
+        "    nextflow run . -params-file params.yml\n\n" +
+        "To switch a boolean on, a bare flag works: `--use_cellpose`."
+    )
+}
+
+//
+// Reject parameters the schema does not declare.
+//
+// `use_use_tma_dearray = true` reached a real run: pipeline_info/params_*.json from
+// the published WSI run records both the typo and the real parameter, with
+// validate_params true. The typo was accepted, silently ignored, and the run did the
+// opposite of what it asked for while reporting success.
+//
+// nf-schema is supposed to do this. `validation.failUnrecognisedParams` is documented
+// and its value is read, but the field it assigns to is never declared on
+// ValidationConfig, so setting the option aborts the run with
+// `MissingPropertyException: No such property: failUnrecognisedParams`. Checked
+// against the source at tags 2.7.2, 2.7.3 and 2.8.0, which is every release at the
+// time of writing, and there is no upstream issue for it. Delete this function and
+// set the option once that is fixed.
+//
+// Unknown samplesheet columns need nothing here: `additionalProperties: false` in the
+// sheet schemas already rejects them, which is what `validation.failUnrecognisedHeaders`
+// would otherwise have been for.
+//
+def rejectUnknownParams(params) {
+    def declared = schemaParams().keySet()
+
+    // Set by the tooling rather than by a user, so absent from the schema by design.
+    def injected = [
+        'nf_test_output',  // nf-test, which is also in nf-schema's own default ignore list
+    ] as Set
+
+    def unknown = (params.keySet() - declared - injected).sort()
+    if (!unknown) {
+        return params
+    }
+
+    // A doubled prefix is the typo that got through, and `use_use_tma_dearray`
+    // contains `use_tma_dearray`, so plain containment finds it. Cheap, and it never
+    // claims a match it cannot show.
+    def hints = unknown.collectEntries { name ->
+        def near = declared.findAll { d -> d != name && (d.contains(name) || name.contains(d)) }.sort()
+        [(name): near]
+    }
+
+    def lines = unknown.collect { name ->
+        hints[name] ? "  ${name}  (did you mean: ${hints[name].join(', ')}?)" : "  ${name}"
+    }
+
+    error(
+        "Unrecognised parameter(s):\n${lines.join('\n')}\n\n" +
+        "Every parameter must be declared in nextflow_schema.json. A parameter that is " +
+        "not declared is silently ignored, so a run configured with a misspelt switch " +
+        "does the opposite of what was asked and still reports success. Run with --help " +
+        "to list the parameters this pipeline accepts."
+    )
 }
 
 def validateParams(params) {

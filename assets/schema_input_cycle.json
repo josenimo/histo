@@ -17,7 +17,7 @@
             "cycle_number": {
                 "type": "integer",
                 "minimum": 1,
-                "description": "1-based acquisition cycle. Determines the order in which cycles are passed to Ashlar, and must match the cycle_number column of the marker sheet.",
+                "description": "1-based acquisition cycle. Determines the order in which cycles are passed to Ashlar, and must match the cycle_number column of the marker sheet. Must run 1..N per sample without repeats or gaps: a repeat makes two rows indistinguishable, since a cycle is identified by sample and cycle_number together. JSON Schema validates rows independently and cannot express that, so it is checked by validateCycleNumbers at startup.",
                 "errorMessage": "cycle_number must be an integer of 1 or greater, sequential and without gaps",
                 "meta": "cycle_number"
             },

@@ -27,6 +27,7 @@
                 "errorMessage": "Data path must exist and not contain spaces"
             }
         },
-        "required": ["data_path"]
+        "required": ["data_path"],
+        "additionalProperties": false
     }
 }

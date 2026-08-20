@@ -113,16 +113,18 @@ already-planned move to a samplesheet column, rather than breaking the format th
   tools, so `CITATIONS.md` is not strictly wrong, but the QC report's clustering is scanpy's Leiden
   via igraph and that is a scientific method presented in output a reader may act on. Cite both, or
   drop the clustering, before tagging 1.0.0.
-- **Boolean parameters cannot be set from the command line.** `--use_qc false` leaves QC enabled,
-  and so does `--use_qc=false`. Nextflow hands the value over as the string `"false"`, and a
-  non-empty string is truthy in Groovy, so every `if (params.use_*)` in the pipeline takes the
-  wrong branch. Verified against both a new parameter and an existing one: `--use_cellpose false`
-  does not disable Cellpose either, while a params file carrying a real YAML boolean works
-  correctly. So this is not one parameter's bug, it is every boolean switch the pipeline has, and
-  the failure is silent — a run asked to skip background subtraction performs it and reports
-  success. The fix belongs in one place, coercing the declared booleans once at pipeline
-  initialisation beside `validateIlluminationColumns`, rather than at each use site. Until then
-  `docs/output.md` tells users to pass a params file.
+- **Booleans still cannot be set on the command line, but the attempt now fails instead of
+  inverting.** Two separate mechanisms, and the roadmap previously described only one of them.
+  `--use_qc=false` arrives as the string `"false"`, which is truthy in Groovy. `--use_qc false` is
+  different and worse: Nextflow reads the flag on its own, sets it to boolean `true`, and discards
+  the `false` entirely, so it reaches neither `params` nor the positional args and the run
+  explicitly enables what it was asked to skip. Both are rejected at startup now.
+  **Coercing the value, which this entry used to propose, is not possible.** `params` is a
+  `ScriptBinding$ParamsMap` and ignores writes to a key that is already set: `params.use_qc = false`
+  and `params.putAll([use_qc: false])` both return without error and change nothing, verified on
+  Nextflow 26.04.6. Making the spaced form work would need a change in Nextflow, since the value is
+  destroyed before any pipeline code runs. A params file remains the way to set a boolean, and a
+  bare flag remains the way to switch one on.
 - **Run-level resource QC is deferred, and the reason is structural.** Failed and retried task
   counts and peak RSS per task all live in `pipeline_info/execution_trace_*.txt`, which Nextflow
   only finalises when the run ends — so no process inside the DAG can read its own run's trace, and
@@ -133,49 +135,44 @@ already-planned move to a samplesheet column, rather than breaking the format th
   is no reading at all, which is every row on macOS without a container engine. Worth having: the
   published WSI run peaked at 8.7 GB in BASICPY, and `TO_SPATIALDATA` reported exactly 8.00 GiB,
   which looks like a ceiling rather than a measurement.
-- **`min_area_pixels2` may not be filtering anything.** Measured on the published WSI run: the
-  smallest cell in the table is 4.3 px² and 1% of cells are under 48.6 px², against a `nextflow.config`
-  comment that says leaving the parameter `null` lets sopa derive the floor as `(diameter/2)²`, which
-  for that run's `cellpose_diameter = 35` would be about 306 px². `argsCLI()` skips nulls, so
-  `--min-area` genuinely never reached the CLI and sopa's own default applied. Either that comment
-  describes a derivation sopa does not do, or the floor is applied per patch before
-  `RESOLVE_CELLPOSE` stitches boundaries across patch seams and the fragments it creates are not
-  re-filtered. Both are worth knowing and the two are distinguished by one run with an explicit
-  `--min-area`. Until then the comment is asserting something the data contradicts.
+- **`min_area_pixels2 = null` filters nothing, and the reason is now known.** No cluster run was
+  needed after all; sopa's source answers it. `sopa/segmentation/methods/_cellpose.py` does
+  `if min_area is None: min_area = (diameter / 2) ** 2`, so the derivation `nextflow.config`
+  described is real, but it lives in the Python API. The CLI this pipeline calls declares
+  `min_area: int = typer.Option(0, ...)` in `sopa/cli/segmentation.py`, so `argsCLI()` skipping the
+  null means no `--min-area` is passed and typer supplies 0 rather than the None that would trigger
+  the derivation. Filtering is therefore off, which matches the published WSI run: smallest cell
+  4.3 px², 1% under 48.6 px², against the ~306 px² that `(35/2)²` implies. Neither of the two
+  hypotheses recorded here was right; the comment was describing a real derivation on a code path
+  this pipeline does not use. The comment now says so. **Open decision:** whether to pass
+  `(cellpose_diameter / 2)²` explicitly when the parameter is null, which would reproduce sopa's
+  documented intent in one line of `extractSubArgs`, or to keep filtering off by default. That
+  changes segmentation results, so it is a scientific call rather than a fix. Note also that
+  `sopa/cli/resolve.py` takes a `min_area` in **microns²** while the segmentation CLI takes
+  pixels²; this pipeline only routes to the latter, so there is no unit mismatch today, but there
+  would be if the parameter were ever wired to resolve.
+
 - **A misspelt parameter does not fail the run.** `pipeline_info/params_*.json` from the published
   run records both `use_use_tma_dearray` and `use_tma_dearray`, with `validate_params = true`. The
   typo was accepted and silently ignored, so a run configured with `use_use_tma_dearray = true`
   would quietly do the opposite of what was asked. nf-core's schema validation can reject unknown
   parameters; find out why it did not here.
-- **Duplicate `cycle_number` is accepted, and silently misaligns illumination profiles.** `meta` is
-  built from `sample` and `cycle_number` alone, so two samplesheet rows sharing both produce
-  identical meta maps. That map is the join key in `preprocess_images/main.nf:48`, so which cycle
-  receives which BaSiCPy profile depends on task completion order, and the `groupTuple` sort in the
-  same file has the same tie. Seen on a real three-cycle run whose sheet numbered the cycles 1, 2, 2:
-  it completed with no guarantee the profiles matched their cycles.
-  `assets/schema_input_cycle.json` already promises "sequential and without gaps" in its
-  `errorMessage`, but JSON Schema validates rows independently and cannot express a cross-row
-  constraint, so that message describes a check that was never written. The check belongs beside
-  `validateIlluminationColumns`, which exists for this category and whose comment names this exact
-  failure mode. Fix the error message in the same change. Quick, and it converts a silent wrong
-  answer into a startup error.
-- **backsub's filename suffix leaks into TMA core identity, and from there into the cell table.**
-  `conf/modules.config` gives BACKSUB `ext.prefix = { "${meta.id}_backsub" }`, and on the TMA path
-  BACKSUB runs before COREOGRAPH, which derives each core's identity from its filename
-  (`preprocess_images/main.nf:155`). So with both `use_backsub` and `use_tma` set, `meta.id` becomes
-  `{sample}_backsub_core001`, and the suffix propagates into `meta.sample`, the zarr directory name,
-  the REPORT filename and the element prefixes `bin/merge_spatialdata.py` writes into the merged
-  store. Nothing crashes: the element name and `meta.sample` agree because both come from the same
-  filename. The cost is that row identity in the final table depends on whether an optional
-  preprocessing step was enabled, so the same slide run with and without backsub yields cores that
-  cannot be matched by name. This is the quiet half of the `SET_CHANNEL_NAMES` fix above; making the
-  lookup filename-independent does not help, because this is a naming defect rather than a lookup
-  one. The suffix is not cosmetic — backsub's input is Ashlar's output, and Nextflow excludes staged
-  inputs from output matching, so identical names fail the task with a missing-output error. The fix
-  is to stage the input as `path(image, stageAs: 'input/*')` and drop the prefix, which leaves the
-  module's own collision guard passing since `$image` renders as `input/{sample}.ome.tif`. Reasoned
-  from the module source, not tested. It costs a second patched nf-core module carried through
-  `nf-core modules update`, and looks upstreamable, which would remove that cost.
+- **backsub's filename suffix does not leak into core identity. The entry that said it did was
+  wrong.** Recorded here rather than deleted, because it was reasoned from module source without
+  being tested and then believed for a fortnight. The claim was that `ext.prefix = { "${meta.id}_backsub" }`
+  reaches core IDs, `meta.sample`, the zarr directory name, the REPORT filename and the merged
+  element prefixes. It reaches none of them. COREOGRAPH is patched to name cores
+  `${prefix}_core001` from `ext.prefix = { "${meta.id}" }`, set explicitly in `conf/modules.config`,
+  and BACKSUB passes `meta` through unchanged, so `meta.id` is still the slide when Coreograph runs.
+  That patch (98a74a0, 6 August) predates the entry (e954f35, 10 August), so this was never true.
+  Verified on stub runs with `use_backsub` both with and without `use_tma_dearray`: `_backsub`
+  appears on backsub's own two published files and nowhere else, while every downstream name is
+  `{slide}_core001` or `{slide}`. The prefix is still required for the reason `conf/modules.config`
+  gives, that without it backsub's output would collide with its staged input. No module patch, no
+  upstream PR. The one place the suffix does survive is the image element name inside the zarr, since
+  `sopa convert` names elements after the file it converted, and `SET_CHANNEL_NAMES` already handles
+  that by taking the sole image element rather than addressing it by name.
+
 - **`bin/set_channel_names.py` `main()` has no test for element selection.**
   `tests/unit/test_set_channel_names.py` covers marker sheet parsing and `channel_labels()`, but not
   the explicit `--element` path, the single-element fallback, or the "more than one image element"

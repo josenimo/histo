@@ -80,6 +80,21 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
 
 ### Fixed
 
+- A samplesheet that repeats a `cycle_number` within a sample is rejected at startup. It was
+  previously accepted, and since a cycle is identified by `sample` and `cycle_number` together, two
+  such rows were the same cycle as far as the pipeline could tell: each cycle's BaSiCPy profile went
+  to whichever image finished first, and the run reported success. Found on a real three-cycle run
+  numbered 1, 2, 2. Gaps are rejected too, which `assets/schema_input_cycle.json` had promised in
+  its `errorMessage` without anything enforcing it.
+
+- Parameters the schema does not declare, and booleans given on the command line, now stop the run
+  at startup. `use_use_tma_dearray = true` was previously accepted and ignored, and `--use_qc false`
+  previously enabled QC: Nextflow reads the flag alone, sets it true and discards the `false` before
+  any pipeline code runs, so the value cannot be recovered or corrected afterwards. `--use_qc=false`
+  arrived as a truthy string. All three are rejected with a message naming the parameter, and for a
+  misspelling, the parameter that was probably meant. Booleans belong in a params file; a bare flag
+  switches one on. See [docs/usage.md](docs/usage.md).
+
 - The marker sheet reached `SET_CHANNEL_NAMES` as a queue channel holding one item whenever
   background subtraction was off, so Nextflow paired it element-wise against the stores and stopped
   at the shorter of the two. A dearrayed slide with four cores had its channels named on one core
@@ -104,24 +119,6 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
   on real `.czi` data.
 
 ### Known broken
-
-- Boolean parameters cannot be set from the command line. `--use_qc false` leaves QC enabled, as
-  does `--use_cellpose false`: Nextflow passes the value as the string `"false"` and a non-empty
-  string is truthy, so every `use_*` switch takes the wrong branch and the run reports success.
-  Pass a params file with a real boolean instead. See [ROADMAP.md](ROADMAP.md).
-
-- A samplesheet that repeats a `cycle_number` within a sample is accepted, and the cycle's BaSiCPy
-  profiles may then be attached to the wrong cycle. `meta` carries only `sample` and `cycle_number`,
-  so duplicate rows share a join key and the pairing follows task completion order. The run succeeds
-  and the misalignment is invisible. Found on a real three-cycle run numbered 1, 2, 2. See
-  [ROADMAP.md](ROADMAP.md).
-
-- On the TMA path with `use_backsub` set, backsub's `_backsub` filename suffix becomes part of each
-  core's identity. COREOGRAPH derives core IDs from filenames, so `meta.id` is
-  `{sample}_backsub_core001`, and the suffix reaches the zarr directory name, the REPORT filename and
-  cell identity in the merged table. Nothing fails, but the same slide run with and without backsub
-  produces cores that cannot be matched by name. This is the quiet half of the `SET_CHANNEL_NAMES`
-  fix above, and a naming defect rather than a lookup one. See [ROADMAP.md](ROADMAP.md).
 
 - `tests/*.nf.test.snap` still record `"nf-core/sopa": "v1.0.1"`. Snapshots must not be hand-edited;
   they need regenerating with `nf-test`, which needs real containers on the cluster. Until then

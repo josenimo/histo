@@ -61,9 +61,9 @@ lint:
   #     collected in workflows/histo.nf. qc does emit versions, but these tests run under
   #     -stub, so the snapshot would pin the stub blocks' literal "stub" strings.
   #
-  # The first two are `nextflow_workflow` tests of a subworkflow. The last two are
-  # `nextflow_function` tests of the marker sheet validators, where no process runs at
-  # all: they call a Groovy function and assert on what it rejects.
+  # The first two are `nextflow_workflow` tests of a subworkflow. The rest are
+  # `nextflow_function` tests of the input validators, where no process runs at all:
+  # they call a Groovy function and assert on what it rejects.
   #
   # Listing the files skips only those files; the other test files stay checked.
   nf_test_content:
@@ -71,6 +71,10 @@ lint:
     - tests/qc.nf.test
     - tests/validate_markersheet.nf.test
     - tests/validate_marker_sheet_column.nf.test
+    - tests/reject_unknown_params.nf.test
+    - tests/reject_spaced_booleans.nf.test
+    - tests/reject_string_booleans.nf.test
+    - tests/validate_cycle_numbers.nf.test
 
   multiqc_config: false
 
