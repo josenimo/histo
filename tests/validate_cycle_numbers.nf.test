@@ -1,0 +1,107 @@
+// cycle_number identifies a cycle together with the sample name, so a repeat makes two
+// rows indistinguishable to the pipeline.
+//
+// The repeated case is not hypothetical: a real three-cycle run had its cycles numbered
+// 1, 2, 2, completed, and gave no indication that each cycle's illumination profile was
+// attached to whichever image happened to finish first.
+//
+// Rows arrive as [meta, image_tiles, dfp, ffp, marker_sheet]; only meta is read here.
+
+nextflow_function {
+
+    name "validateCycleNumbers"
+    script "../subworkflows/local/utils_nfcore_histo_pipeline/main.nf"
+    function "validateCycleNumbers"
+    tag "unit"
+    tag "validation"
+
+    test("cycles numbered 1..N are accepted") {
+        when {
+            function {
+                """
+                input[0] = [
+                    [ [ id: 'slideA', cycle_number: 1 ], 'c1.tif', [], [], 'm.csv' ],
+                    [ [ id: 'slideA', cycle_number: 2 ], 'c2.tif', [], [], 'm.csv' ],
+                    [ [ id: 'slideA', cycle_number: 3 ], 'c3.tif', [], [], 'm.csv' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("the real 1, 2, 2 sheet is rejected") {
+        when {
+            function {
+                """
+                input[0] = [
+                    [ [ id: 'slideA', cycle_number: 1 ], 'c1.tif', [], [], 'm.csv' ],
+                    [ [ id: 'slideA', cycle_number: 2 ], 'c2.tif', [], [], 'm.csv' ],
+                    [ [ id: 'slideA', cycle_number: 2 ], 'c3.tif', [], [], 'm.csv' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains('cycle_number is repeated: [2]') }
+            assert function.stdout.any { it.contains("Sample 'slideA'") }
+        }
+    }
+
+    test("a gap is rejected, since a cycle is probably missing") {
+        when {
+            function {
+                """
+                input[0] = [
+                    [ [ id: 'slideA', cycle_number: 1 ], 'c1.tif', [], [], 'm.csv' ],
+                    [ [ id: 'slideA', cycle_number: 3 ], 'c3.tif', [], [], 'm.csv' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains('without gaps') }
+            assert function.stdout.any { it.contains('Got [1, 3]') }
+        }
+    }
+
+    test("numbering that does not start at 1 is rejected") {
+        when {
+            function {
+                """
+                input[0] = [
+                    [ [ id: 'slideA', cycle_number: 2 ], 'c2.tif', [], [], 'm.csv' ],
+                    [ [ id: 'slideA', cycle_number: 3 ], 'c3.tif', [], [], 'm.csv' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains('without gaps') }
+        }
+    }
+
+    test("each sample is numbered independently") {
+        // Two samples both starting at 1 is normal, not a collision: meta carries the
+        // sample name as well.
+        when {
+            function {
+                """
+                input[0] = [
+                    [ [ id: 'slideA', cycle_number: 1 ], 'a1.tif', [], [], 'a.csv' ],
+                    [ [ id: 'slideA', cycle_number: 2 ], 'a2.tif', [], [], 'a.csv' ],
+                    [ [ id: 'slideB', cycle_number: 1 ], 'b1.tif', [], [], 'b.csv' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+}

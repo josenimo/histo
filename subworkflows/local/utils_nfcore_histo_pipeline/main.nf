@@ -116,11 +116,14 @@ workflow PIPELINE_INITIALISATION {
         // Rows arrive as [meta, image_tiles, dfp, ffp, marker_sheet], in schema
         // property order. Read once and used twice: for the cycles themselves, and
         // for the per-sample marker sheets below.
-        cycle_rows = validateMarkerSheetColumn(
-            validateIlluminationColumns(
-                samplesheetToList(params.input, "${projectDir}/assets/schema_input_cycle.json")
-            )
-        )
+        cycle_rows = samplesheetToList(params.input, "${projectDir}/assets/schema_input_cycle.json")
+
+        // Called for their assertions rather than their return value, which is the rows
+        // unchanged. Sequential rather than nested so that adding a fourth check does not
+        // mean another layer of brackets.
+        validateIlluminationColumns(cycle_rows)
+        validateCycleNumbers(cycle_rows)
+        validateMarkerSheetColumn(cycle_rows)
 
         Channel
             .fromList(cycle_rows)
@@ -349,6 +352,50 @@ def validateIlluminationColumns(rows) {
             "Sample '${sample}': dfp and ffp must be given for every cycle or for none. " +
             "Found ${withProfiles} of ${cycles.size()} cycles with profiles. " +
             "Supplying them for some cycles only would misalign illumination profiles against images."
+        )
+    }
+    return rows
+}
+
+//
+// cycle_number must run 1..N per sample, without repeats and without gaps.
+//
+// A repeat is the dangerous case and it has happened: a real three-cycle run whose sheet
+// numbered the cycles 1, 2, 2. meta is built from sample and cycle_number alone, so two
+// rows sharing both produce identical meta maps, and meta is the join key that attaches
+// each cycle's BaSiCPy profile to its image in preprocess_images/main.nf. Which cycle
+// receives which profile then depends on task completion order, and the groupTuple sort
+// beside it ties the same way. The run succeeds with no guarantee that the profiles match
+// their images, which is silent misregistration.
+//
+// assets/schema_input_cycle.json has always promised "sequential and without gaps" in its
+// errorMessage, but JSON Schema validates each row on its own and cannot see across rows,
+// so that message described a check nobody had written. This is that check.
+//
+// Gaps have no known failure mode, unlike repeats. They are rejected anyway because the
+// schema says they are, because cycle_number is an index and an index with a hole in it
+// usually means a cycle went missing on the way to the samplesheet, and because a run
+// that quietly processes two of three cycles is the kind of thing this pipeline exists to
+// make visible. If that ever blocks something legitimate, this is the paragraph to argue
+// with.
+//
+def validateCycleNumbers(rows) {
+    rows.groupBy { it[0].id }.each { sample, cycles ->
+        def numbers = cycles.collect { it[0].cycle_number }.sort()
+        def expected = (1..numbers.size()).toList()
+
+        def repeated = numbers.countBy { it }.findAll { _n, count -> count > 1 }.keySet().sort()
+        assert !repeated : (
+            "Sample '${sample}': cycle_number is repeated: ${repeated}. Cycles are identified " +
+            "by sample and cycle_number together, so two rows sharing both are the same cycle " +
+            "as far as the pipeline can tell, and each cycle's illumination profile would be " +
+            "attached to whichever image finished first. Number the cycles 1..${numbers.size()}."
+        )
+
+        assert numbers == expected : (
+            "Sample '${sample}': cycle_number must run 1..${numbers.size()} without gaps. " +
+            "Got ${numbers}. A gap usually means a cycle is missing from the samplesheet, and " +
+            "the pipeline would process the rest without remarking on it."
         )
     }
     return rows

@@ -80,6 +80,13 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
 
 ### Fixed
 
+- A samplesheet that repeats a `cycle_number` within a sample is rejected at startup. It was
+  previously accepted, and since a cycle is identified by `sample` and `cycle_number` together, two
+  such rows were the same cycle as far as the pipeline could tell: each cycle's BaSiCPy profile went
+  to whichever image finished first, and the run reported success. Found on a real three-cycle run
+  numbered 1, 2, 2. Gaps are rejected too, which `assets/schema_input_cycle.json` had promised in
+  its `errorMessage` without anything enforcing it.
+
 - Parameters the schema does not declare, and booleans given on the command line, now stop the run
   at startup. `use_use_tma_dearray = true` was previously accepted and ignored, and `--use_qc false`
   previously enabled QC: Nextflow reads the flag alone, sets it true and discards the `false` before
@@ -112,12 +119,6 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
   on real `.czi` data.
 
 ### Known broken
-
-- A samplesheet that repeats a `cycle_number` within a sample is accepted, and the cycle's BaSiCPy
-  profiles may then be attached to the wrong cycle. `meta` carries only `sample` and `cycle_number`,
-  so duplicate rows share a join key and the pairing follows task completion order. The run succeeds
-  and the misalignment is invisible. Found on a real three-cycle run numbered 1, 2, 2. See
-  [ROADMAP.md](ROADMAP.md).
 
 - On the TMA path with `use_backsub` set, backsub's `_backsub` filename suffix becomes part of each
   core's identity. COREOGRAPH derives core IDs from filenames, so `meta.id` is
