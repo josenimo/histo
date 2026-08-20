@@ -160,6 +160,7 @@ workflow PIPELINE_INITIALISATION {
     //
     // Sopa params validation
     //
+    rejectUnknownParams(params)
     validateParams(params)
 
     //
@@ -469,6 +470,69 @@ def validateMarkersheet(rows, sample = null) {
     }
 
     return rows
+}
+
+//
+// Reject parameters the schema does not declare.
+//
+// `use_use_tma_dearray = true` reached a real run: pipeline_info/params_*.json from
+// the published WSI run records both the typo and the real parameter, with
+// validate_params true. The typo was accepted, silently ignored, and the run did the
+// opposite of what it asked for while reporting success.
+//
+// nf-schema is supposed to do this. `validation.failUnrecognisedParams` is documented
+// and its value is read, but the field it assigns to is never declared on
+// ValidationConfig, so setting the option aborts the run with
+// `MissingPropertyException: No such property: failUnrecognisedParams`. Checked
+// against the source at tags 2.7.2, 2.7.3 and 2.8.0, which is every release at the
+// time of writing, and there is no upstream issue for it. Delete this function and
+// set the option once that is fixed.
+//
+// Unknown samplesheet columns need nothing here: `additionalProperties: false` in the
+// sheet schemas already rejects them, which is what `validation.failUnrecognisedHeaders`
+// would otherwise have been for.
+//
+def rejectUnknownParams(params) {
+    def schema = new groovy.json.JsonSlurper().parseText(
+        file("${projectDir}/nextflow_schema.json").text
+    )
+
+    // Parameters live in the $defs groups, with a handful at the top level.
+    def declared = [] as Set
+    declared.addAll((schema.properties ?: [:]).keySet())
+    (schema['$defs'] ?: [:]).each { _group, body ->
+        declared.addAll((body.properties ?: [:]).keySet())
+    }
+
+    // Set by the tooling rather than by a user, so absent from the schema by design.
+    def injected = [
+        'nf_test_output',  // nf-test, which is also in nf-schema's own default ignore list
+    ] as Set
+
+    def unknown = (params.keySet() - declared - injected).sort()
+    if (!unknown) {
+        return params
+    }
+
+    // A doubled prefix is the typo that got through, and `use_use_tma_dearray`
+    // contains `use_tma_dearray`, so plain containment finds it. Cheap, and it never
+    // claims a match it cannot show.
+    def hints = unknown.collectEntries { name ->
+        def near = declared.findAll { d -> d != name && (d.contains(name) || name.contains(d)) }.sort()
+        [(name): near]
+    }
+
+    def lines = unknown.collect { name ->
+        hints[name] ? "  ${name}  (did you mean: ${hints[name].join(', ')}?)" : "  ${name}"
+    }
+
+    error(
+        "Unrecognised parameter(s):\n${lines.join('\n')}\n\n" +
+        "Every parameter must be declared in nextflow_schema.json. A parameter that is " +
+        "not declared is silently ignored, so a run configured with a misspelt switch " +
+        "does the opposite of what was asked and still reports success. Run with --help " +
+        "to list the parameters this pipeline accepts."
+    )
 }
 
 def validateParams(params) {
