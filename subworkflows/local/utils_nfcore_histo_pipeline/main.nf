@@ -160,6 +160,8 @@ workflow PIPELINE_INITIALISATION {
     //
     // Sopa params validation
     //
+    rejectSpacedBooleans(workflow.commandLine)
+    rejectStringBooleans(params)
     rejectUnknownParams(params)
     validateParams(params)
 
@@ -473,6 +475,130 @@ def validateMarkersheet(rows, sample = null) {
 }
 
 //
+// Every parameter the schema declares, as name to definition.
+//
+// Read from nextflow_schema.json so the schema stays the single source of truth: a new
+// parameter is declared once and every check here picks it up without a second edit.
+// Parameters live in the $defs groups, with a handful at the top level.
+//
+def schemaParams() {
+    def schema = new groovy.json.JsonSlurper().parseText(
+        file("${projectDir}/nextflow_schema.json").text
+    )
+    def declared = [:]
+    declared.putAll(schema.properties ?: [:])
+    (schema['$defs'] ?: [:]).each { _group, body ->
+        declared.putAll(body.properties ?: [:])
+    }
+    return declared
+}
+
+//
+// A boolean written with a space is destroyed before the pipeline can see the value.
+//
+// `--use_qc false` does not leave QC enabled through string truthiness, which is what it
+// looks like. Nextflow reads `--use_qc` as a bare flag, sets it to boolean true, and
+// discards the `false` entirely: it is not in params, and it is not in the positional
+// args either. So the run explicitly enables the step the user asked to switch off, and
+// by the time any code runs, `params.use_qc` is indistinguishable from the default.
+//
+// workflow.commandLine is the only place the value survives, which is why this reads a
+// string rather than inspecting params. Taken as an argument rather than read from the
+// global so the check can be tested.
+//
+// `--use_qc true` is rejected too. It happens to produce the right answer, for the same
+// reason `--use_qc false` produces the wrong one, and a form that works for one value
+// and silently inverts the other is worse than one that never works.
+//
+def rejectSpacedBooleans(command_line) {
+    if (!command_line) {
+        return command_line
+    }
+
+    def booleans = schemaParams().findAll { _name, definition -> definition.type == 'boolean' }.keySet()
+
+    // Tokenised rather than matched with a regex, because the command line arrives with
+    // the offending pair quoted as `'--use_qc false'` and because an interpolated slashy
+    // pattern does not survive the Nextflow 26 parser. Quotes become separators, and
+    // tokenize discards the empties that leaves behind.
+    def tokens = command_line.replace("'", " ").replace('"', " ").tokenize(" ")
+
+    def offenders = []
+    tokens.eachWithIndex { token, i ->
+        if (!token.startsWith("--")) {
+            return
+        }
+        def name = token.substring(2)
+        // A following token starting with `-` is the next option, so the flag was bare
+        // and nothing was swallowed. `--use_qc=false` is a single token and is not
+        // matched here; rejectStringBooleans catches that form.
+        if (name in booleans && i + 1 < tokens.size() && !tokens[i + 1].startsWith("-")) {
+            offenders << "  --${name} ${tokens[i + 1]}"
+        }
+    }
+    offenders = offenders.sort()
+
+    if (!offenders) {
+        return command_line
+    }
+
+    error(
+        "Boolean parameter(s) written with a space:\n${offenders.join('\n')}\n\n" +
+        "Nextflow reads the flag on its own and throws the value away, so each of these " +
+        "is enabled regardless of what follows it. The value never reaches the pipeline, " +
+        "which is why this has to be caught here rather than checked after the fact.\n\n" +
+        "Use a params file, where the value is a real boolean:\n\n" +
+        "    nextflow run . -params-file params.yml\n\n" +
+        "To switch a boolean on, a bare flag is enough: `--use_cellpose`."
+    )
+}
+
+//
+// A boolean given as a string is a boolean that will be read the wrong way round.
+//
+// `--use_qc=false` reaches the pipeline as the string "false", and every non-empty
+// string is true in Groovy, so `if (params.use_qc)` takes the enabled branch. This
+// affects every boolean the pipeline declares, not one of them.
+//
+// It cannot be fixed by coercing the value. params is a ScriptBinding$ParamsMap, which
+// ignores writes to a key that is already set: both `params.use_qc = false` and
+// `params.putAll([use_qc: false])` return without error and change nothing. Verified on
+// Nextflow 26.04.6. So the only honest options are to fail or to read the value through
+// a helper at every use site, and failing once at startup beats a helper that someone
+// eventually forgets.
+//
+// A bare `--use_qc` also arrives as a string, "true", and that one is both idiomatic and
+// correct, so only strings that do not mean true are rejected.
+//
+def rejectStringBooleans(params) {
+    def declared = schemaParams()
+    def offenders = declared
+        .findAll { name, definition ->
+            definition.type == 'boolean' &&
+                params.containsKey(name) &&
+                params[name] instanceof CharSequence &&
+                params[name].toString().toLowerCase() != 'true'
+        }
+        .collect { name, _definition -> "  --${name}=${params[name]}" }
+        .sort()
+
+    if (!offenders) {
+        return params
+    }
+
+    error(
+        "Boolean parameter(s) given as text on the command line:\n${offenders.join('\n')}\n\n" +
+        "Nextflow passes these through as strings, and every non-empty string is true in " +
+        "Groovy, so the pipeline would read each of these as enabled and do the opposite " +
+        "of what was asked while reporting success. The value cannot be corrected here " +
+        "because a parameter already set on the command line is not writable. Use a " +
+        "params file instead, where `false` is a real boolean:\n\n" +
+        "    nextflow run . -params-file params.yml\n\n" +
+        "To switch a boolean on, a bare flag works: `--use_cellpose`."
+    )
+}
+
+//
 // Reject parameters the schema does not declare.
 //
 // `use_use_tma_dearray = true` reached a real run: pipeline_info/params_*.json from
@@ -493,16 +619,7 @@ def validateMarkersheet(rows, sample = null) {
 // would otherwise have been for.
 //
 def rejectUnknownParams(params) {
-    def schema = new groovy.json.JsonSlurper().parseText(
-        file("${projectDir}/nextflow_schema.json").text
-    )
-
-    // Parameters live in the $defs groups, with a handful at the top level.
-    def declared = [] as Set
-    declared.addAll((schema.properties ?: [:]).keySet())
-    (schema['$defs'] ?: [:]).each { _group, body ->
-        declared.addAll((body.properties ?: [:]).keySet())
-    }
+    def declared = schemaParams().keySet()
 
     // Set by the tooling rather than by a user, so absent from the schema by design.
     def injected = [

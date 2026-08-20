@@ -1,0 +1,84 @@
+// `--use_qc=false` arrives as the string "false", and every non-empty string is true in
+// Groovy, so `if (params.use_qc)` takes the enabled branch.
+//
+// It cannot be corrected in place. params is a ScriptBinding$ParamsMap and ignores writes
+// to a key that is already set, so `params.use_qc = false` and `params.putAll(...)` both
+// return without error and change nothing. Failing at startup is the alternative.
+
+nextflow_function {
+
+    name "rejectStringBooleans"
+    script "../subworkflows/local/utils_nfcore_histo_pipeline/main.nf"
+    function "rejectStringBooleans"
+    tag "unit"
+    tag "validation"
+
+    test("a boolean given as the string false is rejected") {
+        when {
+            function {
+                """
+                input[0] = [ use_qc: 'false' ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains('given as text') }
+            assert function.stdout.any { it.contains('--use_qc=false') }
+        }
+    }
+
+    test("any string that does not mean true is rejected, not just the word false") {
+        // "0" is as truthy as "false" in Groovy, so it fails the same way.
+        when {
+            function {
+                """
+                input[0] = [ use_cellpose: '0' ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains('--use_cellpose=0') }
+        }
+    }
+
+    test("the string true is accepted, because a bare flag produces it") {
+        when {
+            function {
+                """
+                input[0] = [ use_qc: 'true' ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("real booleans are accepted, whichever way round") {
+        when {
+            function {
+                """
+                input[0] = [ use_qc: false, use_cellpose: true ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("a non-boolean parameter holding a string is not its business") {
+        when {
+            function {
+                """
+                input[0] = [ cellpose_channels: 'DAPI', outdir: 'results' ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+}

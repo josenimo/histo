@@ -113,16 +113,18 @@ already-planned move to a samplesheet column, rather than breaking the format th
   tools, so `CITATIONS.md` is not strictly wrong, but the QC report's clustering is scanpy's Leiden
   via igraph and that is a scientific method presented in output a reader may act on. Cite both, or
   drop the clustering, before tagging 1.0.0.
-- **Boolean parameters cannot be set from the command line.** `--use_qc false` leaves QC enabled,
-  and so does `--use_qc=false`. Nextflow hands the value over as the string `"false"`, and a
-  non-empty string is truthy in Groovy, so every `if (params.use_*)` in the pipeline takes the
-  wrong branch. Verified against both a new parameter and an existing one: `--use_cellpose false`
-  does not disable Cellpose either, while a params file carrying a real YAML boolean works
-  correctly. So this is not one parameter's bug, it is every boolean switch the pipeline has, and
-  the failure is silent — a run asked to skip background subtraction performs it and reports
-  success. The fix belongs in one place, coercing the declared booleans once at pipeline
-  initialisation beside `validateIlluminationColumns`, rather than at each use site. Until then
-  `docs/output.md` tells users to pass a params file.
+- **Booleans still cannot be set on the command line, but the attempt now fails instead of
+  inverting.** Two separate mechanisms, and the roadmap previously described only one of them.
+  `--use_qc=false` arrives as the string `"false"`, which is truthy in Groovy. `--use_qc false` is
+  different and worse: Nextflow reads the flag on its own, sets it to boolean `true`, and discards
+  the `false` entirely, so it reaches neither `params` nor the positional args and the run
+  explicitly enables what it was asked to skip. Both are rejected at startup now.
+  **Coercing the value, which this entry used to propose, is not possible.** `params` is a
+  `ScriptBinding$ParamsMap` and ignores writes to a key that is already set: `params.use_qc = false`
+  and `params.putAll([use_qc: false])` both return without error and change nothing, verified on
+  Nextflow 26.04.6. Making the spaced form work would need a change in Nextflow, since the value is
+  destroyed before any pipeline code runs. A params file remains the way to set a boolean, and a
+  bare flag remains the way to switch one on.
 - **Run-level resource QC is deferred, and the reason is structural.** Failed and retried task
   counts and peak RSS per task all live in `pipeline_info/execution_trace_*.txt`, which Nextflow
   only finalises when the run ends — so no process inside the DAG can read its own run's trace, and

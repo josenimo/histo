@@ -72,6 +72,8 @@ lint:
     - tests/validate_markersheet.nf.test
     - tests/validate_marker_sheet_column.nf.test
     - tests/reject_unknown_params.nf.test
+    - tests/reject_spaced_booleans.nf.test
+    - tests/reject_string_booleans.nf.test
 
   multiqc_config: false
 

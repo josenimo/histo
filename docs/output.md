@@ -61,17 +61,19 @@ Refer to the [SpatialData docs](https://spatialdata.scverse.org/en/stable/) for 
 
 </details>
 
-The QC report is produced per sample, which on a dearrayed slide means per core. `--use_qc false`
-skips it entirely; `--use_qc_images false` keeps the metrics and the charts but drops the
+The QC report is produced per sample, which on a dearrayed slide means per core. `use_qc: false`
+skips it entirely; `use_qc_images: false` keeps the metrics and the charts but drops the
 clustering and the image crops, which are the slow part. Tuning for the image step — the Leiden
 resolution ladder, the arcsinh cofactor, how many crops — goes through `ext.args` for `QC_IMAGES`
 in `conf/modules.config` rather than through pipeline parameters.
 
-> [!WARNING]
-> Boolean parameters do not currently respond to the command line: `--use_qc false` leaves QC
-> enabled, because Nextflow passes `false` as a string and a non-empty string is true. Use a
-> params file (`use_qc: false`) until this is fixed. This affects every `use_*` parameter in the
-> pipeline, not only these two.
+> [!NOTE]
+> Booleans cannot be switched off from the command line, and the pipeline now stops at startup
+> rather than doing the opposite of what was asked. `--use_qc false` used to enable QC: Nextflow
+> reads the flag on its own, sets it true, and throws the `false` away before any pipeline code
+> runs. Set booleans in a params file (`use_qc: false`), which is where a real boolean survives.
+> A bare flag still works to switch one on. This applies to every boolean the pipeline has, not
+> only these two.
 
 Upstream nf-core/sopa also produced a `{sample}.explorer/` directory holding a Xenium Explorer
 bundle and a standalone `adata.h5ad`. **This pipeline does not export to Xenium Explorer.** The

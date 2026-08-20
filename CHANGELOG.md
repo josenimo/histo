@@ -80,6 +80,14 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
 
 ### Fixed
 
+- Parameters the schema does not declare, and booleans given on the command line, now stop the run
+  at startup. `use_use_tma_dearray = true` was previously accepted and ignored, and `--use_qc false`
+  previously enabled QC: Nextflow reads the flag alone, sets it true and discards the `false` before
+  any pipeline code runs, so the value cannot be recovered or corrected afterwards. `--use_qc=false`
+  arrived as a truthy string. All three are rejected with a message naming the parameter, and for a
+  misspelling, the parameter that was probably meant. Booleans belong in a params file; a bare flag
+  switches one on. See [docs/usage.md](docs/usage.md).
+
 - The marker sheet reached `SET_CHANNEL_NAMES` as a queue channel holding one item whenever
   background subtraction was off, so Nextflow paired it element-wise against the stores and stopped
   at the shorter of the two. A dearrayed slide with four cores had its channels named on one core
@@ -104,11 +112,6 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
   on real `.czi` data.
 
 ### Known broken
-
-- Boolean parameters cannot be set from the command line. `--use_qc false` leaves QC enabled, as
-  does `--use_cellpose false`: Nextflow passes the value as the string `"false"` and a non-empty
-  string is truthy, so every `use_*` switch takes the wrong branch and the run reports success.
-  Pass a params file with a real boolean instead. See [ROADMAP.md](ROADMAP.md).
 
 - A samplesheet that repeats a `cycle_number` within a sample is accepted, and the cycle's BaSiCPy
   profiles may then be attached to the wrong cycle. `meta` carries only `sample` and `cycle_number`,
