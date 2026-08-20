@@ -169,9 +169,13 @@ workflow PIPELINE_INITIALISATION {
     // describes a sample, and two samples in one run may have different channel
     // layouts. A parameter could only ever say one thing for all of them.
     //
-    // Each distinct sheet is parsed and checked once, however many samples name it,
-    // and the channel carries the path rather than the parsed rows. Every consumer
-    // reads the CSV itself: set_channel_names.py and qc_metrics.py both parse with
+    // Checked once per sample, so a sheet shared by several samples is parsed once for
+    // each of them. That is deliberate rather than merely tolerable: the checks are
+    // cheap on a file this size, and validating per sample is what lets the error
+    // message name the sample whose sheet is wrong.
+    //
+    // The channel carries the path rather than the parsed rows. Every consumer reads
+    // the CSV itself: set_channel_names.py and qc_metrics.py both parse with
     // csv.DictReader and require only the columns they use, and backsub reads it with
     // pd.read_csv and passes unknown columns through to its own marker output. So
     // nothing needs the sheet rewritten, and a path joins onto an image by key while
@@ -392,6 +396,25 @@ def validateMarkersheet(rows, sample = null) {
     assert numbers == expected : (
         "${where}: channel_number must run 1..${rows.size()} continuously across all cycles, " +
         "without restarting per cycle. Got ${numbers}."
+    )
+
+    // Marker names must be unique. They become the column names of the feature matrix,
+    // so duplicates make it ambiguous, and backsub requires uniqueness too.
+    //
+    // set_channel_names.py already rejects them, but it runs after Ashlar and backsub,
+    // so a duplicate costs a full stitch before anything complains. Checked here it
+    // costs nothing. The role lookup below is the more immediate reason: it is built
+    // with collectEntries, which keeps the last value for a repeated key, so a name
+    // appearing twice with different roles would silently resolve to one of them and
+    // the background check would then pass or fail for a reason nobody could see.
+    def duplicateNames = rows
+        .groupBy { it.marker_name }
+        .findAll { _name, group -> group.size() > 1 }
+        .keySet()
+        .sort()
+    assert !duplicateNames : (
+        "${where}: marker_name must be unique. Repeated: ${duplicateNames}. Marker names " +
+        "become the feature matrix column names, so a duplicate makes a column ambiguous."
     )
 
     // Every cycle needs a nuclear stain. Ashlar registers cycles against one another
