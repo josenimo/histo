@@ -69,6 +69,13 @@ Paths must be absolute.
 
 Only `input`, `outdir` and a segmentation backend are required. Everything below has a default.
 
+**Booleans on the command line follow Nextflow's rule: a bare flag means true, and anything else
+means use the default.** `--use_backsub` switches it on. To switch something off, leave it out, or
+use a params file where `use_backsub: false` is a real boolean. Writing a value after the flag does
+not work and never did: Nextflow reads the flag on its own, sets it true, and throws the value away
+before the pipeline sees it, so `--use_backsub false` would perform background subtraction. The
+pipeline stops at startup rather than letting that happen, for every boolean it declares.
+
 | Parameter                     | Default              | Change it when                                                                                         |
 | ----------------------------- | -------------------- | ------------------------------------------------------------------------------------------------------ |
 | `use_preprocessing`           | `true`               | Your image is already stitched. Then the samplesheet is one row per sample with a `data_path` column.  |
