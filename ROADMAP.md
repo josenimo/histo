@@ -31,6 +31,13 @@ Version `0.1.0dev`. Lint: 241 passed, 35 ignored, 5 warnings, 0 failed.
   difference. Boundary resolution works, which is the claim the whole downstream design rests on.
 - Nothing exceeded 1.7 GB peak RSS across 49 tasks. Ashlar's memory tracks the mosaic's spatial
   extent, not channel count: 889 MB for 2 cycles, 1.3 GB for 10.
+- WSI, 3 cycles, 15 channels (5 of them background), 21,798 x 11,295 px, `use_backsub = true`
+  → 142,493 cells in 72 patches. Every QC metric and every threshold in Phase 7 was calibrated
+  against this one run, which is the single biggest caveat on all of them. Its numbers are quoted
+  throughout the QC code and tests deliberately, so a regression disagrees with something that
+  actually happened rather than with an invented expectation. Peak RSS was 8.7 GB in BASICPY, which
+  contradicts the 1.7 GB line above -- that was a smaller run, and the line is now stale as a
+  general claim.
 
 ## Next
 
@@ -47,9 +54,15 @@ Ordered by how much harder each becomes if deferred.
 3. **Explain `obs/slide`.** It appears on non-TMA runs and nothing in this pipeline writes it.
    Worth understanding before `MERGE_SPATIALDATA` starts writing its own slide identity into
    the same tables.
-4. **Phase 7, QC report.** Machine-readable pass or fail for unattended runs: cell count per
-   core, saturated-pixel fraction per channel, Ashlar registration residual, fraction of
-   patches with zero cells. Thresholds need real datasets behind them.
+4. **Phase 7's remaining half: the pass-or-fail gate.** The metrics, the images and the report are
+   in and published to `<outdir>/qc`; `{sample}_qc.json` is the machine-readable contract a gate
+   would read. What is missing is the gate itself, and it is blocked on data rather than on code:
+   every threshold worth setting needs several slides behind it, and the one slide available says
+   different things than a second one might. Deliberately no thresholds and no exit code were
+   written, so that a guess did not end up baked into the pipeline's verdict. Two of the four
+   metrics originally listed here are still absent: Ashlar's registration residual, which exists
+   only in its stderr (see Longer term), and run-level resource QC, which is structurally blocked
+   (see Open).
 5. **Phase 8, release.** Tag off `main`, `nf-core pipelines lint --release` first.
 
 ## Longer term
@@ -59,7 +72,9 @@ Sketched with costs and risks in [docs/future-ideas.md](docs/future-ideas.md).
 1. **Read `.czi` metadata** — auto-fill exposure for backsub, and channel names, from the file.
 2. **Dearray across every nuclear channel** — detect cores lost between cycles.
 3. **Imaging QC** — autofluorescence, artefacts, focus. Merge with Phase 7.
-4. **Ashlar registration QC** — lives on an upstream dev branch; revisit when Phase 7 starts.
+4. **Ashlar registration QC** — lives on an upstream dev branch. Phase 7 has now started and this
+   is the one metric it could not supply: the residual exists only in Ashlar's stderr, which
+   nothing captures or publishes, so it needs a module change before QC can report it.
 5. **Dearray first, process each core in parallel** — the largest change here, and the one that
    would most improve Ashlar's reliability. Depends on locating cores from a naive
    stage-position mosaic, without stitching first.
@@ -69,6 +84,38 @@ already-planned move to a samplesheet column, rather than breaking the format th
 
 ## Open
 
+- **Leiden clusters are not reproducible on the one slide we have, and that is a finding rather
+  than a bug.** Across eight resolutions from 0.1 to 2.0, the best agreement between partitions from
+  different random seeds was 0.596 adjusted Rand, against the 0.9 floor the QC step asks for. So no
+  resolution on that slide produces a partition worth calling cell types, and the report says as
+  much instead of presenting the clusters as phenotypes. Worth re-checking on a second slide before
+  concluding it is a property of the data rather than of this one sample. If it holds, the honest
+  move is to present clusters only as a summary of staining, or to drop them for a supervised
+  gating step against known markers.
+- **Silhouette was tried and rejected for choosing a Leiden resolution; do not reach for it again.**
+  It falls monotonically as resolution rises -- 0.223 at five clusters down to 0.079 at forty-three
+  on the measured run -- so maximising it always returns the coarsest option on offer, and it chose
+  five clusters. It is still computed and reported for reference. Selection uses seed-to-seed
+  stability instead, which is not monotone and ranked resolution 0.1 _worst_, the opposite verdict.
+  Both numbers are in the report's sweep table.
+- **Nothing in the samplesheet says which channel is a nuclear stain.** The cross-cycle
+  photobleaching check and the cluster snapshots both need to know, and both currently find it by
+  matching the marker name against `--nuclear-pattern`, defaulting to `DAPI`. That works on every
+  dataset seen so far and will break silently on a Hoechst-stained one, where it reports the metric
+  as unavailable rather than wrong. A `nuclear` boolean column on the marker sheet would settle it,
+  and belongs in the same schema change as the samplesheet-column move above, not in a separate
+  breaking edit.
+- **`sopa report` and the new QC report now overlap, and one of them should probably go.** sopa's
+  `{sample}_analysis_summary.html` draws cell count, an area histogram, channel names, per-cell
+  intensity distributions and a UMAP; the QC report covers all of that except the UMAP, in a page
+  that is self-contained and backed by a machine-readable JSON. Keeping both means every run pays
+  for REPORT and publishes two HTML files that disagree in style and overlap in content. Dropping
+  REPORT would also remove the `.sopa_cache` deletion that forces QC and MERGE_SPATIALDATA to chain
+  off it. Decide before release; the only thing genuinely lost is the UMAP.
+- **scanpy and igraph are uncited.** Both arrive as transitive sopa dependencies rather than as new
+  tools, so `CITATIONS.md` is not strictly wrong, but the QC report's clustering is scanpy's Leiden
+  via igraph and that is a scientific method presented in output a reader may act on. Cite both, or
+  drop the clustering, before tagging 1.0.0.
 - **Boolean parameters cannot be set from the command line.** `--use_qc false` leaves QC enabled,
   and so does `--use_qc=false`. Nextflow hands the value over as the string `"false"`, and a
   non-empty string is truthy in Groovy, so every `if (params.use_*)` in the pipeline takes the
