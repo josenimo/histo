@@ -48,10 +48,8 @@ nextflow_workflow {
                     ]
                 )
                 input[1] = Channel.of([
-                    [ channel_number: 1, cycle_number: 1, marker_name: 'DNA_6'  ],
-                    [ channel_number: 2, cycle_number: 1, marker_name: 'ELANE'  ],
-                    [ channel_number: 3, cycle_number: 2, marker_name: 'DNA_7'  ],
-                    [ channel_number: 4, cycle_number: 2, marker_name: 'CD11B'  ]
+                    [ id: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
                 ])
                 """
             }
@@ -94,10 +92,8 @@ nextflow_workflow {
                     ]
                 )
                 input[1] = Channel.of([
-                    [ channel_number: 1, cycle_number: 1, marker_name: 'DNA_6'  ],
-                    [ channel_number: 2, cycle_number: 1, marker_name: 'ELANE'  ],
-                    [ channel_number: 3, cycle_number: 2, marker_name: 'DNA_7'  ],
-                    [ channel_number: 4, cycle_number: 2, marker_name: 'CD11B'  ]
+                    [ id: 'testslide' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
                 ])
                 """
             }
@@ -117,7 +113,14 @@ nextflow_workflow {
                 // meta.slide is what MERGE_SPATIALDATA groups on. Without it every core
                 // groups under a null key and unrelated slides merge together.
                 { assert metas.every { it.slide == 'testslide' } },
-                { assert metas.collect { it.id }.toSet().size() == 2 }
+                { assert metas.collect { it.id }.toSet().size() == 2 },
+                // Every core inherits its slide's marker sheet, keyed by the core
+                // rather than the slide. One entry per core, not one per slide: keyed
+                // by slide, the downstream join would match the first core and drop
+                // the rest, which is how a four-core slide once produced one report.
+                { assert workflow.out.markers.size() == 2 },
+                { assert workflow.out.markers.collect { it[0].id }.sort() == ['testslide_core001', 'testslide_core002'] },
+                { assert workflow.out.markers.every { it[1].endsWith('markers.csv') } }
             )
         }
     }

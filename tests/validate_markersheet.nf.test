@@ -1,0 +1,167 @@
+// Marker sheet checks that JSON Schema cannot express.
+//
+// These exist because the checks themselves are the only thing standing between a
+// mislabelled sheet and a feature table that carries the wrong marker names. Every
+// case below is watched to fail, not merely watched to pass: a check that has never
+// been seen rejecting anything is not known to work. That lesson is recorded in
+// docs/decisions.md, and it is why the message text is asserted too. An assertion
+// that fires with an unreadable message is only half a check.
+
+nextflow_function {
+
+    name "validateMarkersheet"
+    script "../subworkflows/local/utils_nfcore_histo_pipeline/main.nf"
+    function "validateMarkersheet"
+    tag "unit"
+    tag "validation"
+
+    test("a sheet with a dna channel in every cycle is accepted") {
+        when {
+            params {
+                use_backsub = false
+            }
+            function {
+                """
+                input[0] = [
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DAPI',  channel_role: 'dna' ],
+                    [ channel_number: 2, cycle_number: 1, marker_name: 'CD3',   channel_role: 'marker' ],
+                    [ channel_number: 3, cycle_number: 2, marker_name: 'DAPI_2', channel_role: 'dna' ],
+                    [ channel_number: 4, cycle_number: 2, marker_name: 'CD8',   channel_role: 'marker' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("a cycle with no dna channel is rejected, and the message names the cycle") {
+        when {
+            params {
+                use_backsub = false
+            }
+            function {
+                """
+                input[0] = [
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DAPI', channel_role: 'dna' ],
+                    [ channel_number: 2, cycle_number: 2, marker_name: 'CD8',  channel_role: 'marker' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains("channel_role 'dna'") }
+            assert function.stdout.any { it.contains("[2]") }
+        }
+    }
+
+    test("a background pointing at something other than an autofluorescence channel is rejected") {
+        when {
+            params {
+                use_backsub = false
+            }
+            function {
+                """
+                input[0] = [
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DAPI', channel_role: 'dna' ],
+                    [ channel_number: 2, cycle_number: 1, marker_name: 'CD3',  channel_role: 'marker', background: 'DAPI' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains("'autofluorescence'") }
+            assert function.stdout.any { it.contains("CD3 -> DAPI") }
+        }
+    }
+
+    test("a background naming a channel that does not exist is rejected even with backsub off") {
+        when {
+            params {
+                use_backsub = false
+            }
+            function {
+                """
+                input[0] = [
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DAPI', channel_role: 'dna' ],
+                    [ channel_number: 2, cycle_number: 1, marker_name: 'CD3',  channel_role: 'marker', background: 'AF_typo' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains("no such channel") }
+        }
+    }
+
+    test("a background pointing at an autofluorescence channel is accepted") {
+        when {
+            params {
+                use_backsub = false
+            }
+            function {
+                """
+                input[0] = [
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DAPI', channel_role: 'dna' ],
+                    [ channel_number: 2, cycle_number: 1, marker_name: 'AF',   channel_role: 'autofluorescence' ],
+                    [ channel_number: 3, cycle_number: 1, marker_name: 'CD3',  channel_role: 'marker', background: 'AF' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("a repeated marker_name is rejected before anything expensive runs") {
+        // set_channel_names.py rejects duplicates too, but not until after Ashlar and
+        // backsub have run. The role lookup is the nearer problem: it keeps the last
+        // value for a repeated key, so AF appearing twice with different roles would
+        // resolve to one of them and the background check would pass or fail for an
+        // invisible reason.
+        when {
+            params {
+                use_backsub = false
+            }
+            function {
+                """
+                input[0] = [
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DAPI', channel_role: 'dna' ],
+                    [ channel_number: 2, cycle_number: 1, marker_name: 'AF',   channel_role: 'autofluorescence' ],
+                    [ channel_number: 3, cycle_number: 1, marker_name: 'AF',   channel_role: 'marker' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains("marker_name must be unique") }
+            assert function.stdout.any { it.contains("[AF]") }
+        }
+    }
+
+    test("channel_number restarting each cycle is rejected") {
+        when {
+            params {
+                use_backsub = false
+            }
+            function {
+                """
+                input[0] = [
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DAPI',   channel_role: 'dna' ],
+                    [ channel_number: 1, cycle_number: 2, marker_name: 'DAPI_2', channel_role: 'dna' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains("continuously across all cycles") }
+        }
+    }
+}

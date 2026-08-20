@@ -56,7 +56,37 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
   them; everything else is `ext.args` in `conf/modules.config`. See
   [docs/output.md](docs/output.md).
 
+### Changed
+
+- **Breaking.** The marker sheet moved from the `--marker_sheet` parameter to a required
+  `marker_sheet` column in the samplesheet, one sheet per sample. The parameter is gone, and a
+  samplesheet without the column fails at startup. A marker sheet describes a sample, and two
+  samples in one run may have different channel layouts, which one parameter could not express.
+  Every cycle row of a sample must name the same file, since the sheet describes the whole
+  stitched image rather than one cycle of it. See [docs/usage.md](docs/usage.md).
+
+- The marker sheet gained two columns. `channel_role` is required and is one of `dna`, `marker`,
+  `autofluorescence` or `blank`; `channel_compartment` is optional and is `nuclear`, `cytoplasm`,
+  `membrane` or a `+`-joined combination. They are separate columns because role decides control
+  flow and compartment decides interpretation. Two checks arrive with them: every cycle needs at
+  least one `dna` channel, and `background` must name a channel whose role is `autofluorescence`.
+  The QC scripts still find the nuclear channel by matching its name; `channel_role` replaces that
+  next.
+
+- backsub receives the marker sheet as written instead of a six-column rewrite. It reads the CSV
+  with `pd.read_csv` and addresses columns by name, so columns it has no use for pass through into
+  its own marker output. Dropping the rewrite is what allowed the sheet to become per sample: the
+  rewrite produced one shared file.
+
 ### Fixed
+
+- The marker sheet reached `SET_CHANNEL_NAMES` as a queue channel holding one item whenever
+  background subtraction was off, so Nextflow paired it element-wise against the stores and stopped
+  at the shorter of the two. A dearrayed slide with four cores had its channels named on one core
+  while the other three never reached the rest of the pipeline, and the run reported success. With
+  no marker sheet at all the same channel was empty and the process ran zero times, which made the
+  entire downstream half do nothing and still exit 0. Marker sheets are now keyed per sample and
+  joined, so neither shape can occur.
 
 - `SET_CHANNEL_NAMES` no longer fails when `use_backsub` is true. It asked for the image element
   named after `meta.sample`, but `sopa convert` names the element after the file it converted, and

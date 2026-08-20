@@ -108,15 +108,31 @@ workflow PIPELINE_INITIALISATION {
     //                   sopa can read. Used for pre-stitched images, for dearrayed
     //                   TMA cores re-entering the pipeline, and for toy_dataset.
     //
+    // Declared out here because the marker sheet block further down needs it as well,
+    // and a `def` inside an if block is scoped to that block.
+    def cycle_rows = null
+
     if (params.use_preprocessing) {
-        Channel
-            .fromList(validateIlluminationColumns(
+        // Rows arrive as [meta, image_tiles, dfp, ffp, marker_sheet], in schema
+        // property order. Read once and used twice: for the cycles themselves, and
+        // for the per-sample marker sheets below.
+        cycle_rows = validateMarkerSheetColumn(
+            validateIlluminationColumns(
                 samplesheetToList(params.input, "${projectDir}/assets/schema_input_cycle.json")
-            ))
-            .map { meta, image_tiles, dfp, ffp ->
+            )
+        )
+
+        Channel
+            .fromList(cycle_rows)
+            .map { meta, image_tiles, dfp, ffp, _marker_sheet ->
                 // sdata_dir is deliberately not set here. It is per-sample, and at
                 // this point a row is one cycle of a sample. It is added after
                 // cycles are grouped and stitched.
+                //
+                // marker_sheet is dropped here rather than carried through
+                // stitching. It is per-sample and every cycle of a sample repeats
+                // the same value, so carrying it per cycle would mean grouping it
+                // back again and choosing which copy to trust.
                 [meta, image_tiles, dfp, ffp]
             }
             .set { ch_samplesheet }
@@ -147,24 +163,47 @@ workflow PIPELINE_INITIALISATION {
     validateParams(params)
 
     //
-    // Marker sheet. One row per channel across all cycles. Optional overall, but
-    // required by background subtraction, which scales each channel by its
-    // exposure time.
+    // Marker sheets, one per sample. One row per channel across all cycles.
     //
-    if (params.marker_sheet) {
-        // Validated synchronously, before the channel exists. An assert thrown
-        // inside a channel operator is swallowed and the run dies with no message;
-        // called here it surfaces the way validateIlluminationColumns does.
-        //
-        // Every column is declared as meta, so each row arrives as a
-        // single-element list holding the meta map, hence it[0].
-        def marker_rows = validateMarkersheet(
-            samplesheetToList(params.marker_sheet, "${projectDir}/assets/schema_marker.json")
-                .collect { it[0] }
+    // The sheet is a samplesheet column rather than a parameter because it
+    // describes a sample, and two samples in one run may have different channel
+    // layouts. A parameter could only ever say one thing for all of them.
+    //
+    // Checked once per sample, so a sheet shared by several samples is parsed once for
+    // each of them. That is deliberate rather than merely tolerable: the checks are
+    // cheap on a file this size, and validating per sample is what lets the error
+    // message name the sample whose sheet is wrong.
+    //
+    // The channel carries the path rather than the parsed rows. Every consumer reads
+    // the CSV itself: set_channel_names.py and qc_metrics.py both parse with
+    // csv.DictReader and require only the columns they use, and backsub reads it with
+    // pd.read_csv and passes unknown columns through to its own marker output. So
+    // nothing needs the sheet rewritten, and a path joins onto an image by key while
+    // a list of rows would have to be broadcast.
+    //
+    // Validated synchronously, before any channel exists. An assert thrown inside a
+    // channel operator is swallowed and the run dies with no message; called here it
+    // surfaces the way validateIlluminationColumns does.
+    if (params.use_preprocessing) {
+        def sheets_by_sample = markerSheetsBySample(cycle_rows)
+
+        // Every column of the marker sheet is declared as meta, so each row arrives
+        // as a single-element list holding the meta map, hence it[0].
+        sheets_by_sample.each { sample, sheet ->
+            validateMarkersheet(
+                samplesheetToList(sheet, "${projectDir}/assets/schema_marker.json").collect { it[0] },
+                sample,
+            )
+        }
+
+        ch_markersheet = channel.fromList(
+            sheets_by_sample.collect { sample, sheet -> [[id: sample], file(sheet)] }
         )
-        ch_markersheet = channel.value(marker_rows)
     }
     else {
+        // No marker sheet on this path, and none needed. An image entering the
+        // pipeline pre-stitched is assumed to carry its own channel names, so nothing
+        // downstream renames them.
         ch_markersheet = channel.empty()
     }
 
@@ -313,17 +352,102 @@ def validateIlluminationColumns(rows) {
 }
 
 //
+// The marker sheet is per sample, but the samplesheet has one row per cycle, so the
+// column repeats. All copies must agree.
+//
+// A sample whose cycles name different sheets is asking for one image to be described
+// two ways, and whichever copy happened to be read first would win silently. JSON
+// Schema validates rows independently and cannot see across them, so this is checked
+// here, the same category and the same reason as validateIlluminationColumns.
+//
+def validateMarkerSheetColumn(rows) {
+    rows.groupBy { it[0].id }.each { sample, cycles ->
+        def sheets = cycles.collect { it[4] as String }.unique()
+        assert sheets.size() == 1 : (
+            "Sample '${sample}': every cycle must name the same marker_sheet. Found " +
+            "${sheets.size()}: ${sheets}. The marker sheet describes the whole stitched " +
+            "image rather than one cycle of it, so a sample can only have one."
+        )
+    }
+    return rows
+}
+
+//
+// Sample name to marker sheet, one entry per sample.
+//
+// Distinct by construction, because validateMarkerSheetColumn has already established
+// that a sample's cycles agree. Two samples may share a sheet, and then it is parsed
+// once per sample; the sheets are small and the checks are cheap.
+//
+def markerSheetsBySample(rows) {
+    return rows.collectEntries { row -> [(row[0].id): row[4]] }
+}
+
+//
 // Marker sheet checks that JSON Schema cannot express.
 //
-def validateMarkersheet(rows) {
+def validateMarkersheet(rows, sample = null) {
+    def where = sample ? "marker_sheet for sample '${sample}'" : "marker_sheet"
     // channel_number is a continuous index across all cycles, not per-cycle. If it
     // restarts each cycle, every channel after cycle 1 is mislabelled and the
     // feature table silently carries the wrong marker names.
     def numbers = rows.collect { it.channel_number }
     def expected = (1..rows.size()).toList()
     assert numbers == expected : (
-        "marker_sheet: channel_number must run 1..${rows.size()} continuously across all cycles, " +
+        "${where}: channel_number must run 1..${rows.size()} continuously across all cycles, " +
         "without restarting per cycle. Got ${numbers}."
+    )
+
+    // Marker names must be unique. They become the column names of the feature matrix,
+    // so duplicates make it ambiguous, and backsub requires uniqueness too.
+    //
+    // set_channel_names.py already rejects them, but it runs after Ashlar and backsub,
+    // so a duplicate costs a full stitch before anything complains. Checked here it
+    // costs nothing. The role lookup below is the more immediate reason: it is built
+    // with collectEntries, which keeps the last value for a repeated key, so a name
+    // appearing twice with different roles would silently resolve to one of them and
+    // the background check would then pass or fail for a reason nobody could see.
+    def duplicateNames = rows
+        .groupBy { it.marker_name }
+        .findAll { _name, group -> group.size() > 1 }
+        .keySet()
+        .sort()
+    assert !duplicateNames : (
+        "${where}: marker_name must be unique. Repeated: ${duplicateNames}. Marker names " +
+        "become the feature matrix column names, so a duplicate makes a column ambiguous."
+    )
+
+    // Every cycle needs a nuclear stain. Ashlar registers cycles against one another
+    // through it, segmentation reads it, and the cross-cycle photobleaching metric
+    // compares it from cycle to cycle. A cycle without one is either a sheet that
+    // forgot to label it or an acquisition that nothing downstream can align.
+    def cyclesWithoutDna = rows
+        .groupBy { it.cycle_number }
+        .findAll { _cycle, channels -> !channels.any { it.channel_role == 'dna' } }
+        .keySet()
+        .sort()
+    assert !cyclesWithoutDna : (
+        "${where}: every cycle needs at least one channel with channel_role 'dna'. " +
+        "Missing for cycle(s): ${cyclesWithoutDna}. Registration, segmentation and the " +
+        "cross-cycle photobleaching check all read the nuclear stain."
+    )
+
+    // The background column names the channel to subtract, so whatever it names is by
+    // definition an autofluorescence channel. Two columns describing one fact would
+    // otherwise be free to disagree, and the disagreement would be invisible.
+    //
+    // Checked whether or not backsub runs. A sheet that labels its background channel
+    // as a marker is describing the acquisition wrongly, and that description is what
+    // QC and every later feature reads, not just backsub. This also catches a
+    // background naming a channel that does not exist when backsub is off, which the
+    // check below only catches when it is on.
+    def roleByName = rows.collectEntries { [(it.marker_name): it.channel_role] }
+    def wrongRole = rows
+        .findAll { it.background && roleByName[it.background] != 'autofluorescence' }
+        .collect { "${it.marker_name} -> ${it.background} (role: ${roleByName[it.background] ?: 'no such channel'})" }
+    assert !wrongRole : (
+        "${where}: background must name a channel whose channel_role is " +
+        "'autofluorescence'. Offending rows: ${wrongRole}"
     )
 
     // Background subtraction scales by exposure and looks up a background channel
@@ -332,7 +456,7 @@ def validateMarkersheet(rows) {
     if (params.use_backsub) {
         def noExposure = rows.findAll { !it.exposure }.collect { it.marker_name }
         assert !noExposure : (
-            "marker_sheet: use_backsub is enabled, so every channel needs an exposure. " +
+            "${where}: use_backsub is enabled, so every channel needs an exposure. " +
             "Missing for: ${noExposure}"
         )
 
@@ -340,7 +464,7 @@ def validateMarkersheet(rows) {
         def unknown = rows.findAll { it.background && !(it.background in names) }
             .collect { "${it.marker_name} -> ${it.background}" }
         assert !unknown : (
-            "marker_sheet: background must name another channel's marker_name. Unknown: ${unknown}"
+            "${where}: background must name another channel's marker_name. Unknown: ${unknown}"
         )
     }
 

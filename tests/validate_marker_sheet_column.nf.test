@@ -1,0 +1,66 @@
+// The marker sheet is per sample, but the samplesheet has one row per cycle, so the
+// column repeats and every copy has to agree.
+//
+// Rows arrive as [meta, image_tiles, dfp, ffp, marker_sheet], which is schema property
+// order, so the sheet is it[4]. That positional coupling is the reason the column was
+// appended to schema_input_cycle.json rather than inserted: dfp and ffp are read
+// positionally elsewhere.
+
+nextflow_function {
+
+    name "validateMarkerSheetColumn"
+    script "../subworkflows/local/utils_nfcore_histo_pipeline/main.nf"
+    function "validateMarkerSheetColumn"
+    tag "unit"
+    tag "validation"
+
+    test("cycles of one sample naming the same sheet are accepted") {
+        when {
+            function {
+                """
+                input[0] = [
+                    [ [ id: 'slideA' ], 'c1.tif', [], [], '/data/markers_A.csv' ],
+                    [ [ id: 'slideA' ], 'c2.tif', [], [], '/data/markers_A.csv' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("two samples naming different sheets are accepted, which is the point of the column") {
+        when {
+            function {
+                """
+                input[0] = [
+                    [ [ id: 'slideA' ], 'c1.tif', [], [], '/data/markers_A.csv' ],
+                    [ [ id: 'slideB' ], 'c1.tif', [], [], '/data/markers_B.csv' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("one sample whose cycles name different sheets is rejected") {
+        when {
+            function {
+                """
+                input[0] = [
+                    [ [ id: 'slideA' ], 'c1.tif', [], [], '/data/markers_A.csv' ],
+                    [ [ id: 'slideA' ], 'c2.tif', [], [], '/data/markers_B.csv' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains("Sample 'slideA'") }
+            assert function.stdout.any { it.contains("must name the same marker_sheet") }
+        }
+    }
+}

@@ -50,15 +50,6 @@
                     "description": "Run the preprocessing half: illumination correction, stitching and registration, and the optional steps below. When false the samplesheet must point at images sopa can already read, which covers pre-stitched images and dearrayed cores re-entering the pipeline.",
                     "fa_icon": "fas fa-toggle-on"
                 },
-                "marker_sheet": {
-                    "type": "string",
-                    "description": "Path to the marker sheet CSV, one row per channel. Required when use_preprocessing is true. channel_number must run 1..N without gaps, because that ordering is what maps marker names onto the stitched image's channels.",
-                    "fa_icon": "fas fa-file-csv",
-                    "format": "file-path",
-                    "exists": true,
-                    "mimetype": "text/csv",
-                    "pattern": "^\\S+\\.csv$"
-                },
                 "ashlar_args": {
                     "type": "string",
                     "default": "--maximum-shift 30",

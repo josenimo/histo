@@ -54,17 +54,23 @@ lint:
     #                         committed by accident because it is a dotfile
     - .gitignore
 
-  # Both files are `nextflow_workflow` tests of a subworkflow, not pipeline tests, and
-  # both checks in this rule assume a pipeline:
-  #   - `outdir` is meaningless, the subworkflow publishes nothing
-  #   - a versions.yml snapshot asserts nothing here. preprocess_images has no versions
-  #     output at all, because the modules it calls emit on the `versions` topic which is
+  # None of these are pipeline tests, and both checks in this rule assume a pipeline:
+  #   - `outdir` is meaningless, nothing here publishes anything
+  #   - a versions.yml snapshot asserts nothing. preprocess_images has no versions output
+  #     at all, because the modules it calls emit on the `versions` topic which is
   #     collected in workflows/histo.nf. qc does emit versions, but these tests run under
   #     -stub, so the snapshot would pin the stub blocks' literal "stub" strings.
+  #
+  # The first two are `nextflow_workflow` tests of a subworkflow. The last two are
+  # `nextflow_function` tests of the marker sheet validators, where no process runs at
+  # all: they call a Groovy function and assert on what it rejects.
+  #
   # Listing the files skips only those files; the other test files stay checked.
   nf_test_content:
     - tests/preprocess_images.nf.test
     - tests/qc.nf.test
+    - tests/validate_markersheet.nf.test
+    - tests/validate_marker_sheet_column.nf.test
 
   multiqc_config: false
 

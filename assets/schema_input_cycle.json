@@ -44,9 +44,18 @@
                 "pattern": "^\\S+$",
                 "description": "Optional pre-computed flat-field profile for this cycle. Supply only when skipping BaSiCPy; if given for one cycle it must be given for all.",
                 "errorMessage": "ffp must be an existing file without spaces"
+            },
+            "marker_sheet": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "mimetype": "text/csv",
+                "pattern": "^\\S+\\.csv$",
+                "description": "Path to the marker sheet for this sample, one row per channel. Every cycle row of a sample must name the same file: the sheet describes the whole stitched image, not one cycle of it. Two samples may name different sheets, which is the point of the column.",
+                "errorMessage": "marker_sheet must be an existing .csv file without spaces"
             }
         },
-        "required": ["sample", "cycle_number", "image_tiles"],
+        "required": ["sample", "cycle_number", "image_tiles", "marker_sheet"],
         "additionalProperties": false
     }
 }

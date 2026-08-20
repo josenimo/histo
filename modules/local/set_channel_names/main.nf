@@ -8,8 +8,11 @@ process SET_CHANNEL_NAMES {
 :         'community.wave.seqera.io/library/python_sopa:54a97bc5a187152d' }"
 
     input:
-    tuple val(meta), path(sdata_path)
-    path markers
+    // markers arrives in the tuple rather than as a separate input, so it is matched
+    // to its own store by key. As a separate `path` input it was a single file
+    // broadcast to every sample, which silently processed one sample and dropped the
+    // rest whenever that channel held one item rather than being a value channel.
+    tuple val(meta), path(sdata_path), path(markers)
 
     output:
     // Pass-through: this mutates the store in place and declares its input as its

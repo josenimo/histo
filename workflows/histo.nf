@@ -28,10 +28,27 @@ include { argsCLI        } from '../modules/local/utils'
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
+//
+// Grouping cycles into samples reduces meta to {id}, but the downstream half needs
+// sample and sdata_dir. They are per-sample and only meaningful once cycles are
+// stitched, so they are added here rather than during samplesheet validation.
+//
+// Applied to the images and to the marker sheets through the same function, because
+// the two are joined on meta further down and a key differing by one field joins to
+// nothing. A top-level def rather than a closure in the workflow body: Nextflow 26
+// does not resolve a local closure called from inside a map closure.
+//
+def addSampleKeys(meta) {
+    return meta + [
+        sample: meta.id,
+        sdata_dir: "${meta.id}.zarr",
+    ]
+}
+
 workflow HISTO {
     take:
     ch_samplesheet // channel: samplesheet read in from --input
-    ch_markersheet // channel: marker sheet read in from --marker_sheet
+    ch_markersheet // channel: [ val(meta), path(csv) ] one marker sheet per sample
     outdir
 
     main:
@@ -41,20 +58,19 @@ workflow HISTO {
     if (params.use_preprocessing) {
         PREPROCESS_IMAGES(ch_samplesheet, ch_markersheet)
 
-        // Grouping cycles into samples reduces meta to {id}, but the downstream
-        // half needs sample and sdata_dir. They are per-sample and only
-        // meaningful once cycles are stitched, so they are added here rather
-        // than during samplesheet validation.
         ch_input_spatialdata = PREPROCESS_IMAGES.out.images.map { meta, image ->
-            def m = meta + [
-                sample: meta.id,
-                sdata_dir: "${meta.id}.zarr",
-            ]
-            [m, image, []]
+            [addSampleKeys(meta), image, []]
+        }
+        ch_markers = PREPROCESS_IMAGES.out.markers.map { meta, markers ->
+            [addSampleKeys(meta), markers]
         }
     }
     else {
         ch_input_spatialdata = ch_samplesheet.map { meta -> [meta, meta.data_dir, []] }
+
+        // Nothing describes the channels on this path, and nothing needs to: an image
+        // arriving pre-stitched is assumed to carry its own names.
+        ch_markers = channel.empty()
     }
 
     (ch_spatialdata, versions) = TO_SPATIALDATA(ch_input_spatialdata)
@@ -74,8 +90,11 @@ workflow HISTO {
     // Only when preprocessing ran: without it there is no marker sheet describing
     // the image, and an image entering the pipeline pre-stitched is assumed to carry
     // its own names already.
+    //
+    // join() pairs each store with its own sheet. On the TMA path that is per core,
+    // every core of a slide having inherited the same sheet.
     if (params.use_preprocessing) {
-        SET_CHANNEL_NAMES(ch_spatialdata, PREPROCESS_IMAGES.out.markers)
+        SET_CHANNEL_NAMES(ch_spatialdata.join(ch_markers))
         ch_named = SET_CHANNEL_NAMES.out.sdata
         ch_versions = ch_versions.mix(SET_CHANNEL_NAMES.out.versions)
     }
@@ -131,14 +150,11 @@ workflow HISTO {
     // clustering both read the per-cell intensity matrix, which does not exist until
     // aggregation has written it.
     if (params.use_qc) {
-        def ch_qc_markers = params.use_preprocessing
-            ? PREPROCESS_IMAGES.out.markers
-            : channel.empty()
         def ch_unsubtracted = params.use_preprocessing
             ? PREPROCESS_IMAGES.out.unsubtracted
             : channel.empty()
 
-        QC(REPORT.out.sdata, ch_qc_markers, ch_unsubtracted)
+        QC(REPORT.out.sdata, ch_markers, ch_unsubtracted)
         ch_versions = ch_versions.mix(QC.out.versions)
     }
 

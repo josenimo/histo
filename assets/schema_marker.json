@@ -28,6 +28,21 @@
                 "errorMessage": "marker_name must be provided and may contain only letters, digits, dot, underscore and hyphen",
                 "meta": "marker_name"
             },
+            "channel_role": {
+                "type": "string",
+                "enum": ["dna", "marker", "autofluorescence", "blank"],
+                "description": "What the pipeline should do with this channel. dna is a nuclear stain, used for segmentation and as the reference for the cross-cycle photobleaching check. marker is a biological readout. autofluorescence is a channel acquired to be subtracted rather than interpreted, and is what the background column points at. blank is a channel expected to be dark, which QC checks rather than reports. This replaces guessing the nuclear channel by matching its name.",
+                "errorMessage": "channel_role must be provided and must be one of: dna, marker, autofluorescence, blank",
+                "meta": "channel_role"
+            },
+            "channel_compartment": {
+                "type": "string",
+                "default": null,
+                "pattern": "^(nuclear|cytoplasm|membrane)(\\+(nuclear|cytoplasm|membrane))*$",
+                "description": "Optional. Where the signal is expected to sit within a cell. Combine with + for a marker that stains more than one compartment, for example nuclear+cytoplasm. Read by QC, which can only judge whether a marker landed where it should if the sheet says where that is. Order is not significant.",
+                "errorMessage": "channel_compartment must be one or more of nuclear, cytoplasm, membrane, joined with + (for example: membrane, or nuclear+cytoplasm)",
+                "meta": "channel_compartment"
+            },
             "filter": {
                 "type": "string",
                 "default": null,
@@ -69,7 +84,7 @@
                 "meta": "remove"
             }
         },
-        "required": ["channel_number", "cycle_number", "marker_name"],
+        "required": ["channel_number", "cycle_number", "marker_name", "channel_role"],
         "additionalProperties": false
     }
 }
