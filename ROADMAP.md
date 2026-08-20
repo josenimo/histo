@@ -20,7 +20,7 @@ Priorities, in order: transparency, robustness, troubleshootability.
 | 7. QC report           | Metrics, images and report wired in; thresholds still need real datasets  |
 | 8. Release 1.0.0       | Not started                                                               |
 
-Version `0.1.0dev`. Lint: 241 passed, 35 ignored, 5 warnings, 0 failed.
+Version `0.1.0dev`. Lint: 262 passed, 38 ignored, 6 warnings, 0 failed.
 
 ## Verified on real data
 
@@ -43,18 +43,13 @@ Version `0.1.0dev`. Lint: 241 passed, 35 ignored, 5 warnings, 0 failed.
 
 Ordered by how much harder each becomes if deferred.
 
-1. **Marker sheet as a samplesheet column.** Currently one global file broadcast to every
-   sample, which is wrong the moment two samples have different channel layouts. Needs
-   all-or-nothing validation: every cycle of a sample must name the same sheet. Do this before
-   other people depend on the current format, because changing it later is a breaking change
-   with an audience.
-2. **Aggregation beyond the mean.** sopa reports mean intensity per cell. Quantiles, standard
+1. **Aggregation beyond the mean.** sopa reports mean intensity per cell. Quantiles, standard
    deviation and morphology are all reasonable, and would need either a patched sopa module or
    our own aggregation step. The item with scientific rather than engineering value.
-3. **Explain `obs/slide`.** It appears on non-TMA runs and nothing in this pipeline writes it.
+2. **Explain `obs/slide`.** It appears on non-TMA runs and nothing in this pipeline writes it.
    Worth understanding before `MERGE_SPATIALDATA` starts writing its own slide identity into
    the same tables.
-4. **Phase 7's remaining half: the pass-or-fail gate.** The metrics, the images and the report are
+3. **Phase 7's remaining half: the pass-or-fail gate.** The metrics, the images and the report are
    in and published to `<outdir>/qc`; `{sample}_qc.json` is the machine-readable contract a gate
    would read. What is missing is the gate itself, and it is blocked on data rather than on code:
    every threshold worth setting needs several slides behind it, and the one slide available says
@@ -63,7 +58,7 @@ Ordered by how much harder each becomes if deferred.
    metrics originally listed here are still absent: Ashlar's registration residual, which exists
    only in its stderr (see Longer term), and run-level resource QC, which is structurally blocked
    (see Open).
-5. **Phase 8, release.** Tag off `main`, `nf-core pipelines lint --release` first.
+4. **Phase 8, release.** Tag off `main`, `nf-core pipelines lint --release` first.
 
 ## Longer term
 
@@ -98,13 +93,15 @@ already-planned move to a samplesheet column, rather than breaking the format th
   five clusters. It is still computed and reported for reference. Selection uses seed-to-seed
   stability instead, which is not monotone and ranked resolution 0.1 _worst_, the opposite verdict.
   Both numbers are in the report's sweep table.
-- **Nothing in the samplesheet says which channel is a nuclear stain.** The cross-cycle
-  photobleaching check and the cluster snapshots both need to know, and both currently find it by
-  matching the marker name against `--nuclear-pattern`, defaulting to `DAPI`. That works on every
-  dataset seen so far and will break silently on a Hoechst-stained one, where it reports the metric
-  as unavailable rather than wrong. A `nuclear` boolean column on the marker sheet would settle it,
-  and belongs in the same schema change as the samplesheet-column move above, not in a separate
-  breaking edit.
+- **The marker sheet now says which channel is a nuclear stain, but the QC scripts do not read it
+  yet.** `channel_role` is a required column and `dna` is one of its values, validated to appear in
+  every cycle. The cross-cycle photobleaching check and the cluster snapshots still find the
+  nuclear channel by matching the marker name against `--nuclear-pattern`, defaulting to `DAPI`,
+  which works on every dataset seen so far and goes quiet on a Hoechst-stained one. Replacing the
+  pattern with the column is the next branch, and touches `bin/qc_metrics.py`, `bin/qc_images.py`
+  and their tests. One wrinkle to handle there: backsub drops rows whose `remove` column is set, so
+  a sheet marking a `dna` channel for removal validates on the way in and has no `dna` channel left
+  in the `markerout` the QC step reads.
 - **`sopa report` and the new QC report now overlap, and one of them should probably go.** sopa's
   `{sample}_analysis_summary.html` draws cell count, an area histogram, channel names, per-cell
   intensity distributions and a UMAP; the QC report covers all of that except the UMAP, in a page
