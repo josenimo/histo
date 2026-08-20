@@ -31,12 +31,31 @@ cycle you must give them for all; otherwise BaSiCPy computes them.
 **Marker sheet**, one row per channel, `channel_number` running 1..N without gaps:
 
 ```csv
-channel_number,cycle_number,marker_name,filter
-1,1,DNA_1,DAPI
-2,1,CD45,FITC
+channel_number,cycle_number,marker_name,channel_role,channel_compartment,filter
+1,1,DNA_1,dna,nuclear,DAPI
+2,1,CD45,marker,membrane,FITC
 ```
 
-`--use_backsub` additionally needs `exposure` and `background` columns.
+`channel_role` is required and states what the pipeline should do with the channel:
+
+| Role               | Meaning                                                                                                                           |
+| ------------------ | --------------------------------------------------------------------------------------------------------------------------------- |
+| `dna`              | A nuclear stain. Every cycle needs at least one: registration, segmentation and the cross-cycle photobleaching check all read it. |
+| `marker`           | A biological readout.                                                                                                             |
+| `autofluorescence` | Acquired in order to be subtracted rather than interpreted. This is what `background` must point at.                              |
+| `blank`            | Expected to be dark. QC checks that it is, rather than reporting it as a result.                                                  |
+
+Giving the role explicitly is what stops the pipeline guessing which channel is a nuclear stain by
+matching its name, which works until someone stains with Hoechst.
+
+`channel_compartment` is optional and states where the signal belongs: `nuclear`, `cytoplasm`,
+`membrane`, or a `+`-joined combination such as `nuclear+cytoplasm`. Order is not significant. QC
+can only judge whether a marker landed where it should if the sheet says where that is, so leaving
+it blank costs a check rather than breaking a run.
+
+`--use_backsub` additionally needs `exposure` and `background` columns. `background` names the
+`marker_name` of the channel to subtract, and that channel must itself have `channel_role` set to
+`autofluorescence`. The two columns describe one fact, so they are checked against each other.
 
 Paths must be absolute.
 

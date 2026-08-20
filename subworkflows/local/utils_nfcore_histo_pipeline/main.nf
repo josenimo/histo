@@ -326,6 +326,39 @@ def validateMarkersheet(rows) {
         "without restarting per cycle. Got ${numbers}."
     )
 
+    // Every cycle needs a nuclear stain. Ashlar registers cycles against one another
+    // through it, segmentation reads it, and the cross-cycle photobleaching metric
+    // compares it from cycle to cycle. A cycle without one is either a sheet that
+    // forgot to label it or an acquisition that nothing downstream can align.
+    def cyclesWithoutDna = rows
+        .groupBy { it.cycle_number }
+        .findAll { _cycle, channels -> !channels.any { it.channel_role == 'dna' } }
+        .keySet()
+        .sort()
+    assert !cyclesWithoutDna : (
+        "marker_sheet: every cycle needs at least one channel with channel_role 'dna'. " +
+        "Missing for cycle(s): ${cyclesWithoutDna}. Registration, segmentation and the " +
+        "cross-cycle photobleaching check all read the nuclear stain."
+    )
+
+    // The background column names the channel to subtract, so whatever it names is by
+    // definition an autofluorescence channel. Two columns describing one fact would
+    // otherwise be free to disagree, and the disagreement would be invisible.
+    //
+    // Checked whether or not backsub runs. A sheet that labels its background channel
+    // as a marker is describing the acquisition wrongly, and that description is what
+    // QC and every later feature reads, not just backsub. This also catches a
+    // background naming a channel that does not exist when backsub is off, which the
+    // check below only catches when it is on.
+    def roleByName = rows.collectEntries { [(it.marker_name): it.channel_role] }
+    def wrongRole = rows
+        .findAll { it.background && roleByName[it.background] != 'autofluorescence' }
+        .collect { "${it.marker_name} -> ${it.background} (role: ${roleByName[it.background] ?: 'no such channel'})" }
+    assert !wrongRole : (
+        "marker_sheet: background must name a channel whose channel_role is " +
+        "'autofluorescence'. Offending rows: ${wrongRole}"
+    )
+
     // Background subtraction scales by exposure and looks up a background channel
     // by marker_name. Both are optional columns in general but mandatory here, and
     // a missing one produces a confusing failure inside the tool.
