@@ -149,23 +149,22 @@ already-planned move to a samplesheet column, rather than breaking the format th
   typo was accepted and silently ignored, so a run configured with `use_use_tma_dearray = true`
   would quietly do the opposite of what was asked. nf-core's schema validation can reject unknown
   parameters; find out why it did not here.
-- **backsub's filename suffix leaks into TMA core identity, and from there into the cell table.**
-  `conf/modules.config` gives BACKSUB `ext.prefix = { "${meta.id}_backsub" }`, and on the TMA path
-  BACKSUB runs before COREOGRAPH, which derives each core's identity from its filename
-  (`preprocess_images/main.nf:155`). So with both `use_backsub` and `use_tma` set, `meta.id` becomes
-  `{sample}_backsub_core001`, and the suffix propagates into `meta.sample`, the zarr directory name,
-  the REPORT filename and the element prefixes `bin/merge_spatialdata.py` writes into the merged
-  store. Nothing crashes: the element name and `meta.sample` agree because both come from the same
-  filename. The cost is that row identity in the final table depends on whether an optional
-  preprocessing step was enabled, so the same slide run with and without backsub yields cores that
-  cannot be matched by name. This is the quiet half of the `SET_CHANNEL_NAMES` fix above; making the
-  lookup filename-independent does not help, because this is a naming defect rather than a lookup
-  one. The suffix is not cosmetic — backsub's input is Ashlar's output, and Nextflow excludes staged
-  inputs from output matching, so identical names fail the task with a missing-output error. The fix
-  is to stage the input as `path(image, stageAs: 'input/*')` and drop the prefix, which leaves the
-  module's own collision guard passing since `$image` renders as `input/{sample}.ome.tif`. Reasoned
-  from the module source, not tested. It costs a second patched nf-core module carried through
-  `nf-core modules update`, and looks upstreamable, which would remove that cost.
+- **backsub's filename suffix does not leak into core identity. The entry that said it did was
+  wrong.** Recorded here rather than deleted, because it was reasoned from module source without
+  being tested and then believed for a fortnight. The claim was that `ext.prefix = { "${meta.id}_backsub" }`
+  reaches core IDs, `meta.sample`, the zarr directory name, the REPORT filename and the merged
+  element prefixes. It reaches none of them. COREOGRAPH is patched to name cores
+  `${prefix}_core001` from `ext.prefix = { "${meta.id}" }`, set explicitly in `conf/modules.config`,
+  and BACKSUB passes `meta` through unchanged, so `meta.id` is still the slide when Coreograph runs.
+  That patch (98a74a0, 6 August) predates the entry (e954f35, 10 August), so this was never true.
+  Verified on stub runs with `use_backsub` both with and without `use_tma_dearray`: `_backsub`
+  appears on backsub's own two published files and nowhere else, while every downstream name is
+  `{slide}_core001` or `{slide}`. The prefix is still required for the reason `conf/modules.config`
+  gives, that without it backsub's output would collide with its staged input. No module patch, no
+  upstream PR. The one place the suffix does survive is the image element name inside the zarr, since
+  `sopa convert` names elements after the file it converted, and `SET_CHANNEL_NAMES` already handles
+  that by taking the sole image element rather than addressing it by name.
+
 - **`bin/set_channel_names.py` `main()` has no test for element selection.**
   `tests/unit/test_set_channel_names.py` covers marker sheet parsing and `channel_labels()`, but not
   the explicit `--element` path, the single-element fallback, or the "more than one image element"

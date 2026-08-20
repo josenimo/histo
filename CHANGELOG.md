@@ -120,13 +120,6 @@ Initial scaffold. Not yet runnable; see [ROADMAP.md](ROADMAP.md).
 
 ### Known broken
 
-- On the TMA path with `use_backsub` set, backsub's `_backsub` filename suffix becomes part of each
-  core's identity. COREOGRAPH derives core IDs from filenames, so `meta.id` is
-  `{sample}_backsub_core001`, and the suffix reaches the zarr directory name, the REPORT filename and
-  cell identity in the merged table. Nothing fails, but the same slide run with and without backsub
-  produces cores that cannot be matched by name. This is the quiet half of the `SET_CHANNEL_NAMES`
-  fix above, and a naming defect rather than a lookup one. See [ROADMAP.md](ROADMAP.md).
-
 - `tests/*.nf.test.snap` still record `"nf-core/sopa": "v1.0.1"`. Snapshots must not be hand-edited;
   they need regenerating with `nf-test`, which needs real containers on the cluster. Until then
   `nf-test` fails. This blocks the Phase 1 exit criterion.
