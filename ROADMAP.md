@@ -1,7 +1,7 @@
 # Roadmap
 
-Status and plan. **This file is the tracker.** The issue tracker was deleted, so anything open
-lives here, under Next, Longer term or Open. The reasoning behind the design is in
+Status and plan. **This file is the tracker.** GitHub Issues is enabled but empty and unused, so
+anything open lives here, under Next, Longer term or Open. The reasoning behind the design is in
 [docs/decisions.md](docs/decisions.md), longer-term ideas in
 [docs/future-ideas.md](docs/future-ideas.md), and the blow-by-blow in git history.
 
@@ -30,15 +30,25 @@ Version `0.1.0dev`. Lint: 262 passed, 38 ignored, 6 warnings, 0 failed.
 - 10-cycle TMA, with and without background subtraction.
 - Tiled segmentation is correct: 9,855 cells as one patch versus 9,896 across six, a 0.4%
   difference. Boundary resolution works, which is the claim the whole downstream design rests on.
-- Nothing exceeded 1.7 GB peak RSS across 49 tasks. Ashlar's memory tracks the mosaic's spatial
-  extent, not channel count: 889 MB for 2 cycles, 1.3 GB for 10.
 - WSI, 3 cycles, 15 channels (5 of them background), 21,798 x 11,295 px, `use_backsub = true`
   → 142,493 cells in 72 patches. Every QC metric and every threshold in Phase 7 was calibrated
   against this one run, which is the single biggest caveat on all of them. Its numbers are quoted
   throughout the QC code and tests deliberately, so a regression disagrees with something that
-  actually happened rather than with an invented expectation. Peak RSS was 8.7 GB in BASICPY, which
-  contradicts the 1.7 GB line above -- that was a smaller run, and the line is now stale as a
-  general claim.
+  actually happened rather than with an invented expectation.
+
+### Memory
+
+Two measurements, and the larger one is the one to plan against.
+
+- **8.7 GB peak RSS in BASICPY** on the WSI run above. `TO_SPATIALDATA` reported exactly 8.00 GiB,
+  which looks like a ceiling rather than a measurement, so treat it as unmeasured.
+- **1.7 GB across 49 tasks** on the smaller mIF and TMA runs. Ashlar's memory tracked the mosaic's
+  spatial extent rather than channel count there: 889 MB for 2 cycles, 1.3 GB for 10.
+
+The two are not in conflict once the slide size is attached to each, which the earlier version of
+this section did not do: it asserted the 1.7 GB figure as a general claim and then contradicted it
+four lines later. Resource profiles are still estimates apart from `size_tiny`, and rewriting them
+wants `peak_rss` and `realtime` from a trace on a genuinely large slide.
 
 ## Next
 
