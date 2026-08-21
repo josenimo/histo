@@ -21,7 +21,7 @@ Priorities, in order: transparency, robustness, troubleshootability.
 | 7. QC report           | Metrics, images and report wired in; thresholds still need real datasets  |
 | 8. Release 1.0.0       | Not started                                                               |
 
-Version `0.1.0dev`. Lint: 262 passed, 38 ignored, 6 warnings, 0 failed.
+Version `0.1.0dev`. Lint: 263 passed, 42 ignored, 6 warnings, 0 failed.
 
 ## Verified on real data
 
@@ -216,6 +216,21 @@ blocks 1.0.0 on a decision.
 
 - **No real-data test** for the TMA path, background subtraction, or `use_preprocessing = false`.
 
+- **The background subtraction path cannot be stub-run at all**, so it has no stub test either.
+  `modules/nf-core/backsub/main.nf` declares its version as
+  `eval('backsub --version')`, and Nextflow evaluates an `eval` output even under `-stub`, so the
+  task fails with `bash: backsub: command not found` on any machine without the tool. Every other
+  path stubs cleanly. Fixing it means patching the module to hardcode a stub version, which is a
+  divergence from upstream nf-core to weigh against the coverage it buys.
+
+### Findings in the tooling
+
+- **nf-metro 1.1.0 cannot render the WSI line's auxiliary edge.** Adding
+  `ASHLAR -->|backsub| QC_METRICS` to `docs/pipeline_paths.mmd`, which is the pre-subtraction
+  image reaching QC, aborts the renderer with `CurveInvariantError: a route hanging in open
+space`. Every other edge in that map renders. The edge is documented in prose in
+  `docs/pipeline-paths.md` instead. Worth reporting upstream.
+
 ### Resource and configuration loose ends
 
 - **`FLUO_ANNOTATION` is missing from the three larger size tiers**, so it inherits
@@ -224,10 +239,6 @@ blocks 1.0.0 on a decision.
 
 - **`PATCH_SEGMENTATION_CELLPOSE` is `process_single` but used 133% CPU.** Belongs in
   `base.config`, since its cost follows `patch_width_pixel` rather than image size.
-
-- **`MERGE_SPATIALDATA` publishes a stray `versions.yml` into the output root**, because its
-  `publishDir` has no `saveAs` filter like the ones in `conf/modules.config` do. `REPORT` did the
-  same on every run until it was removed, so this is now TMA-only. Verified on a stub run.
 
 - **Singularity bind mounts** in `conf/slurm.config` are a commented TODO, unresolved until a
   task fails to find its input.

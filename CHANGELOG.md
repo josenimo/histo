@@ -12,10 +12,17 @@ See [ROADMAP.md](ROADMAP.md).
 
 ### Added
 
-- `PUBLISH_SPATIALDATA`, a publish sink whose only job is to copy `{sample}.zarr` into the output
-  directory. `publishDir` is a process directive, so publishing a channel means declaring it as
-  some process's output; aggregation and fluorescence annotation both write into the store and
-  which runs last depends on `use_fluorescence_annotation`, so neither can own the publication.
+- `PUBLISH_SPATIALDATA`, a publish sink whose only job is to copy the finished store into the
+  output directory. `publishDir` is a process directive, so publishing a channel means declaring
+  it as some process's output; aggregation and fluorescence annotation both write into the store
+  and which runs last depends on `use_fluorescence_annotation`, so neither can own the
+  publication. On the TMA path it runs after `MERGE_SPATIALDATA` and publishes the merged store
+  only, once per slide. The per-core stores are no longer published, because the merged store
+  copies every element family and every table out of them, prefixed by core.
+
+- A metro map of the three paths that have been run on real data, in `docs/pipeline_paths.mmd`,
+  rendered to SVG with [nf-metro](https://github.com/seqeralabs/nf-metro) and described in
+  `docs/pipeline-paths.md`.
 
 - Citations for the Leiden algorithm and python-igraph, which the QC report's clustering calls
   through `sc.tl.leiden(flavor="igraph")`.
@@ -152,6 +159,13 @@ See [ROADMAP.md](ROADMAP.md).
   unguarded on a field the manifest no longer defines.
 
 - `.devcontainer/`, which configured a GitHub Codespaces environment that is unused.
+
+### Changed
+
+- `MERGE_SPATIALDATA` publishes only its manifest, from a selector in `conf/modules.config`
+  rather than a `publishDir` in the module. The merged store itself is published by
+  `PUBLISH_SPATIALDATA`, and the unfiltered directive this replaces also dropped a stray
+  `versions.yml` in the output root.
 
 ### Known broken
 
