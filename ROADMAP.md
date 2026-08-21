@@ -56,11 +56,22 @@ Ordered by how much harder each becomes if deferred.
 
 1. **Aggregation beyond the mean.** sopa reports mean intensity per cell. Quantiles, standard
    deviation and morphology are all reasonable, and would need either a patched sopa module or
-   our own aggregation step. The item with scientific rather than engineering value.
-2. **Explain `obs/slide`.** It appears on non-TMA runs and nothing in this pipeline writes it.
+   our own aggregation step. The item with scientific rather than engineering value, and now also
+   the gate on two others: post-aggregation cell filtering has nothing to filter on until these
+   metrics exist, and the segmentation-time filter stays off until then (see Known limitations).
+
+2. **Post-aggregation cell filtering.** The place to reject degenerate cells, once there are
+   per-cell metrics worth thresholding. Ordered after item 1 deliberately. This is where filtering
+   belongs rather than in the segmentation call, because it is reversible, inspectable in the QC
+   report, and does not change the segmentation that produced the cells.
+
+3. **Cellpose-SAM.** Planned model upgrade. It takes no diameter, which is why no diameter-derived
+   filter was wired into segmentation.
+
+4. **Explain `obs/slide`.** It appears on non-TMA runs and nothing in this pipeline writes it.
    Worth understanding before `MERGE_SPATIALDATA` starts writing its own slide identity into
    the same tables.
-3. **Phase 7's remaining half: the pass-or-fail gate.** The metrics, the images and the report are
+5. **Phase 7's remaining half: the pass-or-fail gate.** The metrics, the images and the report are
    in and published to `<outdir>/qc`; `{sample}_qc.json` is the machine-readable contract a gate
    would read. What is missing is the gate itself, and it is blocked on data rather than on code:
    every threshold worth setting needs several slides behind it, and the one slide available says
@@ -69,7 +80,7 @@ Ordered by how much harder each becomes if deferred.
    metrics originally listed here are still absent: Ashlar's registration residual, which exists
    only in its stderr (see Longer term), and run-level resource QC, which is structurally blocked
    (see Open).
-4. **Phase 8, release.** Tag off `main`, `nf-core pipelines lint --release` first.
+6. **Phase 8, release.** Tag off `main`, `nf-core pipelines lint --release` first.
 
 ## Longer term
 
@@ -85,46 +96,14 @@ Sketched with costs and risks in [docs/future-ideas.md](docs/future-ideas.md).
    would most improve Ashlar's reliability. Depends on locating cores from a naive
    stage-position mosaic, without stitching first.
 
-Ideas 1, 2 and 5 all want extra marker sheet columns. Design that schema once, alongside the
-already-planned move to a samplesheet column, rather than breaking the format three times.
+Ideas 1, 2 and 5 all want extra marker sheet columns. The sheet is already a per-sample
+samplesheet column, so design that schema once rather than breaking the format three times.
 
 ## Open
 
-Grouped by what each one asks of a reader. A decision needs an answer before release, a
-finding needs no fix, a known limitation is understood and left alone on purpose, and the
-last two groups are work.
-
-### Decisions needed before 1.0.0
-
-- **`sopa report` and the new QC report now overlap, and one of them should probably go.** sopa's
-  `{sample}_analysis_summary.html` draws cell count, an area histogram, channel names, per-cell
-  intensity distributions and a UMAP; the QC report covers all of that except the UMAP, in a page
-  that is self-contained and backed by a machine-readable JSON. Keeping both means every run pays
-  for REPORT and publishes two HTML files that disagree in style and overlap in content. Dropping
-  REPORT would also remove the `.sopa_cache` deletion that forces QC and MERGE_SPATIALDATA to chain
-  off it. Decide before release; the only thing genuinely lost is the UMAP.
-
-- **scanpy and igraph are uncited.** Both arrive as transitive sopa dependencies rather than as new
-  tools, so `CITATIONS.md` is not strictly wrong, but the QC report's clustering is scanpy's Leiden
-  via igraph and that is a scientific method presented in output a reader may act on. Cite both, or
-  drop the clustering, before tagging 1.0.0.
-
-- **`min_area_pixels2 = null` filters nothing, and the reason is now known.** No cluster run was
-  needed after all; sopa's source answers it. `sopa/segmentation/methods/_cellpose.py` does
-  `if min_area is None: min_area = (diameter / 2) ** 2`, so the derivation `nextflow.config`
-  described is real, but it lives in the Python API. The CLI this pipeline calls declares
-  `min_area: int = typer.Option(0, ...)` in `sopa/cli/segmentation.py`, so `argsCLI()` skipping the
-  null means no `--min-area` is passed and typer supplies 0 rather than the None that would trigger
-  the derivation. Filtering is therefore off, which matches the published WSI run: smallest cell
-  4.3 px², 1% under 48.6 px², against the ~306 px² that `(35/2)²` implies. Neither of the two
-  hypotheses recorded here was right; the comment was describing a real derivation on a code path
-  this pipeline does not use. The comment now says so. **Open decision:** whether to pass
-  `(cellpose_diameter / 2)²` explicitly when the parameter is null, which would reproduce sopa's
-  documented intent in one line of `extractSubArgs`, or to keep filtering off by default. That
-  changes segmentation results, so it is a scientific call rather than a fix. Note also that
-  `sopa/cli/resolve.py` takes a `min_area` in **microns²** while the segmentation CLI takes
-  pixels²; this pipeline only routes to the latter, so there is no unit mismatch today, but there
-  would be if the parameter were ever wired to resolve.
+Grouped by what each one asks of a reader. A finding needs no fix, a known limitation is
+understood and left alone on purpose, and the last two groups are work. Nothing here now
+blocks 1.0.0 on a decision.
 
 ### Findings, not bugs
 
@@ -136,6 +115,13 @@ last two groups are work.
   concluding it is a property of the data rather than of this one sample. If it holds, the honest
   move is to present clusters only as a summary of staining, or to drop them for a supervised
   gating step against known markers.
+
+- **Every `-stub` run warns about a positional argument it was never given.** `nextflow run . -stub`
+  and `-stub-run` both leave `true` in the positional args that Nextflow hands the pipeline, so the
+  nf-core validator reports "the positional argument `true` has been detected" on every stub run.
+  Verified on Nextflow 26.04.6 with both spellings and with `-ansi-log` absent, so it is neither the
+  flag's value nor this pipeline's own strict-parameter check. Harmless, and worth knowing before
+  someone chases it: stub runs are the primary feedback loop here, so this warning appears constantly.
 
 - **Silhouette was tried and rejected for choosing a Leiden resolution; do not reach for it again.**
   It falls monotonically as resolution rises -- 0.223 at five clusters down to 0.079 at forty-three
@@ -186,6 +172,21 @@ last two groups are work.
   published WSI run peaked at 8.7 GB in BASICPY, and `TO_SPATIALDATA` reported exactly 8.00 GiB,
   which looks like a ceiling rather than a measurement.
 
+- **Segmentation-time area filtering stays off, and that is now a decision rather than an
+  accident.** `min_area_pixels2 = null` passes no `--min-area`, so typer supplies 0 and nothing is
+  filtered. sopa's Python API would have derived `(diameter / 2)²` from the same null
+  (`sopa/segmentation/methods/_cellpose.py`), but the CLI this pipeline calls declares
+  `min_area: int = typer.Option(0, ...)` in `sopa/cli/segmentation.py`, so that derivation is on a
+  code path this pipeline does not use. The published WSI run matches: smallest cell 4.3 px², 1%
+  under 48.6 px², against the ~306 px² that `(35/2)²` implies. Wiring the derivation up explicitly
+  was considered and rejected for two reasons. Cellpose-SAM takes no diameter, so a
+  diameter-derived threshold is a dead end; and filtering belongs after aggregation, where it is
+  reversible and visible in the QC report, rather than inside the segmentation call where it
+  silently changes what was segmented. See Next items 2 and 3. Note for whoever revisits this:
+  `sopa/cli/resolve.py` takes `min_area` in **microns²** while the segmentation CLI takes pixels².
+  This pipeline only routes to the latter, so there is no unit mismatch today, but there would be
+  if the parameter were ever wired to resolve.
+
 - **Resource profiles are estimates** apart from `size_tiny`. Rewrite from `peak_rss` and
   `realtime` in the trace once a genuinely large slide has run.
 
@@ -217,11 +218,16 @@ last two groups are work.
 
 ### Resource and configuration loose ends
 
-- **`REPORT` and `FLUO_ANNOTATION` are missing from the three larger size tiers**, so they
-  inherit `process_medium` — a one-minute REPORT asked for 36 GB.
+- **`FLUO_ANNOTATION` is missing from the three larger size tiers**, so it inherits
+  `process_medium`. The cost of that gap was measured on `REPORT`, which shared it: a one-minute
+  task asked for 36 GB. `REPORT` has since been removed.
 
 - **`PATCH_SEGMENTATION_CELLPOSE` is `process_single` but used 133% CPU.** Belongs in
   `base.config`, since its cost follows `patch_width_pixel` rather than image size.
+
+- **`MERGE_SPATIALDATA` publishes a stray `versions.yml` into the output root**, because its
+  `publishDir` has no `saveAs` filter like the ones in `conf/modules.config` do. `REPORT` did the
+  same on every run until it was removed, so this is now TMA-only. Verified on a stub run.
 
 - **Singularity bind mounts** in `conf/slurm.config` are a commented TODO, unresolved until a
   task fails to find its input.

@@ -12,6 +12,14 @@ See [ROADMAP.md](ROADMAP.md).
 
 ### Added
 
+- `PUBLISH_SPATIALDATA`, a publish sink whose only job is to copy `{sample}.zarr` into the output
+  directory. `publishDir` is a process directive, so publishing a channel means declaring it as
+  some process's output; aggregation and fluorescence annotation both write into the store and
+  which runs last depends on `use_fluorescence_annotation`, so neither can own the publication.
+
+- Citations for the Leiden algorithm and python-igraph, which the QC report's clustering calls
+  through `sc.tl.leiden(flavor="igraph")`.
+
 - Project context (`AGENT_CONTEXT.md`) and the phased plan (`ROADMAP.md`). The linting
   configuration that was proposed under `planning/` now lives in `.pre-commit-config.yaml`.
 
@@ -111,6 +119,23 @@ See [ROADMAP.md](ROADMAP.md).
   on real `.czi` data.
 
 ### Removed
+
+- `REPORT`, and with it `sopa report`'s `{sample}_analysis_summary.html` and the stray
+  `versions.yml` its unfiltered `publishDir` dropped in the output root. Its cell counts, area
+  distribution and per-channel intensity distributions are all in the QC report, which is
+  self-contained and backed by a machine-readable JSON. Two figures are genuinely lost: the UMAP,
+  and the spatial cell-annotation scatter, which only ever rendered under
+  `use_fluorescence_annotation`. Its transcripts section had always returned `None` here.
+
+- The `rm -r ${sdata_path}/.sopa_cache` that `REPORT` inherited from nf-core/sopa. Nextflow stages
+  the store as a symlink, so the deletion reached back into a completed task's output and left it
+  no longer matching what that task produced. The cache is 2.4 MB in a 57 MB store, reproducible
+  from the store, and now ships with it. Nothing writes to the store after aggregation any more, so
+  QC, `MERGE_SPATIALDATA` and `PUBLISH_SPATIALDATA` fan out from one channel instead of chaining
+  through `REPORT` to avoid racing it.
+
+- The `(planned)` markers on BaSiCPy, ASHLAR and background_subtraction in `CITATIONS.md`. All
+  three have been wired in since the preprocessing half landed.
 
 - The nf-core Zenodo DOI from the manifest and README. It belongs to nf-core/sopa and retaining it
   would have claimed another project's citation.
