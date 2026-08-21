@@ -4,8 +4,9 @@ Processing, segmentation and quantification of H&E and multiplex immunofluoresce
 
 > [!WARNING]
 > **Runs end to end, but is pre-release at `0.1.0dev`.** Both halves work on real data: mIF and TMA
-> slides have been processed from raw cycles to a quantified SpatialData object. There are no
-> regression tests yet, and parameter names may still change. Check your results.
+> slides have been processed from raw cycles to a quantified SpatialData object. The input format is
+> still changing and parameter names may still change. Every threshold in the QC report was
+> calibrated against a single slide. Check your results.
 
 [![Nextflow](https://img.shields.io/badge/version-%E2%89%A525.10.4-green?style=flat&logo=nextflow&logoColor=white&color=%230DC09D&link=https%3A%2F%2Fnextflow.io)](https://www.nextflow.io/)
 [![nf-test](https://img.shields.io/badge/unit_tests-nf--test-337ab7.svg)](https://www.nf-test.com)
@@ -66,8 +67,6 @@ for pre-staging images.
 
 Expect breaking changes before `1.0.0`.
 
-- **Marker sheet** becomes a samplesheet column rather than a single global file, so that samples can
-  differ.
 - **Resource profiles** are estimates apart from `size_tiny`, and will be rewritten from real runs.
 - **Aggregation** currently reports mean intensity per cell; more per-cell metrics are being
   considered.
@@ -79,23 +78,24 @@ poor fit for it, so images stay in pixel units. Full reasoning and progress in
 
 ## Tests and checks
 
-Four layers, cheapest and fastest first. Each catches a different class of problem, and
+Six layers, cheapest and fastest first. Each catches a different class of problem, and
 none of them substitutes for another.
 
-| Layer                    | What it checks                     | Data          | Where             | Time    |
-| ------------------------ | ---------------------------------- | ------------- | ----------------- | ------- |
-| Pre-commit hooks         | Style, and repo-specific rules     | none          | Local commit + CI | seconds |
-| `nf-core pipelines lint` | Template conformance               | none          | CI                | seconds |
-| Unit tests               | Logic inside `bin/` and `tools/`   | none          | CI + local        | seconds |
-| Stub tests               | Channel topology                   | placeholders  | CI + local        | seconds |
-| Fixture test             | The whole pipeline, on real images | 43 MB fixture | Cluster, by hand  | ~6 min  |
+| Layer                    | What it checks                      | Data          | Where             | Time    |
+| ------------------------ | ----------------------------------- | ------------- | ----------------- | ------- |
+| Pre-commit hooks         | Style, and repo-specific rules      | none          | Local commit + CI | seconds |
+| `nf-core pipelines lint` | Template conformance                | none          | CI                | seconds |
+| Unit tests               | Logic inside `bin/` and `tools/`    | none          | CI + local        | seconds |
+| Validation tests         | That bad input is actually rejected | none          | CI + local        | seconds |
+| Stub tests               | Channel topology                    | placeholders  | CI + local        | seconds |
+| Fixture test             | The whole pipeline, on real images  | 43 MB fixture | Cluster, by hand  | ~6 min  |
 
 ### Pre-commit hooks — `prek run --all-files`
 
 Eighteen hooks. Twelve are off-the-shelf: `prettier`, whitespace and end-of-file fixers,
-`check-yaml`, `detect-private-key`, `check-added-large-files`, shebang consistency,
-`nextflow-lint`, `shellcheck`, and `ruff-check`/`ruff-format` over `bin/`, `tools/` and
-`tests/unit/`.
+`check-merge-conflict`, `detect-private-key`, `check-added-large-files`, the two shebang
+consistency hooks, `nextflow-lint`, `shellcheck`, and `ruff-check`/`ruff-format` over `bin/`,
+`tools/` and `tests/unit/`.
 
 Six are written for this repository, each after a real defect:
 
@@ -113,15 +113,29 @@ the real run fails, which is worse than having no test.
 
 ### Unit tests — `pytest tests/unit`
 
-Thirty tests over the pure logic in `bin/` and `tools/`: marker sheet parsing, channel-label
-reading, TMA core naming, table region relinking, container cache filenames. No containers,
-no imaging data, no Nextflow. Every case is one that has actually occurred.
+159 tests over the pure logic in `bin/` and `tools/`: marker sheet parsing, channel-label
+reading, TMA core naming, table region relinking, QC metrics and report rendering, container
+cache filenames. No containers, no imaging data, no Nextflow.
 
-### Stub tests — `nf-test test tests/preprocess_images.nf.test`
+### Validation tests — `nf-test test --tag validation`
 
-Runs the preprocessing subworkflow with `-stub`, so no tool executes. Asserts wiring only:
-that two cycles group into one image, and that a TMA fans out into cores which keep their
-slide identity and carry no file extension in their IDs.
+29 cases over the functions that reject bad input, run as `nextflow_function` tests so no
+process starts. Twelve of them watch a check reject something and assert on the message text,
+because a check never seen failing is not known to work and one that fires with an unreadable
+message is half a check.
+
+What they cover: a marker sheet with a cycle missing its nuclear stain, a repeated marker
+name, a `background` column pointing at the wrong kind of channel, a sample whose cycles name
+different marker sheets, a repeated or gapped `cycle_number`, a misspelt parameter, and a
+boolean set on the command line in either of the two forms that do not work.
+
+### Stub tests — `nf-test test --tag stub`
+
+Runs the preprocessing and QC subworkflows with `-stub`, so no tool executes. Asserts wiring
+only: that two cycles group into one image, that a TMA fans out into cores which keep their
+slide identity and carry no file extension in their IDs, that each core inherits its slide's
+marker sheet, and that the optional QC inputs can each be absent without silently removing
+the report.
 
 Inputs are a few hundred bytes of placeholder in `tests/stub_data/` — stub runs stage their
 inputs and never read them.
@@ -142,7 +156,9 @@ Assertions are properties rather than checksums: Cellpose output shifts with ver
 hardware, so a snapshot would fail for reasons unrelated to this pipeline.
 
 The fixture is not in this repository — 43 MB of binary that git would keep forever. Needs
-all seven containers, so it does not run in CI.
+all seven containers, so it does not run in CI. Since the marker sheet became a samplesheet
+column, `samplesheet_fixture.csv` needs a `marker_sheet` column and `markers_fixture.csv`
+needs a `channel_role` for every row; both live with the fixture, not here.
 
 ### Also in CI
 
