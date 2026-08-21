@@ -14,7 +14,7 @@ include { TISSUE_SEGMENTATION     } from '../modules/local/tissue_segmentation'
 include { AGGREGATE               } from '../modules/local/aggregate'
 include { MERGE_SPATIALDATA       } from '../modules/local/merge_spatialdata'
 include { SET_CHANNEL_NAMES       } from '../modules/local/set_channel_names'
-include { REPORT                  } from '../modules/local/report'
+include { PUBLISH_SPATIALDATA     } from '../modules/local/publish_spatialdata'
 include { FLUO_ANNOTATION         } from '../modules/local/fluo_annotation'
 include { CELLPOSE                } from '../subworkflows/local/cellpose'
 include { STARDIST                } from '../subworkflows/local/stardist'
@@ -139,13 +139,12 @@ workflow HISTO {
 
     ch_preprocessed = ch_annotated
 
-    REPORT(ch_preprocessed)
-    ch_versions = ch_versions.mix(REPORT.out.versions)
+    // The store is complete here, and nothing downstream writes to it, so the three
+    // consumers below fan out from this one channel rather than chaining. That was
+    // not true while REPORT existed: it deleted .sopa_cache from the store, which
+    // made every reader a potential race against a writer.
+    PUBLISH_SPATIALDATA(ch_preprocessed)
 
-    // QC chains off REPORT.out.sdata for the same reason MERGE_SPATIALDATA does:
-    // REPORT deletes .sopa_cache from the store, so reading it concurrently would race
-    // a writer. Both would otherwise see the same cells.
-    //
     // After AGGREGATE, necessarily: the cross-cycle nuclear comparison and the
     // clustering both read the per-cell intensity matrix, which does not exist until
     // aggregation has written it.
@@ -154,7 +153,7 @@ workflow HISTO {
             ? PREPROCESS_IMAGES.out.unsubtracted
             : channel.empty()
 
-        QC(REPORT.out.sdata, ch_markers, ch_unsubtracted)
+        QC(ch_preprocessed, ch_markers, ch_unsubtracted)
         ch_versions = ch_versions.mix(QC.out.versions)
     }
 
@@ -162,12 +161,8 @@ workflow HISTO {
     // through every step on its own. Merging earlier would mean segmenting and
     // aggregating one large sparse object instead of many small dense ones,
     // which scales badly and loses the per-core QC report.
-    //
-    // This chains off REPORT rather than off ch_preprocessed. Both would give
-    // the same cores, but REPORT mutates the zarr in place (it removes
-    // .sopa_cache), so reading the same store concurrently would be a race.
     if (params.use_tma_dearray) {
-        ch_cores_by_slide = REPORT.out.sdata
+        ch_cores_by_slide = ch_preprocessed
             .map { meta, sdata -> [[id: meta.slide], sdata] }
             .groupTuple()
 

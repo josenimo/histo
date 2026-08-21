@@ -1,0 +1,5 @@
+# Modules that record no tool version, one path per line with a reason above it.
+#
+# Unlike the rest of this list's intent, the entry below is not expected to burn
+# down: a publish sink runs no tool, so there is no version for it to record.
+modules/local/publish_spatialdata/main.nf

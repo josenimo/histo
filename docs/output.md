@@ -52,12 +52,20 @@ background subtraction produces cores with matching names.
 
 - `{sample}.zarr/`
   - Spatial elements: `images/`, `shapes/`, `tables/`, `points/`, ...
+- `{sample}.zarr/.sopa_cache/`
+  - What segmentation left behind: the patch definitions, and one parquet of cell boundaries
+    per patch. Reproducible from the store, and about 4% of its size.
 
 </details>
 
 The `{sample}.zarr` directory contains a [SpatialData](https://spatialdata.scverse.org/en/stable/) object, where the `sample` name is either (i) specified by the samplesheet, or (ii) based on the name of the corresponding input directory.
 
 Refer to the [SpatialData docs](https://spatialdata.scverse.org/en/stable/) for usage details, or to the [documentation of `sopa` as a Python package](https://prism-oncology.github.io/sopa/). If you are not familiar with `SpatialData`, you can also use directly the extracted `AnnData` object (see below).
+
+`PUBLISH_SPATIALDATA` is what copies the store here, and it exists only for that. Aggregation
+and fluorescence annotation both write into the store, and which of them runs last depends on
+`use_fluorescence_annotation`, so publishing from either would publish a store the other then
+modifies.
 
 ### QC report
 
@@ -82,8 +90,6 @@ Refer to the [SpatialData docs](https://spatialdata.scverse.org/en/stable/) for 
 - `qc/{sample}_qc_images/`
   - The PNGs the report embeds, kept as files so they can be used on their own. Absent when
     `--use_qc_images false`.
-- `{sample}_analysis_summary.html`
-  - Sopa quality control report: cell counts, area distributions, per-channel intensity summaries.
 
 </details>
 
