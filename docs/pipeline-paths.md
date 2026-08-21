@@ -7,7 +7,8 @@ The three routes through the pipeline that have been run on real data. Everythin
 
 ## The same thing as a table
 
-Read down a column to get one run's process list, in order.
+Read down a column to get one run's process list, in order. The three QC steps read the store
+without writing to it, so they run alongside publishing rather than after it.
 
 | Station                       |  mIF slide   | WSI, background subtracted | TMA, dearrayed |
 | ----------------------------- | :----------: | :------------------------: | :------------: |
@@ -21,16 +22,43 @@ Read down a column to get one run's process list, in order.
 | `PATCH_SEGMENTATION_CELLPOSE` | x, per patch |        x, per patch        |  x, per patch  |
 | `RESOLVE_CELLPOSE`            |      x       |             x              |       x        |
 | `AGGREGATE`                   |      x       |             x              |       x        |
-| `PUBLISH_SPATIALDATA`         |      x       |             x              |       x        |
+| `MERGE_SPATIALDATA`           |              |                            |       x        |
+| `PUBLISH_SPATIALDATA`         |      x       |             x              |  x, per slide  |
 | `QC_METRICS`                  |      x       |             x              |       x        |
 | `QC_IMAGES`                   |      x       |             x              |       x        |
 | `QC_REPORT`                   |      x       |             x              |       x        |
-| `MERGE_SPATIALDATA`           |              |                            |       x        |
 
-Everything from `COREOGRAPH` onward runs once per core on the TMA path, and
-`MERGE_SPATIALDATA` puts the cores of one slide back together at the end. It runs in parallel
-with `PUBLISH_SPATIALDATA` rather than after it: both read the finished store, neither writes
-to it.
+Everything from `COREOGRAPH` to `AGGREGATE` runs once per core on the TMA path.
+`MERGE_SPATIALDATA` then puts one slide's cores back together, and `PUBLISH_SPATIALDATA`
+publishes the result, so publication happens once per slide rather than once per core. The
+per-core stores are not published: the merged store copies every element family and every table
+out of them, prefixed by core, so publishing both would write the slide out twice.
+
+## Regenerating the figure
+
+The map is authored in [`pipeline_paths.mmd`](pipeline_paths.mmd) and rendered with
+[nf-metro](https://github.com/seqeralabs/nf-metro):
+
+```bash
+pip install nf-metro
+nf-metro validate docs/pipeline_paths.mmd
+nf-metro render docs/pipeline_paths.mmd -o docs/images/pipeline_paths.svg
+```
+
+**Re-render this after any rewiring, and look at the result.** A change to the graph that leaves
+the map stale is a change nobody has seen. The tests assert that processes ran and that their
+outputs exist, which is not the same as checking what feeds what: sequencing `PUBLISH_SPATIALDATA`
+behind `MERGE_SPATIALDATA` passed every test both before and after, and the map is where the
+difference is visible. Reading it is a human step and deliberately not automated.
+
+The station order was taken from `nextflow run . -stub -with-dag` exports of the mIF and TMA
+paths rather than read off the source, so the map reflects the graph Nextflow actually built.
+`nf-metro convert` turns such an export straight into a map, which is worth doing when the
+pipeline changes shape. The WSI path could not be exported that way: `modules/nf-core/backsub`
+declares its version with `eval('backsub --version')`, and an `eval` output runs even under
+`-stub`, so a stub run of that path fails without the tool installed.
+
+nf-metro renders light only, so the figure keeps its own light surface on a dark page.
 
 ## What the map does not show
 
@@ -43,6 +71,8 @@ to it.
 - StarDist substitutes `PATCH_SEGMENTATION_STARDIST` and `RESOLVE_STARDIST` for the two Cellpose
   stations.
 
-The pre-subtraction image reaching `QC_METRICS` is a second input rather than part of the flow,
-which is why it is dashed. It exists only when `use_backsub` is set and `use_tma_dearray` is not:
-a dearrayed core has no whole-slide before-image to compare against.
+One edge is deliberately absent. On the WSI line, `ASHLAR`'s pre-subtraction image also reaches
+`QC_METRICS`, which is how the report compares channel statistics before and after subtraction.
+It exists only when `use_backsub` is set and `use_tma_dearray` is not, because a dearrayed core
+has no whole-slide before-image to compare against. Drawing it aborts nf-metro 1.1.0's renderer
+with a `CurveInvariantError`, so it is written down here instead.
