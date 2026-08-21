@@ -90,29 +90,12 @@ already-planned move to a samplesheet column, rather than breaking the format th
 
 ## Open
 
-- **Leiden clusters are not reproducible on the one slide we have, and that is a finding rather
-  than a bug.** Across eight resolutions from 0.1 to 2.0, the best agreement between partitions from
-  different random seeds was 0.596 adjusted Rand, against the 0.9 floor the QC step asks for. So no
-  resolution on that slide produces a partition worth calling cell types, and the report says as
-  much instead of presenting the clusters as phenotypes. Worth re-checking on a second slide before
-  concluding it is a property of the data rather than of this one sample. If it holds, the honest
-  move is to present clusters only as a summary of staining, or to drop them for a supervised
-  gating step against known markers.
-- **Silhouette was tried and rejected for choosing a Leiden resolution; do not reach for it again.**
-  It falls monotonically as resolution rises -- 0.223 at five clusters down to 0.079 at forty-three
-  on the measured run -- so maximising it always returns the coarsest option on offer, and it chose
-  five clusters. It is still computed and reported for reference. Selection uses seed-to-seed
-  stability instead, which is not monotone and ranked resolution 0.1 _worst_, the opposite verdict.
-  Both numbers are in the report's sweep table.
-- **The marker sheet now says which channel is a nuclear stain, but the QC scripts do not read it
-  yet.** `channel_role` is a required column and `dna` is one of its values, validated to appear in
-  every cycle. The cross-cycle photobleaching check and the cluster snapshots still find the
-  nuclear channel by matching the marker name against `--nuclear-pattern`, defaulting to `DAPI`,
-  which works on every dataset seen so far and goes quiet on a Hoechst-stained one. Replacing the
-  pattern with the column is the next branch, and touches `bin/qc_metrics.py`, `bin/qc_images.py`
-  and their tests. One wrinkle to handle there: backsub drops rows whose `remove` column is set, so
-  a sheet marking a `dna` channel for removal validates on the way in and has no `dna` channel left
-  in the `markerout` the QC step reads.
+Grouped by what each one asks of a reader. A decision needs an answer before release, a
+finding needs no fix, a known limitation is understood and left alone on purpose, and the
+last two groups are work.
+
+### Decisions needed before 1.0.0
+
 - **`sopa report` and the new QC report now overlap, and one of them should probably go.** sopa's
   `{sample}_analysis_summary.html` draws cell count, an area histogram, channel names, per-cell
   intensity distributions and a UMAP; the QC report covers all of that except the UMAP, in a page
@@ -120,32 +103,12 @@ already-planned move to a samplesheet column, rather than breaking the format th
   for REPORT and publishes two HTML files that disagree in style and overlap in content. Dropping
   REPORT would also remove the `.sopa_cache` deletion that forces QC and MERGE_SPATIALDATA to chain
   off it. Decide before release; the only thing genuinely lost is the UMAP.
+
 - **scanpy and igraph are uncited.** Both arrive as transitive sopa dependencies rather than as new
   tools, so `CITATIONS.md` is not strictly wrong, but the QC report's clustering is scanpy's Leiden
   via igraph and that is a scientific method presented in output a reader may act on. Cite both, or
   drop the clustering, before tagging 1.0.0.
-- **Booleans still cannot be set on the command line, but the attempt now fails instead of
-  inverting.** Two separate mechanisms, and the roadmap previously described only one of them.
-  `--use_qc=false` arrives as the string `"false"`, which is truthy in Groovy. `--use_qc false` is
-  different and worse: Nextflow reads the flag on its own, sets it to boolean `true`, and discards
-  the `false` entirely, so it reaches neither `params` nor the positional args and the run
-  explicitly enables what it was asked to skip. Both are rejected at startup now.
-  **Coercing the value, which this entry used to propose, is not possible.** `params` is a
-  `ScriptBinding$ParamsMap` and ignores writes to a key that is already set: `params.use_qc = false`
-  and `params.putAll([use_qc: false])` both return without error and change nothing, verified on
-  Nextflow 26.04.6. Making the spaced form work would need a change in Nextflow, since the value is
-  destroyed before any pipeline code runs. A params file remains the way to set a boolean, and a
-  bare flag remains the way to switch one on.
-- **Run-level resource QC is deferred, and the reason is structural.** Failed and retried task
-  counts and peak RSS per task all live in `pipeline_info/execution_trace_*.txt`, which Nextflow
-  only finalises when the run ends — so no process inside the DAG can read its own run's trace, and
-  the per-sample QC step cannot produce these numbers. It needs either a `workflow.onComplete` hook
-  or a post-run step, and neither is worth building until the pass/fail gate exists to consume it.
-  A working parser was written and removed in the same branch rather than left unwired; the trace
-  columns are `status`, `attempt` and `peak_rss`, and sizes arrive as `5.1 GB` or as `-` when there
-  is no reading at all, which is every row on macOS without a container engine. Worth having: the
-  published WSI run peaked at 8.7 GB in BASICPY, and `TO_SPATIALDATA` reported exactly 8.00 GiB,
-  which looks like a ceiling rather than a measurement.
+
 - **`min_area_pixels2 = null` filters nothing, and the reason is now known.** No cluster run was
   needed after all; sopa's source answers it. `sopa/segmentation/methods/_cellpose.py` does
   `if min_area is None: min_area = (diameter / 2) ** 2`, so the derivation `nextflow.config`
@@ -163,11 +126,24 @@ already-planned move to a samplesheet column, rather than breaking the format th
   pixels²; this pipeline only routes to the latter, so there is no unit mismatch today, but there
   would be if the parameter were ever wired to resolve.
 
-- **A misspelt parameter does not fail the run.** `pipeline_info/params_*.json` from the published
-  run records both `use_use_tma_dearray` and `use_tma_dearray`, with `validate_params = true`. The
-  typo was accepted and silently ignored, so a run configured with `use_use_tma_dearray = true`
-  would quietly do the opposite of what was asked. nf-core's schema validation can reject unknown
-  parameters; find out why it did not here.
+### Findings, not bugs
+
+- **Leiden clusters are not reproducible on the one slide we have, and that is a finding rather
+  than a bug.** Across eight resolutions from 0.1 to 2.0, the best agreement between partitions from
+  different random seeds was 0.596 adjusted Rand, against the 0.9 floor the QC step asks for. So no
+  resolution on that slide produces a partition worth calling cell types, and the report says as
+  much instead of presenting the clusters as phenotypes. Worth re-checking on a second slide before
+  concluding it is a property of the data rather than of this one sample. If it holds, the honest
+  move is to present clusters only as a summary of staining, or to drop them for a supervised
+  gating step against known markers.
+
+- **Silhouette was tried and rejected for choosing a Leiden resolution; do not reach for it again.**
+  It falls monotonically as resolution rises -- 0.223 at five clusters down to 0.079 at forty-three
+  on the measured run -- so maximising it always returns the coarsest option on offer, and it chose
+  five clusters. It is still computed and reported for reference. Selection uses seed-to-seed
+  stability instead, which is not monotone and ranked resolution 0.1 _worst_, the opposite verdict.
+  Both numbers are in the report's sweep table.
+
 - **backsub's filename suffix does not leak into core identity. The entry that said it did was
   wrong.** Recorded here rather than deleted, because it was reasoned from module source without
   being tested and then believed for a fortnight. The claim was that `ext.prefix = { "${meta.id}_backsub" }`
@@ -184,22 +160,69 @@ already-planned move to a samplesheet column, rather than breaking the format th
   `sopa convert` names elements after the file it converted, and `SET_CHANNEL_NAMES` already handles
   that by taking the sole image element rather than addressing it by name.
 
+### Known limitations, accepted for now
+
+- **Booleans still cannot be set on the command line, but the attempt now fails instead of
+  inverting.** Two separate mechanisms, and the roadmap previously described only one of them.
+  `--use_qc=false` arrives as the string `"false"`, which is truthy in Groovy. `--use_qc false` is
+  different and worse: Nextflow reads the flag on its own, sets it to boolean `true`, and discards
+  the `false` entirely, so it reaches neither `params` nor the positional args and the run
+  explicitly enables what it was asked to skip. Both are rejected at startup now.
+  **Coercing the value, which this entry used to propose, is not possible.** `params` is a
+  `ScriptBinding$ParamsMap` and ignores writes to a key that is already set: `params.use_qc = false`
+  and `params.putAll([use_qc: false])` both return without error and change nothing, verified on
+  Nextflow 26.04.6. Making the spaced form work would need a change in Nextflow, since the value is
+  destroyed before any pipeline code runs. A params file remains the way to set a boolean, and a
+  bare flag remains the way to switch one on.
+
+- **Run-level resource QC is deferred, and the reason is structural.** Failed and retried task
+  counts and peak RSS per task all live in `pipeline_info/execution_trace_*.txt`, which Nextflow
+  only finalises when the run ends — so no process inside the DAG can read its own run's trace, and
+  the per-sample QC step cannot produce these numbers. It needs either a `workflow.onComplete` hook
+  or a post-run step, and neither is worth building until the pass/fail gate exists to consume it.
+  A working parser was written and removed in the same branch rather than left unwired; the trace
+  columns are `status`, `attempt` and `peak_rss`, and sizes arrive as `5.1 GB` or as `-` when there
+  is no reading at all, which is every row on macOS without a container engine. Worth having: the
+  published WSI run peaked at 8.7 GB in BASICPY, and `TO_SPATIALDATA` reported exactly 8.00 GiB,
+  which looks like a ceiling rather than a measurement.
+
+- **Resource profiles are estimates** apart from `size_tiny`. Rewrite from `peak_rss` and
+  `realtime` in the trace once a genuinely large slide has run.
+
+- **H&E support** is planned; only `ome_tif` mIF input works today.
+
+### Gaps in the tests
+
+- **The marker sheet now says which channel is a nuclear stain, but the QC scripts do not read it
+  yet.** `channel_role` is a required column and `dna` is one of its values, validated to appear in
+  every cycle. The cross-cycle photobleaching check and the cluster snapshots still find the
+  nuclear channel by matching the marker name against `--nuclear-pattern`, defaulting to `DAPI`,
+  which works on every dataset seen so far and goes quiet on a Hoechst-stained one. Replacing the
+  pattern with the column is the next branch, and touches `bin/qc_metrics.py`, `bin/qc_images.py`
+  and their tests. One wrinkle to handle there: backsub drops rows whose `remove` column is set, so
+  a sheet marking a `dna` channel for removal validates on the way in and has no `dna` channel left
+  in the `markerout` the QC step reads.
+
 - **`bin/set_channel_names.py` `main()` has no test for element selection.**
   `tests/unit/test_set_channel_names.py` covers marker sheet parsing and `channel_labels()`, but not
   the explicit `--element` path, the single-element fallback, or the "more than one image element"
   error. The pipeline now depends on that fallback, so the least-tested part of the script is the
   part it relies on. Needs a real spatialdata store rather than the JSON fixture `make_store`
   builds, so it is slower than the tests beside it.
-- **Resource profiles are estimates** apart from `size_tiny`. Rewrite from `peak_rss` and
-  `realtime` in the trace once a genuinely large slide has run.
-- **`REPORT` and `FLUO_ANNOTATION` are missing from the three larger size tiers**, so they
-  inherit `process_medium` — a one-minute REPORT asked for 36 GB.
-- **`PATCH_SEGMENTATION_CELLPOSE` is `process_single` but used 133% CPU.** Belongs in
-  `base.config`, since its cost follows `patch_width_pixel` rather than image size.
+
 - **Two inherited nf-test files** still snapshot nf-core/sopa's outputs. Rewrite as property
   assertions rather than regenerating.
+
 - **No real-data test** for the TMA path, background subtraction, or `use_preprocessing = false`.
-- **H&E support** is planned; only `ome_tif` mIF input works today.
+
+### Resource and configuration loose ends
+
+- **`REPORT` and `FLUO_ANNOTATION` are missing from the three larger size tiers**, so they
+  inherit `process_medium` — a one-minute REPORT asked for 36 GB.
+
+- **`PATCH_SEGMENTATION_CELLPOSE` is `process_single` but used 133% CPU.** Belongs in
+  `base.config`, since its cost follows `patch_width_pixel` rather than image size.
+
 - **Singularity bind mounts** in `conf/slurm.config` are a commented TODO, unresolved until a
   task fails to find its input.
 
