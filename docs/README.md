@@ -6,8 +6,8 @@
 - [Decisions](decisions.md) — why the pipeline is built the way it is.
 - [Future ideas](future-ideas.md) — larger changes being considered, with their costs.
 
-For the plan, the reasoning behind it, and current progress, see [ROADMAP.md](../ROADMAP.md) and the
-[open issues](https://github.com/josenimo/histo/issues).
+For the plan, the reasoning behind it, and current progress, see [ROADMAP.md](../ROADMAP.md), which
+is also where open work is tracked.
 
 This is not an nf-core pipeline. It uses the nf-core template and modules, so the
 [nf-core documentation](https://nf-co.re/docs) and the

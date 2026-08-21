@@ -17,8 +17,8 @@ Deliberately not duplicated here, because duplicated guidance drifts:
   it wins.
 - **[`AGENTS.md`](../AGENTS.md)** — the nf-core community agent guidelines, vendored verbatim.
   `AGENT_CONTEXT.md` layers on top and takes precedence where they conflict.
-- **[`ROADMAP.md`](../ROADMAP.md)** — the phased plan and the reasoning behind it. Progress is tracked
-  in [issues](https://github.com/josenimo/histo/issues), not in that document.
+- **[`ROADMAP.md`](../ROADMAP.md)** — the phased plan, the reasoning behind it, and the tracker.
+  Open work goes in this file; there is no issue tracker.
 
 ## Before committing
 

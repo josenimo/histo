@@ -75,7 +75,7 @@ Expect breaking changes before `1.0.0`.
 
 Pixel size is deliberately **not** written into the Zarr: SpatialData's coordinate-system model is a
 poor fit for it, so images stay in pixel units. Full reasoning and progress in
-[ROADMAP.md](ROADMAP.md) and the [open issues](https://github.com/josenimo/histo/issues).
+[ROADMAP.md](ROADMAP.md), which is where open work is tracked.
 
 ## Tests and checks
 

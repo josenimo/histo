@@ -1,8 +1,9 @@
 # Roadmap
 
-Status and plan. The reasoning behind the design is in [docs/decisions.md](docs/decisions.md),
-longer-term ideas in [docs/future-ideas.md](docs/future-ideas.md), and the blow-by-blow in git
-history and the [issues](https://github.com/josenimo/histo/issues).
+Status and plan. **This file is the tracker.** The issue tracker was deleted, so anything open
+lives here, under Next, Longer term or Open. The reasoning behind the design is in
+[docs/decisions.md](docs/decisions.md), longer-term ideas in
+[docs/future-ideas.md](docs/future-ideas.md), and the blow-by-blow in git history.
 
 Priorities, in order: transparency, robustness, troubleshootability.
 
