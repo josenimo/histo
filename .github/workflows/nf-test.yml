@@ -51,12 +51,15 @@ jobs:
           NFT_VER: ${{ env.NFT_VER }}
         with:
           max_shards: 7
-          # Only stub-tagged tests run in CI. They need no containers and finish in
-          # seconds. The alternatives cannot run here: tests/fixture.nf.test needs a
-          # 43 MB fixture that is not in the repository and all seven container
-          # images, and the two inherited sopa tests still snapshot outputs this
-          # pipeline no longer produces. Both are run by hand; see tests/README.md.
-          tags: stub
+          # stub and validation only. Neither needs a container and both finish in
+          # seconds: stub tests check channel topology, validation tests call the
+          # input-checking functions directly and assert on what they reject.
+          #
+          # The alternatives cannot run here: tests/fixture.nf.test needs a 43 MB
+          # fixture that is not in the repository and all seven container images, and
+          # the two inherited sopa tests still snapshot outputs this pipeline no longer
+          # produces. Both are run by hand; see tests/README.md.
+          tags: stub,validation
 
       - name: debug
         run: |
@@ -109,7 +112,7 @@ jobs:
           total_shards: ${{ env.TOTAL_SHARDS }}
           # Must match the tag given to get-shards above, or the shard count and the
           # tests actually run will disagree.
-          tags: stub
+          tags: stub,validation
 
       - name: Report test status
         if: ${{ always() }}
