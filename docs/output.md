@@ -1,10 +1,5 @@
 # josenimo/histo: Output
 
-> [!NOTE]
-> Describes the output of the downstream half, which is currently unmodified from nf-core/sopa.
-> Sections will be removed as out-of-scope features are dropped, and extended when the preprocessing
-> half is added. See [ROADMAP.md](../ROADMAP.md).
-
 ## Introduction
 
 This document describes the output produced by the pipeline.
@@ -15,9 +10,40 @@ The directories listed below will be created in the results directory after the 
 
 The pipeline is built using [Nextflow](https://www.nextflow.io/) and outputs the following information:
 
+- [Preprocessing](#preprocessing) - Illumination profiles, the stitched image, and the optional background-subtracted and dearrayed images.
 - [SpatialData directory](#spatialdata-directory) - Full [SpatialData](https://spatialdata.scverse.org/en/stable/) object with the segmented and aggregated data.
 - [QC report](#qc-report) - Per-sample HTML summary of segmentation and aggregation
 - [Pipeline information](#pipeline-information) - Report metrics generated during the workflow execution
+
+### Preprocessing
+
+<details markdown="1">
+<summary>Output files</summary>
+
+- `preprocessing/illumination/`
+  - `{sample}_cycle{n}-dfp.ome.tif` and `-ffp.ome.tif`, the dark-field and flat-field profiles
+    BaSiCPy fitted for each cycle. Absent for a cycle whose profiles were supplied in the
+    samplesheet, since nothing was computed.
+- `preprocessing/registration/`
+  - `{sample}.ome.tif`, the stitched and registered mosaic from Ashlar. **This is the handoff
+    boundary between the two halves of the pipeline**, and the file to inspect first when
+    segmentation looks wrong.
+- `preprocessing/background_subtraction/`
+  - `{sample}_backsub.ome.tif` and `{sample}_backsub.csv`. Only when `use_backsub` is true. The
+    CSV is backsub's own marker sheet rather than a copy of the input: rows whose `remove` column
+    was set are gone and `channel_number` is renumbered over what survives, so this is the sheet
+    that describes the image everything downstream reads.
+- `preprocessing/dearray/`
+  - `{slide}_core001.ome.tif` and one per core, plus `masks/{slide}_core001_mask.tif`,
+    `{slide}_coremask.tif`, `{slide}_tma_map.tif` and `{slide}_centroids.txt`. Only when
+    `use_tma_dearray` is true. The TMA map and centroids are what to check when a core is missing
+    or two cores were merged into one.
+
+</details>
+
+The `_backsub` suffix appears only on backsub's own two files. Core identity comes from the
+slide name rather than from the filename it was cut out of, so a slide processed with and without
+background subtraction produces cores with matching names.
 
 ### SpatialData directory
 
