@@ -51,12 +51,16 @@ outputs exist, which is not the same as checking what feeds what: sequencing `PU
 behind `MERGE_SPATIALDATA` passed every test both before and after, and the map is where the
 difference is visible. Reading it is a human step and deliberately not automated.
 
-The station order was taken from `nextflow run . -stub -with-dag` exports of the mIF and TMA
-paths rather than read off the source, so the map reflects the graph Nextflow actually built.
+The station order was taken from `nextflow run . -stub -with-dag` exports of all three paths
+rather than read off the source, so the map reflects the graph Nextflow actually built.
 `nf-metro convert` turns such an export straight into a map, which is worth doing when the
-pipeline changes shape. The WSI path could not be exported that way: `modules/nf-core/backsub`
-declares its version with `eval('backsub --version')`, and an `eval` output runs even under
-`-stub`, so a stub run of that path fails without the tool installed.
+pipeline changes shape.
+
+Read a converted export rather than trusting it. Nextflow's DAG draws an edge per channel
+consumer, so a channel that two processes read from produces edges to both even when one of them
+discards part of the tuple: the WSI export shows `ASHLAR` reaching `QC_IMAGES`, which it does not,
+because `subworkflows/local/qc/main.nf` drops the pre-subtraction image before `QC_IMAGES` sees
+it.
 
 nf-metro renders light only, so the figure keeps its own light surface on a dark page.
 

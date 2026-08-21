@@ -1,0 +1,19 @@
+Changes in component 'nf-core/backsub'
+'modules/nf-core/backsub/environment.yml' is unchanged
+'modules/nf-core/backsub/meta.yml' is unchanged
+Changes in 'backsub/main.nf':
+--- modules/nf-core/backsub/main.nf
++++ modules/nf-core/backsub/main.nf
+@@ -12,7 +12,7 @@
+     output:
+     tuple val(meta), path("*.ome.tif"), emit: backsub_tif
+     tuple val(meta2), path("*.csv")   , emit: markerout
+-    tuple val("${task.process}"), val('backsub'), eval('backsub --version'), emit: versions_backsub, topic: versions
++    tuple val("${task.process}"), val('backsub'), eval(workflow.stubRun ? 'echo stub' : 'backsub --version'), emit: versions_backsub, topic: versions
+ 
+     when:
+     task.ext.when == null || task.ext.when
+
+'modules/nf-core/backsub/tests/main.nf.test.snap' is unchanged
+'modules/nf-core/backsub/tests/main.nf.test' is unchanged
+************************************************************

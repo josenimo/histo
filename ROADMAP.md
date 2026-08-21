@@ -216,14 +216,17 @@ blocks 1.0.0 on a decision.
 
 - **No real-data test** for the TMA path, background subtraction, or `use_preprocessing = false`.
 
-- **The background subtraction path cannot be stub-run at all**, so it has no stub test either.
-  `modules/nf-core/backsub/main.nf` declares its version as
-  `eval('backsub --version')`, and Nextflow evaluates an `eval` output even under `-stub`, so the
-  task fails with `bash: backsub: command not found` on any machine without the tool. Every other
-  path stubs cleanly. Fixing it means patching the module to hardcode a stub version, which is a
-  divergence from upstream nf-core to weigh against the coverage it buys.
-
 ### Findings in the tooling
+
+- **`ASHLAR` records a blank version on every stub run, and nothing complains.**
+  `modules/nf-core/ashlar/main.nf` captures its version with
+  `eval("ashlar --version | sed 's/^.*ashlar //'")`. The pipe is what saves it: `ashlar` is absent
+  under `-stub`, but the exit status is `sed`'s, so the task succeeds and
+  `histo_software_versions.yml` gets `ashlar:` with nothing after it. `BACKSUB` had the same
+  construction without a pipe and failed loudly instead, which is how this was found. The same
+  `workflow.stubRun` patch applied to BACKSUB would make it record `stub`, honestly, rather than
+  a blank that reads like a captured value. Not yet done, because it is a second divergence from
+  upstream.
 
 - **nf-metro 1.1.0 cannot render the WSI line's auxiliary edge.** Adding
   `ASHLAR -->|backsub| QC_METRICS` to `docs/pipeline_paths.mmd`, which is the pre-subtraction

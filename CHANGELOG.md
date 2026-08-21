@@ -87,6 +87,13 @@ See [ROADMAP.md](ROADMAP.md).
 
 ### Fixed
 
+- The background subtraction path can be stub-run. `modules/nf-core/backsub` declared its version
+  with `eval('backsub --version')`, and Nextflow evaluates an `eval` output even under `-stub`, so
+  the task died with `bash: backsub: command not found` on any machine without the tool and that
+  path had no stub coverage at all. Patched with `nf-core modules patch` to
+  `eval(workflow.stubRun ? 'echo stub' : 'backsub --version')`, so a real run still fails loudly
+  if the tool is missing while a stub run records `backsub: stub` like every other module.
+
 - A samplesheet that repeats a `cycle_number` within a sample is rejected at startup. It was
   previously accepted, and since a cycle is identified by `sample` and `cycle_number` together, two
   such rows were the same cycle as far as the pipeline could tell: each cycle's BaSiCPy profile went
