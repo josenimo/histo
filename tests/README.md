@@ -1,11 +1,11 @@
 # Tests
 
-Three tiers, cheapest first.
+Four tiers, cheapest first.
 
 ## Unit tests — seconds, no containers
 
 Pure Python over the logic in `bin/` and `tools/`: marker sheet parsing, core naming,
-table relinking, container cache filenames.
+table relinking, QC metrics and report rendering, container cache filenames.
 
 ```bash
 pytest tests/unit
@@ -13,14 +13,28 @@ pytest tests/unit
 
 Runs in CI on every push (`.github/workflows/unit-tests.yml`).
 
+## Validation tests — seconds, no containers, no Nextflow processes
+
+The functions that reject bad input, called directly as `nextflow_function` tests.
+
+```bash
+nf-test test --tag validation
+```
+
+Most of these assert on a rejection and on the wording of the message. That is
+deliberate: a check nobody has watched fail is not known to work, and one that fires
+with an unreadable message is half a check. `docs/decisions.md` records why, under
+Recurring lessons.
+
 ## Stub tests — seconds, no containers, no real data
 
 Channel topology. No tool runs, so these say nothing about whether an image was
 stitched well — they catch cycles grouped wrongly, a TMA fan-out that loses core
-identity, an emit nothing consumes.
+identity, a marker sheet that reaches one sample out of four, an emit nothing
+consumes.
 
 ```bash
-nf-test test tests/preprocess_images.nf.test
+nf-test test --tag stub
 ```
 
 `tests/stub_data/` holds a few hundred bytes of placeholder standing in for images.
@@ -30,6 +44,9 @@ and this keeps tens of megabytes out of the repository's permanent history.
 Requires `-profile laptop`, already set in the test file: `ashlar` and `backsub`
 declare versions with `eval()`, which Nextflow evaluates in the task environment even
 under `-stub`, so `tests/stub_bin` must be on PATH.
+
+CI runs `--tag stub,validation`, which is both of the tiers above and nothing else.
+Neither needs a container.
 
 ## Real tests — minutes, containers required
 
