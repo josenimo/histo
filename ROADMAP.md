@@ -218,16 +218,6 @@ blocks 1.0.0 on a decision.
 
 ### Findings in the tooling
 
-- **`ASHLAR` records a blank version on every stub run, and nothing complains.**
-  `modules/nf-core/ashlar/main.nf` captures its version with
-  `eval("ashlar --version | sed 's/^.*ashlar //'")`. The pipe is what saves it: `ashlar` is absent
-  under `-stub`, but the exit status is `sed`'s, so the task succeeds and
-  `histo_software_versions.yml` gets `ashlar:` with nothing after it. `BACKSUB` had the same
-  construction without a pipe and failed loudly instead, which is how this was found. The same
-  `workflow.stubRun` patch applied to BACKSUB would make it record `stub`, honestly, rather than
-  a blank that reads like a captured value. Not yet done, because it is a second divergence from
-  upstream.
-
 - **nf-metro 1.1.0 cannot render the WSI line's auxiliary edge.** Adding
   `ASHLAR -->|backsub| QC_METRICS` to `docs/pipeline_paths.mmd`, which is the pre-subtraction
   image reaching QC, aborts the renderer with `CurveInvariantError: a route hanging in open
@@ -235,6 +225,10 @@ space`. Every other edge in that map renders. The edge is documented in prose in
   `docs/pipeline-paths.md` instead. Worth reporting upstream.
 
 ### Resource and configuration loose ends
+
+- **Two nf-core modules carry a local patch for the same reason**, `ashlar` and `backsub`, both
+  making `eval` version capture stub-aware. `nf-core modules update` on either will conflict on
+  that line, which is the point of the recorded `.diff`. Drop the patch if the fix lands upstream.
 
 - **`FLUO_ANNOTATION` is missing from the three larger size tiers**, so it inherits
   `process_medium`. The cost of that gap was measured on `REPORT`, which shared it: a one-minute

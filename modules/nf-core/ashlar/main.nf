@@ -14,7 +14,7 @@ process ASHLAR {
 
     output:
     tuple val(meta), path("*.ome.tif"), emit: tif
-    tuple val("${task.process}"), val('ashlar'), eval("ashlar --version | sed 's/^.*ashlar //'"), emit: versions_ashlar, topic: versions
+    tuple val("${task.process}"), val('ashlar'), eval(workflow.stubRun ? 'echo stub' : "ashlar --version | sed 's/^.*ashlar //'"), emit: versions_ashlar, topic: versions
 
     when:
     task.ext.when == null || task.ext.when

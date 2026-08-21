@@ -1,0 +1,20 @@
+Changes in component 'nf-core/ashlar'
+'modules/nf-core/ashlar/environment.yml' is unchanged
+'modules/nf-core/ashlar/meta.yml' is unchanged
+Changes in 'ashlar/main.nf':
+--- modules/nf-core/ashlar/main.nf
++++ modules/nf-core/ashlar/main.nf
+@@ -14,7 +14,7 @@
+ 
+     output:
+     tuple val(meta), path("*.ome.tif"), emit: tif
+-    tuple val("${task.process}"), val('ashlar'), eval("ashlar --version | sed 's/^.*ashlar //'"), emit: versions_ashlar, topic: versions
++    tuple val("${task.process}"), val('ashlar'), eval(workflow.stubRun ? 'echo stub' : "ashlar --version | sed 's/^.*ashlar //'"), emit: versions_ashlar, topic: versions
+ 
+     when:
+     task.ext.when == null || task.ext.when
+
+'modules/nf-core/ashlar/tests/main.nf.test.snap' is unchanged
+'modules/nf-core/ashlar/tests/nextflow.config' is unchanged
+'modules/nf-core/ashlar/tests/main.nf.test' is unchanged
+************************************************************

@@ -87,6 +87,13 @@ See [ROADMAP.md](ROADMAP.md).
 
 ### Fixed
 
+- `ASHLAR` records `ashlar: stub` on a stub run instead of a blank. It captured its version with
+  `eval("ashlar --version | sed 's/^.*ashlar //'")`, and the pipe meant the exit status was
+  `sed`'s, so an absent `ashlar` produced a task that succeeded and wrote `ashlar:` with nothing
+  after it into `histo_software_versions.yml`. A blank in a provenance file reads like a captured
+  value, so this was a silent wrong answer rather than a visible gap. Patched the same way as
+  `backsub`.
+
 - The background subtraction path can be stub-run. `modules/nf-core/backsub` declared its version
   with `eval('backsub --version')`, and Nextflow evaluates an `eval` output even under `-stub`, so
   the task died with `bash: backsub: command not found` on any machine without the tool and that
