@@ -80,7 +80,10 @@ nextflow_pipeline {
                 { assert file("${zarr}/shapes/cellpose_boundaries").exists() },
                 { assert file("${zarr}/shapes/image_patches").exists() },
                 { assert file("${zarr}/tables/table").exists() },
-                { assert file("$outputDir/exemplar-001_analysis_summary.html").exists() },
+                // PUBLISH_SPATIALDATA is the only thing putting the store in outdir, so
+                // every zarr assertion above is also a test that it ran. The cache
+                // survives publication now that REPORT no longer deletes it.
+                { assert file("${zarr}/.sopa_cache").exists() },
                 { assert file("$outputDir/preprocessing/registration/exemplar-001.ome.tif").exists() },
 
                 // Provenance for every process that ran. versions.yml exists so that a

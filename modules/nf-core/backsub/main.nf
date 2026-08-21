@@ -12,7 +12,7 @@ process BACKSUB {
     output:
     tuple val(meta), path("*.ome.tif"), emit: backsub_tif
     tuple val(meta2), path("*.csv")   , emit: markerout
-    tuple val("${task.process}"), val('backsub'), eval('backsub --version'), emit: versions_backsub, topic: versions
+    tuple val("${task.process}"), val('backsub'), eval(workflow.stubRun ? 'echo stub' : 'backsub --version'), emit: versions_backsub, topic: versions
 
     when:
     task.ext.when == null || task.ext.when

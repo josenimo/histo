@@ -99,6 +99,12 @@ explains itself.
   - `LICENSE` — MIT
   - `conf/` institutional profile for my SLURM setup
 - **Never hand-edit `nextflow_schema.json`.** Use `nf-core pipelines schema build`.
+- **Re-render the metro map whenever the graph is rewired**, and look at it. Any change to
+  `workflows/histo.nf`, to a subworkflow's wiring, or to which process publishes what, ends with
+  `nf-metro render docs/pipeline_paths.mmd -o docs/images/pipeline_paths.svg` and a human reading
+  the result. It is the one check that catches a rewiring that runs green and is still wrong:
+  tests assert that processes ran, the map shows what feeds what. See
+  [docs/pipeline-paths.md](docs/pipeline-paths.md).
 - Optional steps are booleans in the schema with `default: false`, so they self-document via `--help`.
 - Tag `1.0.0` off `main` once the two required preprocessing steps plus segmentation run
   end-to-end, even if optional steps are unfinished. A tag is what makes `-r 1.0.0` reproducible

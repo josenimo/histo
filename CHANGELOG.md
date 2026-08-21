@@ -12,6 +12,21 @@ See [ROADMAP.md](ROADMAP.md).
 
 ### Added
 
+- `PUBLISH_SPATIALDATA`, a publish sink whose only job is to copy the finished store into the
+  output directory. `publishDir` is a process directive, so publishing a channel means declaring
+  it as some process's output; aggregation and fluorescence annotation both write into the store
+  and which runs last depends on `use_fluorescence_annotation`, so neither can own the
+  publication. On the TMA path it runs after `MERGE_SPATIALDATA` and publishes the merged store
+  only, once per slide. The per-core stores are no longer published, because the merged store
+  copies every element family and every table out of them, prefixed by core.
+
+- A metro map of the three paths that have been run on real data, in `docs/pipeline_paths.mmd`,
+  rendered to SVG with [nf-metro](https://github.com/seqeralabs/nf-metro) and described in
+  `docs/pipeline-paths.md`.
+
+- Citations for the Leiden algorithm and python-igraph, which the QC report's clustering calls
+  through `sc.tl.leiden(flavor="igraph")`.
+
 - Project context (`AGENT_CONTEXT.md`) and the phased plan (`ROADMAP.md`). The linting
   configuration that was proposed under `planning/` now lives in `.pre-commit-config.yaml`.
 
@@ -72,6 +87,20 @@ See [ROADMAP.md](ROADMAP.md).
 
 ### Fixed
 
+- `ASHLAR` records `ashlar: stub` on a stub run instead of a blank. It captured its version with
+  `eval("ashlar --version | sed 's/^.*ashlar //'")`, and the pipe meant the exit status was
+  `sed`'s, so an absent `ashlar` produced a task that succeeded and wrote `ashlar:` with nothing
+  after it into `histo_software_versions.yml`. A blank in a provenance file reads like a captured
+  value, so this was a silent wrong answer rather than a visible gap. Patched the same way as
+  `backsub`.
+
+- The background subtraction path can be stub-run. `modules/nf-core/backsub` declared its version
+  with `eval('backsub --version')`, and Nextflow evaluates an `eval` output even under `-stub`, so
+  the task died with `bash: backsub: command not found` on any machine without the tool and that
+  path had no stub coverage at all. Patched with `nf-core modules patch` to
+  `eval(workflow.stubRun ? 'echo stub' : 'backsub --version')`, so a real run still fails loudly
+  if the tool is missing while a stub run records `backsub: stub` like every other module.
+
 - A samplesheet that repeats a `cycle_number` within a sample is rejected at startup. It was
   previously accepted, and since a cycle is identified by `sample` and `cycle_number` together, two
   such rows were the same cycle as far as the pipeline could tell: each cycle's BaSiCPy profile went
@@ -112,6 +141,23 @@ See [ROADMAP.md](ROADMAP.md).
 
 ### Removed
 
+- `REPORT`, and with it `sopa report`'s `{sample}_analysis_summary.html` and the stray
+  `versions.yml` its unfiltered `publishDir` dropped in the output root. Its cell counts, area
+  distribution and per-channel intensity distributions are all in the QC report, which is
+  self-contained and backed by a machine-readable JSON. Two figures are genuinely lost: the UMAP,
+  and the spatial cell-annotation scatter, which only ever rendered under
+  `use_fluorescence_annotation`. Its transcripts section had always returned `None` here.
+
+- The `rm -r ${sdata_path}/.sopa_cache` that `REPORT` inherited from nf-core/sopa. Nextflow stages
+  the store as a symlink, so the deletion reached back into a completed task's output and left it
+  no longer matching what that task produced. The cache is 2.4 MB in a 57 MB store, reproducible
+  from the store, and now ships with it. Nothing writes to the store after aggregation any more, so
+  QC, `MERGE_SPATIALDATA` and `PUBLISH_SPATIALDATA` fan out from one channel instead of chaining
+  through `REPORT` to avoid racing it.
+
+- The `(planned)` markers on BaSiCPy, ASHLAR and background_subtraction in `CITATIONS.md`. All
+  three have been wired in since the preprocessing half landed.
+
 - The nf-core Zenodo DOI from the manifest and README. It belongs to nf-core/sopa and retaining it
   would have claimed another project's citation.
 
@@ -127,6 +173,13 @@ See [ROADMAP.md](ROADMAP.md).
   unguarded on a field the manifest no longer defines.
 
 - `.devcontainer/`, which configured a GitHub Codespaces environment that is unused.
+
+### Changed
+
+- `MERGE_SPATIALDATA` publishes only its manifest, from a selector in `conf/modules.config`
+  rather than a `publishDir` in the module. The merged store itself is published by
+  `PUBLISH_SPATIALDATA`, and the unfiltered directive this replaces also dropped a stray
+  `versions.yml` in the output root.
 
 ### Known broken
 

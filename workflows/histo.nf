@@ -14,7 +14,7 @@ include { TISSUE_SEGMENTATION     } from '../modules/local/tissue_segmentation'
 include { AGGREGATE               } from '../modules/local/aggregate'
 include { MERGE_SPATIALDATA       } from '../modules/local/merge_spatialdata'
 include { SET_CHANNEL_NAMES       } from '../modules/local/set_channel_names'
-include { REPORT                  } from '../modules/local/report'
+include { PUBLISH_SPATIALDATA     } from '../modules/local/publish_spatialdata'
 include { FLUO_ANNOTATION         } from '../modules/local/fluo_annotation'
 include { CELLPOSE                } from '../subworkflows/local/cellpose'
 include { STARDIST                } from '../subworkflows/local/stardist'
@@ -139,12 +139,10 @@ workflow HISTO {
 
     ch_preprocessed = ch_annotated
 
-    REPORT(ch_preprocessed)
-    ch_versions = ch_versions.mix(REPORT.out.versions)
-
-    // QC chains off REPORT.out.sdata for the same reason MERGE_SPATIALDATA does:
-    // REPORT deletes .sopa_cache from the store, so reading it concurrently would race
-    // a writer. Both would otherwise see the same cells.
+    // The store is complete here and nothing downstream writes to it, so QC and the
+    // merge both read it without coordinating. That was not true while REPORT
+    // existed: it deleted .sopa_cache from the store, which made every reader a
+    // potential race against a writer.
     //
     // After AGGREGATE, necessarily: the cross-cycle nuclear comparison and the
     // clustering both read the per-cell intensity matrix, which does not exist until
@@ -154,7 +152,7 @@ workflow HISTO {
             ? PREPROCESS_IMAGES.out.unsubtracted
             : channel.empty()
 
-        QC(REPORT.out.sdata, ch_markers, ch_unsubtracted)
+        QC(ch_preprocessed, ch_markers, ch_unsubtracted)
         ch_versions = ch_versions.mix(QC.out.versions)
     }
 
@@ -163,17 +161,32 @@ workflow HISTO {
     // aggregating one large sparse object instead of many small dense ones,
     // which scales badly and loses the per-core QC report.
     //
-    // This chains off REPORT rather than off ch_preprocessed. Both would give
-    // the same cores, but REPORT mutates the zarr in place (it removes
-    // .sopa_cache), so reading the same store concurrently would be a race.
+    // `sample` is set alongside `id` because every process downstream of
+    // addSampleKeys tags itself with meta.sample, and a merged slide would
+    // otherwise arrive without one.
     if (params.use_tma_dearray) {
-        ch_cores_by_slide = REPORT.out.sdata
-            .map { meta, sdata -> [[id: meta.slide], sdata] }
+        ch_cores_by_slide = ch_preprocessed
+            .map { meta, sdata -> [[id: meta.slide, sample: meta.slide], sdata] }
             .groupTuple()
 
         MERGE_SPATIALDATA(ch_cores_by_slide)
         ch_versions = ch_versions.mix(MERGE_SPATIALDATA.out.versions)
+
+        // The merged store is what gets published on this path, and the per-core
+        // stores are not. merge_spatialdata.py copies every element family and
+        // every table into it, prefixed by core, so it already contains everything
+        // the cores do and publishing both would write the slide out twice.
+        //
+        // Sequencing publication behind the merge also means a failed merge leaves
+        // nothing published, rather than leaving cores in outdir from a run that
+        // did not finish.
+        ch_publish = MERGE_SPATIALDATA.out.merged
     }
+    else {
+        ch_publish = ch_preprocessed
+    }
+
+    PUBLISH_SPATIALDATA(ch_publish)
 
     //
     // Collate and save software versions
