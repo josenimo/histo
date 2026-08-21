@@ -139,12 +139,11 @@ workflow HISTO {
 
     ch_preprocessed = ch_annotated
 
-    // The store is complete here, and nothing downstream writes to it, so the three
-    // consumers below fan out from this one channel rather than chaining. That was
-    // not true while REPORT existed: it deleted .sopa_cache from the store, which
-    // made every reader a potential race against a writer.
-    PUBLISH_SPATIALDATA(ch_preprocessed)
-
+    // The store is complete here and nothing downstream writes to it, so QC and the
+    // merge both read it without coordinating. That was not true while REPORT
+    // existed: it deleted .sopa_cache from the store, which made every reader a
+    // potential race against a writer.
+    //
     // After AGGREGATE, necessarily: the cross-cycle nuclear comparison and the
     // clustering both read the per-cell intensity matrix, which does not exist until
     // aggregation has written it.
@@ -161,14 +160,33 @@ workflow HISTO {
     // through every step on its own. Merging earlier would mean segmenting and
     // aggregating one large sparse object instead of many small dense ones,
     // which scales badly and loses the per-core QC report.
+    //
+    // `sample` is set alongside `id` because every process downstream of
+    // addSampleKeys tags itself with meta.sample, and a merged slide would
+    // otherwise arrive without one.
     if (params.use_tma_dearray) {
         ch_cores_by_slide = ch_preprocessed
-            .map { meta, sdata -> [[id: meta.slide], sdata] }
+            .map { meta, sdata -> [[id: meta.slide, sample: meta.slide], sdata] }
             .groupTuple()
 
         MERGE_SPATIALDATA(ch_cores_by_slide)
         ch_versions = ch_versions.mix(MERGE_SPATIALDATA.out.versions)
+
+        // The merged store is what gets published on this path, and the per-core
+        // stores are not. merge_spatialdata.py copies every element family and
+        // every table into it, prefixed by core, so it already contains everything
+        // the cores do and publishing both would write the slide out twice.
+        //
+        // Sequencing publication behind the merge also means a failed merge leaves
+        // nothing published, rather than leaving cores in outdir from a run that
+        // did not finish.
+        ch_publish = MERGE_SPATIALDATA.out.merged
     }
+    else {
+        ch_publish = ch_preprocessed
+    }
+
+    PUBLISH_SPATIALDATA(ch_publish)
 
     //
     // Collate and save software versions
