@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1580 536" width="1580" height="536" font-family="ui-sans-serif, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" role="img" aria-label="Metro map of the three pipeline paths run on real data">
+<style>
+  .surface{fill:#fcfcfb} .ink{fill:#0b0b0b} .ink2{fill:#52514e} .ink3{fill:#8a8880} .stn{fill:#fcfcfb;stroke:#0b0b0b;stroke-width:2} .mif{stroke:#2a78d6} .wsi{stroke:#eb6834} .tma{stroke:#1baf7a} .mif-f{fill:#2a78d6} .wsi-f{fill:#eb6834} .tma-f{fill:#1baf7a}
+  @media (prefers-color-scheme: dark){
+    .surface{fill:#1a1a19} .ink{fill:#ffffff} .ink2{fill:#c3c2b7} .ink3{fill:#8a8880}    .stn{fill:#1a1a19;stroke:#ffffff}    .mif{stroke:#3987e5} .wsi{stroke:#d95926} .tma{stroke:#199e70}    .mif-f{fill:#3987e5} .wsi-f{fill:#d95926} .tma-f{fill:#199e70}
+  }
+</style>
+<rect class="surface" width="1580" height="536"/>
+<text class="ink" x="40" y="52" font-size="21" font-weight="600">Three paths through the pipeline</text>
+<text class="ink2" x="40" y="76" font-size="13">The three that have been run on real data. Every station after the samplesheet is a Nextflow process.</text>
+<line class="mif" x1="40" y1="108" x2="76" y2="108" stroke-width="4" stroke-linecap="round"/>
+<text class="ink" x="86" y="112" font-size="12.5" font-weight="500">mIF slide</text>
+<text class="ink2" x="164.8" y="112" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">use_preprocessing = true</text>
+<line class="wsi" x1="40" y1="130" x2="76" y2="130" stroke-width="4" stroke-linecap="round"/>
+<text class="ink" x="86" y="134" font-size="12.5" font-weight="500">WSI, background subtracted</text>
+<text class="ink2" x="287.20000000000005" y="134" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">+ use_backsub</text>
+<line class="tma" x1="40" y1="152" x2="76" y2="152" stroke-width="4" stroke-linecap="round"/>
+<text class="ink" x="86" y="156" font-size="12.5" font-weight="500">TMA, dearrayed</text>
+<text class="ink2" x="200.8" y="156" font-size="12" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">+ use_tma_dearray</text>
+<circle class="stn" cx="46" cy="176" r="5.5"/>
+<text class="ink2" x="60" y="180" font-size="12">shared station</text>
+<circle class="wsi-f" cx="176" cy="176" r="4.5"/>
+<text class="ink2" x="188" y="180" font-size="12">one line only</text>
+<circle cx="300" cy="176" r="4.5" fill="none" class="tma" stroke-width="2"/>
+<text class="ink2" x="312" y="180" font-size="12">optional on that line</text>
+<line x1="452" y1="176" x2="488" y2="176" class="wsi" stroke-width="2" stroke-dasharray="5 4"/>
+<text class="ink2" x="498" y="180" font-size="12">a second input, not the main flow</text>
+<path class="mif" d="M 120 293 L 1264 293" fill="none" stroke-width="3.5" stroke-linecap="round"/>
+<path class="mif" d="M 1153.0 293.0 L 1153.0 431.0 Q 1153.0 445.0 1167.0 445.0 L 1418.0 445.0" fill="none" stroke-width="3.5" stroke-linecap="round"/>
+<path class="wsi" d="M 120 300 L 1264 300" fill="none" stroke-width="3.5" stroke-linecap="round"/>
+<path class="wsi" d="M 1160.0 300.0 L 1160.0 438.0 Q 1160.0 452.0 1174.0 452.0 L 1418.0 452.0" fill="none" stroke-width="3.5" stroke-linecap="round"/>
+<path class="tma" d="M 120 307 L 1264 307" fill="none" stroke-width="3.5" stroke-linecap="round"/>
+<path class="tma" d="M 1167.0 307.0 L 1167.0 445.0 Q 1167.0 459.0 1181.0 459.0 L 1418.0 459.0" fill="none" stroke-width="3.5" stroke-linecap="round"/>
+<path class="tma" d="M 1167.0 307.0 L 1167.0 318.5 Q 1167.0 330.0 1181.0 330.0 L 1368.0 330.0" fill="none" stroke-width="3.5" stroke-linecap="round"/>
+<circle class="tma-f" cx="1368" cy="330" r="5.5"/>
+<text class="ink" x="1382" y="334" font-size="11.5" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">MERGE_SPATIALDATA</text>
+<text class="ink3" x="1382" y="350" font-size="11">one merged store per slide</text>
+<path class="wsi" d="M 328.0 300.0 L 328.0 358.0 Q 328.0 372.0 342.0 372.0 L 1196.0 372.0 Q 1210.0 372.0 1210.0 386.0 L 1210.0 452.0" fill="none" stroke-width="2" stroke-dasharray="5 4"/>
+<text class="ink2" x="344" y="362" font-size="11.5">the pre-subtraction image, so QC can compare before and after</text>
+<text class="ink3" x="344" y="390" font-size="11">absent on the TMA line: a dearrayed core has no whole-slide before-image</text>
+<rect class="stn" x="116" y="287" width="8" height="26" rx="3"/>
+<g transform="translate(116,280) rotate(-40)"><text class="ink" x="0" y="0" font-size="11.5" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">samplesheet</text></g>
+<circle class="stn" cx="224" cy="300" r="7"/>
+<g transform="translate(220,280) rotate(-40)"><text class="ink" x="0" y="0" font-size="11.5" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">BASICPY</text></g>
+<circle class="stn" cx="328" cy="300" r="7"/>
+<g transform="translate(324,280) rotate(-40)"><text class="ink" x="0" y="0" font-size="11.5" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">ASHLAR</text></g>
+<circle class="surface" cx="432" cy="300" r="6.5"/>
+<circle class="wsi-f" cx="432" cy="300" r="4.6"/>
+<circle class="surface" cx="432" cy="307" r="6.5"/>
+<circle class="tma" cx="432" cy="307" r="4.2" fill="none" stroke-width="2"/>
+<g transform="translate(428,280) rotate(-40)"><text class="ink" x="0" y="0" font-size="11.5" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">BACKSUB</text></g>
+<circle class="surface" cx="536" cy="307" r="6.5"/>
+<circle class="tma-f" cx="536" cy="307" r="4.6"/>
+<g transform="translate(532,280) rotate(-40)"><text class="ink" x="0" y="0" font-size="11.5" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">COREOGRAPH</text></g>
+<circle class="stn" cx="640" cy="300" r="7"/>
+<g transform="translate(636,280) rotate(-40)"><text class="ink" x="0" y="0" font-size="11.5" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">TO_SPATIALDATA</text></g>
+<circle class="stn" cx="744" cy="300" r="7"/>
+<g transform="translate(740,280) rotate(-40)"><text class="ink" x="0" y="0" font-size="11.5" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">SET_CHANNEL_NAMES</text></g>
+<circle class="stn" cx="848" cy="300" r="7"/>
+<g transform="translate(844,280) rotate(-40)"><text class="ink" x="0" y="0" font-size="11.5" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">MAKE_IMAGE_PATCHES</text></g>
+<circle class="stn" cx="952" cy="300" r="7"/>
+<g transform="translate(948,280) rotate(-40)"><text class="ink" x="0" y="0" font-size="11.5" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">PATCH_SEGMENTATION_CELLPOSE</text></g>
+<circle class="stn" cx="1056" cy="300" r="7"/>
+<g transform="translate(1052,280) rotate(-40)"><text class="ink" x="0" y="0" font-size="11.5" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">RESOLVE_CELLPOSE</text></g>
+<circle class="stn" cx="1160" cy="300" r="7"/>
+<g transform="translate(1156,280) rotate(-40)"><text class="ink" x="0" y="0" font-size="11.5" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">AGGREGATE</text></g>
+<circle class="stn" cx="1264" cy="300" r="7"/>
+<g transform="translate(1260,280) rotate(-40)"><text class="ink" x="0" y="0" font-size="11.5" font-weight="500" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">PUBLISH_SPATIALDATA</text></g>
+<circle class="stn" cx="1210" cy="452" r="7"/>
+<text class="ink" x="1210" y="478" font-size="11.5" font-weight="500" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">QC_METRICS</text>
+<circle class="stn" cx="1314" cy="452" r="7"/>
+<text class="ink" x="1314" y="478" font-size="11.5" font-weight="500" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">QC_IMAGES</text>
+<circle class="stn" cx="1418" cy="452" r="7"/>
+<text class="ink" x="1418" y="478" font-size="11.5" font-weight="500" text-anchor="middle" font-family="ui-monospace, SFMono-Regular, Menlo, monospace">QC_REPORT</text>
+<text class="ink3" x="952" y="334" font-size="11" text-anchor="middle">one task per patch</text>
+<text class="ink3" x="540" y="334" font-size="11" text-anchor="middle">every station after this one runs once per core</text>
+<text class="ink3" x="1198" y="434" font-size="11">only when use_qc = true</text>
+<text class="ink2" x="40" y="502" font-size="11.5">All three lines segment with Cellpose. The StarDist path substitutes PATCH_SEGMENTATION_STARDIST and RESOLVE_STARDIST at the same two stations.</text>
+<text class="ink3" x="40" y="520" font-size="11.5">Not drawn, because all three runs left them off: TISSUE_SEGMENTATION and FLUO_ANNOTATION, both between MAKE_IMAGE_PATCHES and AGGREGATE. Illumination profiles supplied in the samplesheet bypass BASICPY.</text>
+</svg>

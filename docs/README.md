@@ -2,6 +2,7 @@
 
 - [Usage](usage.md) — how to run the pipeline and what the parameters mean.
 - [Output](output.md) — what the pipeline produces and how to read it.
+- [Pipeline paths](pipeline-paths.md) — the three routes through the pipeline, as a metro map.
 - [Containers](containers.md) — the image manifest, and pre-staging onto the cluster.
 - [Decisions](decisions.md) — why the pipeline is built the way it is.
 - [Future ideas](future-ideas.md) — larger changes being considered, with their costs.
