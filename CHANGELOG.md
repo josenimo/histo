@@ -3,12 +3,34 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## v0.1.0dev - unreleased
+## v1.0.0
 
-Both halves run end to end on real data: raw cycles through illumination correction,
-stitching, optional background subtraction and TMA dearray, then segmentation,
-aggregation and a QC report. Not released, and the input format is still changing.
-See [ROADMAP.md](ROADMAP.md).
+First release. Both halves run end to end on real data: raw cycles through illumination
+correction, stitching, optional background subtraction and TMA dearray, then segmentation,
+aggregation and a QC report. Verified on mIF, TMA and WSI slides; see
+[ROADMAP.md](ROADMAP.md) for what each run measured and what is deliberately absent.
+
+### Compatibility
+
+This release fixes the input contract. The samplesheet and marker sheet columns that exist
+now will keep working:
+
+- **Samplesheet** — `sample`, `cycle_number`, `image_tiles`, `marker_sheet`, and the optional
+  `dfp` and `ffp`.
+- **Marker sheet** — `channel_number`, `cycle_number`, `marker_name`, `channel_role` required;
+  `channel_compartment`, `filter`, `excitation_wavelength`, `emission_wavelength`, `exposure`,
+  `background`, `remove` optional.
+
+Three planned features want more marker sheet columns: reading `.czi` metadata, dearraying
+across every nuclear channel, and dearraying before stitching. Those columns will be **added
+as optional**, in minor releases. A column that exists today will not change meaning or become
+required without a major version. Say so here rather than in a design note, because the
+previous entry said "the input format is still changing" and that is no longer a licence this
+project grants itself.
+
+Boolean parameters still cannot be set on the command line. Use a params file. The attempt is
+rejected at startup rather than silently inverted; the reasoning is in ROADMAP under Known
+limitations.
 
 ### Added
 
@@ -181,18 +203,14 @@ See [ROADMAP.md](ROADMAP.md).
   `PUBLISH_SPATIALDATA`, and the unfiltered directive this replaces also dropped a stray
   `versions.yml` in the output root.
 
-### Known broken
-
-- `tests/*.nf.test.snap` still record `"nf-core/sopa": "v1.0.1"`. Snapshots must not be hand-edited;
-  they need regenerating with `nf-test`, which needs real containers on the cluster. Until then
-  `nf-test` fails. This blocks the Phase 1 exit criterion.
-
 ### Not yet done
 
-- No real-data test for the TMA path, for background subtraction, or for the
-  `use_preprocessing = false` entry point.
+- No **real-data** test for the TMA path or for background subtraction. Both are covered by
+  stub tests for their wiring and have been run by hand on the cluster, but nothing automated
+  asserts on their numbers. The `use_preprocessing = false` entry point is now covered by
+  `tests/default.nf.test`, for wiring.
 
-- H&E input. Only `ome_tif` mIF works today.
+- H&E input. Only `ome_tif` mIF works today, which the manifest description now says.
 
 - The pass-or-fail QC gate. The metrics and the report exist and `{sample}_qc.json` is the
   contract a gate would read; the thresholds need more than one dataset behind them.

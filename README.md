@@ -1,6 +1,7 @@
 # josenimo/histo
 
-Processing, segmentation and quantification of H&E and multiplex immunofluorescence (mIF) images.
+Processing, segmentation and quantification of multiplex immunofluorescence (mIF) images.
+H&E is planned and not supported: `technology` accepts `ome_tif` only.
 
 > [!WARNING]
 > **Runs end to end, but is pre-release at `0.1.0dev`.** Both halves work on real data: mIF and TMA
@@ -144,6 +145,7 @@ inputs and never read them.
 
 ```bash
 export HISTO_FIXTURE=/path/to/fixture
+bash tools/make_fixture_sheets.sh
 nf-test test tests/fixture.nf.test --profile test_fixture,singularity,size_tiny,slurm
 ```
 
@@ -168,10 +170,15 @@ matters because the cluster cannot be relied on to reach a registry mid-run.
 
 ### Not yet covered
 
-`tests/default.nf.test` and `tests/cellpose.nf.test` are inherited from nf-core/sopa. Their
-snapshots still describe that pipeline's outputs and need rewriting as property assertions.
-There is no test for the TMA path on real data, no test for background subtraction, and no
-test of the `use_preprocessing = false` entry point.
+There is no test for the TMA path on real data and none for background subtraction. Both have
+wiring coverage under `-stub` and have been run by hand on the cluster, but nothing automated
+asserts on their numbers.
+
+`tests/default.nf.test` used to be an inherited nf-core/sopa snapshot describing outputs this
+pipeline no longer produces. It is now a property-based stub test of the
+`use_preprocessing = false` entry point. `tests/cellpose.nf.test` was the same kind of
+inherited snapshot and was removed rather than rewritten: `-profile test` already covers that
+path, so a second file asserting the same wiring earned nothing.
 
 ## Credits
 

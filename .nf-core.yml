@@ -82,7 +82,7 @@ nf_core_version: 4.0.3
 repository_type: pipeline
 template:
   author: Jose Nimo
-  description: Processing, segmentation and quantification of H&E and multiplex immunofluorescence images
+  description: Processing, segmentation and quantification of multiplex immunofluorescence (mIF) images
   force: false
   is_nfcore: false
   name: histo
@@ -92,4 +92,4 @@ template:
     - igenomes
     - multiqc
     - fastqc
-  version: 0.1.0dev
+  version: 1.0.0
