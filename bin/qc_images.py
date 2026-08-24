@@ -54,6 +54,85 @@ MASK_RGB = (255, 255, 255)
 TARGET_MASK_RGB = (255, 214, 0)
 
 
+def _qc_metrics():
+    """The sibling module, importable whether or not bin/ is on the path.
+
+    These scripts are executables rather than an installed package, so main() has
+    always had to put its own directory on sys.path. Guarding the insert keeps a
+    repeated call from growing the path, which matters now that module-level
+    functions reach for the sibling too.
+    """
+    here = str(Path(__file__).resolve().parent)
+    if here not in sys.path:
+        sys.path.insert(0, here)
+    import qc_metrics
+
+    return qc_metrics
+
+
+def select_nuclear_channels(
+    channel_names: list[str],
+    marker_rows: list[dict[str, Any]] | None,
+    pattern: str | None = None,
+) -> tuple[list[str], str]:
+    """The store's nuclear channels, and how they were identified.
+
+    Two lists are in play and they are not the same: the marker sheet says what was
+    acquired, and `channel_names` says what survived to the table. A channel dropped
+    by `remove` or by background subtraction is in the first only, so the sheet's
+    answer is intersected with the store's and ordered by the store's.
+
+    Returns an empty list rather than raising, so the caller can name the route in
+    the error. That distinction is the bug this replaced: the old code matched
+    "DAPI" against the channel names and reported "no channel matching 'DAPI'",
+    which on a sheet whose stains are DNA_6, DNA_7 and DNA_8 read as a missing
+    channel rather than as a lookup that never opened the sheet.
+    """
+    qc_metrics = _qc_metrics()
+
+    if marker_rows is None:
+        chosen = pattern or qc_metrics.DEFAULT_NUCLEAR_PATTERN
+        needle = chosen.lower()
+        return (
+            [c for c in channel_names if needle in c.lower()],
+            f"name pattern {chosen!r} (no marker sheet given)",
+        )
+
+    nuclear_rows, how = qc_metrics.resolve_nuclear_rows(marker_rows, pattern)
+    wanted = {r["marker_name"] for r in nuclear_rows}
+    return [c for c in channel_names if c in wanted], how
+
+
+def clustering_exclusions(nuclear: list[str], marker_rows: list[dict[str, Any]] | None) -> dict[str, str]:
+    """Channels held out of clustering, mapped to why.
+
+    Only biological readouts should define a cluster. Nuclear stain is in every cell
+    by construction, an autofluorescence channel is an instrument reading acquired to
+    be subtracted, and a blank channel is expected to be dark; none separates cell
+    types, and all three pull the graph toward staining intensity instead.
+
+    This used to key off the `background` column alone, which caught an
+    autofluorescence channel only when some other channel happened to point at it,
+    and never caught a blank channel at all -- so an all-but-empty channel could
+    define a cluster of its own. `channel_role` states both outright.
+
+    The reason is carried rather than just the name: a reader asking why a marker is
+    missing from the heatmap could not tell an autofluorescence channel from a
+    nuclear one from a typo in the sheet.
+    """
+    channels_with_role = _qc_metrics().channels_with_role
+
+    excluded = {c: "nuclear stain" for c in nuclear}
+    if marker_rows is not None:
+        for role in ("autofluorescence", "blank"):
+            for name in channels_with_role(marker_rows, role):
+                excluded.setdefault(name, f"channel_role {role!r}")
+        for row in marker_rows:
+            if row.get("background"):
+                excluded.setdefault(row["background"], "named as another channel's background")
+    return excluded
+
+
 def read_boundaries(sdata_path: Path, name: str = "cellpose_boundaries") -> Any:
     """The segmentation polygons, as a GeoDataFrame indexed like the table's rows.
 
@@ -557,8 +636,15 @@ def render_cell_snapshots(
     boundaries: Any,
     out_dir: Path,
     size: int = 128,
+    compartments: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Two cells per cluster, in the cluster's top marker and the nuclear stain."""
+    """Two cells per cluster, in the cluster's top marker and the nuclear stain.
+
+    `compartments` is the marker sheet's channel_compartment, recorded against each
+    snapshot's marker. It changes no pixel: it is the expectation the picture should
+    be read against, since a membrane stain that renders as a nuclear dot has gone
+    wrong and nothing in the image itself says which was intended.
+    """
     import numpy as np
     import zarr
     from PIL import Image
@@ -621,6 +707,7 @@ def render_cell_snapshots(
                     "cluster": cluster,
                     "file": name,
                     "marker": marker,
+                    "marker_compartment": (compartments or {}).get(marker),
                     "nuclear": nuclear_channel,
                     "cell_index": int(cell),
                     "x0": x0,
@@ -636,8 +723,19 @@ def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--sdata", required=True, type=Path, help="SpatialData .zarr store")
     ap.add_argument("--out-dir", required=True, type=Path, help="directory for the PNGs and index")
-    ap.add_argument("--markers", type=Path, help="marker sheet CSV, for cycle and background columns")
-    ap.add_argument("--nuclear-pattern", default="DAPI", help="substring naming nuclear channels")
+    ap.add_argument(
+        "--markers",
+        type=Path,
+        help="marker sheet CSV. Supplies channel_role, which identifies the nuclear stain "
+        "and the channels to keep out of clustering, plus the background column.",
+    )
+    ap.add_argument(
+        "--nuclear-pattern",
+        default=None,
+        help="override: name the nuclear stain by substring instead of reading "
+        "channel_role == 'dna' from the marker sheet. Needed only for a sheet with no "
+        "channel_role column, or to override a wrong one.",
+    )
     ap.add_argument("--window", type=int, default=1000, help="crop size in pixels (default: 1000)")
     ap.add_argument("--n-windows", type=int, default=6, help="how many crops (default: 6)")
     ap.add_argument("--cells-per-cluster", type=int, default=5, help="snapshots per cluster (default: 5)")
@@ -679,7 +777,12 @@ def main() -> int:
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import numpy as np
     import zarr
-    from qc_metrics import read_column, read_marker_cycles, sole_image_element
+    from qc_metrics import (
+        compartments_by_channel,
+        read_column,
+        read_marker_cycles,
+        sole_image_element,
+    )
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
     element = sole_image_element(args.sdata)
@@ -688,18 +791,28 @@ def main() -> int:
     centroids = np.asarray(table["obsm"]["spatial"][:])
     boundaries = read_boundaries(args.sdata)
 
-    nuclear = [c for c in channel_names if args.nuclear_pattern.lower() in c.lower()]
+    marker_rows = read_marker_cycles(args.markers) if args.markers else None
+    nuclear, nuclear_how = select_nuclear_channels(channel_names, marker_rows, args.nuclear_pattern)
     if not nuclear:
         raise ValueError(
-            f"no channel matching {args.nuclear_pattern!r}; pass --nuclear-pattern to name the "
-            f"nuclear stain. Channels present: {channel_names}"
+            f"no nuclear channel identified by {nuclear_how}. "
+            f"Channels present: {channel_names}. "
+            "Set channel_role = 'dna' on the nuclear rows of the marker sheet, or pass "
+            "--nuclear-pattern to name the stain by substring."
         )
     nuclear_channel = nuclear[0]
+    compartments = compartments_by_channel(marker_rows) if marker_rows else {}
+    print(f"[qc_images] nuclear stain: {nuclear_channel} (by {nuclear_how})")
 
     index: dict[str, Any] = {
         "sample": args.sdata.stem,
         "image_element": element,
         "nuclear_channel": nuclear_channel,
+        # Which of the three routes named the stain. Recorded because the picture is
+        # only as trustworthy as the channel it was drawn from, and a fallback that
+        # happened to match is not the same as the sheet saying so.
+        "nuclear_selected_by": nuclear_how,
+        "channel_compartments": compartments,
         "crop_mask_colour": "cyan",
         "mask_colour": "white",
         "target_mask_colour": "yellow",
@@ -722,24 +835,14 @@ def main() -> int:
     print(f"  crops      : {len(index['crops'])} of {args.window}x{args.window} px")
 
     if not args.skip_clustering:
-        # Background channels and the nuclear stains are excluded from clustering.
-        # A background channel is one another channel subtracts, so it is an
-        # instrument reading rather than a phenotype, and nuclear stain is present in
-        # every cell by construction: neither separates cell types, and both would
-        # pull the graph toward staining intensity instead.
-        excluded = set(nuclear)
-        if args.markers:
-            rows = read_marker_cycles(args.markers)
-            import csv
-
-            with args.markers.open(newline="") as fh:
-                for r in csv.DictReader(fh):
-                    if (r.get("background") or "").strip():
-                        excluded.add(r["background"].strip())
-            del rows
+        excluded = clustering_exclusions(nuclear, marker_rows)
         use = [c for c in channel_names if c not in excluded]
         if len(use) < 2:
-            raise ValueError(f"only {len(use)} channel(s) left to cluster on after excluding {excluded}")
+            raise ValueError(
+                f"only {len(use)} channel(s) left to cluster on. Excluded: "
+                + ", ".join(f"{k} ({v})" for k, v in sorted(excluded.items()))
+                + f". Channels present: {channel_names}"
+            )
 
         x = np.asarray(table["X"][:])
         resolutions = [float(v) for v in args.resolutions.split(",") if v.strip()]
@@ -782,10 +885,15 @@ def main() -> int:
             centroids,
             boundaries,
             args.out_dir,
+            compartments=compartments,
         )
         print(f"  snapshots  : {len(index['snapshots'])}")
         index["clustering"] = {k: v for k, v in clustering.items() if not k.startswith("_")}
         index["clustering"]["excluded_channels"] = sorted(excluded)
+        # Why each channel was held back, not just that it was. A reader asking why a
+        # marker is missing from the heatmap had no way to tell an autofluorescence
+        # channel from a nuclear one from a typo in the sheet.
+        index["clustering"]["excluded_channels_why"] = dict(sorted(excluded.items()))
 
     out_json = args.out_dir / "qc_images.json"
     out_json.write_text(json.dumps(index, indent=2) + "\n")

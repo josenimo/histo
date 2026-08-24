@@ -376,13 +376,25 @@ def channel_histograms(array: Any, band_rows: int = 2048) -> tuple[list[Any], in
     return hists, int(info.max)
 
 
+# The nuclear-stain fallback, used only when the marker sheet predates
+# `channel_role`. Named rather than inlined because two scripts share it and the
+# report quotes it when explaining how a channel was chosen.
+DEFAULT_NUCLEAR_PATTERN = "DAPI"
+
+
 def read_marker_cycles(path: Path) -> list[dict[str, Any]]:
-    """The marker sheet as rows carrying `cycle_number`, in channel order.
+    """The marker sheet as rows carrying cycle, role and compartment, in channel order.
 
     `read_marker_names` in set_channel_names.py deliberately returns names only,
     because that is all a rename needs. Cycle membership is what tells the first
     imaging round from the last, which is the whole point of the photobleaching
     check, so it is parsed here rather than by widening that function's contract.
+
+    `channel_role` and `channel_compartment` are carried for the same reason: they
+    are what the sheet says a channel *is*, and QC has no other source for it.
+    Both are optional here even though schema_marker.json requires `channel_role`,
+    because a sheet written before that column existed must still parse -- the
+    callers fall back to name-matching and say that they did.
     """
     import csv
 
@@ -401,28 +413,99 @@ def read_marker_cycles(path: Path) -> list[dict[str, Any]]:
                 "channel_number": int(r["channel_number"]),
                 "cycle_number": int(r["cycle_number"]),
                 "marker_name": r["marker_name"].strip(),
+                # Lowercased to match the schema's enum, and None rather than "" so
+                # that "the sheet does not say" is distinguishable from a blank cell.
+                "channel_role": (r.get("channel_role") or "").strip().lower() or None,
+                "channel_compartment": (r.get("channel_compartment") or "").strip().lower() or None,
+                # Not lowercased: this names another channel, and channel names are
+                # matched exactly everywhere else.
+                "background": (r.get("background") or "").strip() or None,
             }
         )
     out.sort(key=lambda r: r["channel_number"])
     return out
 
 
-def nuclear_cycle_pair(rows: list[dict[str, Any]], pattern: str = "DAPI") -> tuple[str, str] | None:
-    """The nuclear stain of the first and last imaging cycle, by name.
+def channels_with_role(rows: list[dict[str, Any]], *roles: str) -> list[str]:
+    """Marker names whose `channel_role` is one of `roles`, in channel order.
+
+    Empty when the sheet carries no role column at all, which is the signal the
+    callers use to fall back to name-matching rather than to conclude that a slide
+    genuinely has no nuclear stain.
+    """
+    wanted = {r.lower() for r in roles}
+    return [r["marker_name"] for r in rows if r.get("channel_role") in wanted]
+
+
+def compartments_by_channel(rows: list[dict[str, Any]]) -> dict[str, str]:
+    """Marker name to `channel_compartment`, for the channels that declare one.
+
+    Where a marker is expected to sit within a cell is the only thing that makes a
+    marker image judgeable: a membrane stain that looks like a nuclear one has gone
+    wrong, and nothing in the pixels says which was intended. Carried into the QC
+    output so a reader sees the expectation next to the result. No threshold is
+    derived from it -- the sheet's claim is reported, not scored.
+    """
+    return {r["marker_name"]: r["channel_compartment"] for r in rows if r.get("channel_compartment")}
+
+
+def resolve_nuclear_rows(
+    rows: list[dict[str, Any]], pattern: str | None = None
+) -> tuple[list[dict[str, Any]], str]:
+    """The nuclear-stain rows, and how they were identified.
+
+    Precedence, most trustworthy first:
+
+    1. an explicit `pattern`, because a caller naming the channel outranks both the
+       sheet and any guess -- it is the escape hatch for a mislabelled sheet;
+    2. `channel_role`, whenever the sheet carries that column at all;
+    3. matching DEFAULT_NUCLEAR_PATTERN against the marker name.
+
+    Step 3 is the historical behaviour and the reason this function exists. Name
+    matching is a guess that fails silently on any slide whose stain is not called
+    DAPI: a sheet naming its stains DNA_6, DNA_7, DNA_8 has three nuclear channels
+    and matches none of them. `channel_role` was added to schema_marker.json to end
+    that guess, and this is where the QC layer stops making it.
+
+    The test is whether the sheet carries roles, not whether it happens to contain a
+    `dna` row. A sheet that declares roles and names none of them nuclear has said
+    something definite, and falling back to a name match there would reintroduce the
+    guess on the one input that explicitly ruled it out -- picking a channel the
+    sheet declined to call nuclear. So that case returns empty, and the caller
+    reports it. Only a sheet with no role column at all -- one written before the
+    column existed -- reaches step 3.
+
+    Returns the rows and a label for the route taken, so callers can record which of
+    the three answered rather than presenting all three as equally sound.
+    """
+    if pattern:
+        needle = pattern.lower()
+        return [r for r in rows if needle in r["marker_name"].lower()], f"name pattern {pattern!r}"
+
+    if any(r.get("channel_role") for r in rows):
+        return [r for r in rows if r.get("channel_role") == "dna"], "channel_role 'dna'"
+
+    needle = DEFAULT_NUCLEAR_PATTERN.lower()
+    return (
+        [r for r in rows if needle in r["marker_name"].lower()],
+        f"name pattern {DEFAULT_NUCLEAR_PATTERN!r} (no channel_role in the sheet)",
+    )
+
+
+def nuclear_cycle_pair(rows: list[dict[str, Any]], pattern: str | None = None) -> tuple[str, str] | None:
+    """The nuclear stain of the first and last imaging cycle.
 
     Every cycle re-images a nuclear stain, which is what makes cross-cycle
     comparison possible at all: the same structure is present in every round, so a
     change in its intensity is a change in the sample or the optics rather than in
     the biology being stained.
 
-    Matched on the marker name rather than on a dedicated column, because the
-    samplesheet has no field saying which channel is nuclear. That makes `pattern`
-    a real assumption and the reason it is an option rather than a constant. Returns
-    None when there is nothing to compare -- a single-cycle run, or no channel whose
-    name matches -- and the caller reports the absence rather than inventing a pair.
+    Which channels those are comes from `resolve_nuclear_rows`, so the sheet's
+    `channel_role` decides it when the sheet says. Returns None when there is
+    nothing to compare -- a single-cycle run, or no nuclear channel identified --
+    and the caller reports the absence rather than inventing a pair.
     """
-    needle = pattern.lower()
-    nuclear = [r for r in rows if needle in r["marker_name"].lower()]
+    nuclear, _how = resolve_nuclear_rows(rows, pattern)
     if not nuclear:
         return None
     cycles = sorted({r["cycle_number"] for r in nuclear})
@@ -548,7 +631,7 @@ def collect(
     min_cell_area: float,
     markers: list[str] | None = None,
     marker_rows: list[dict[str, Any]] | None = None,
-    nuclear_pattern: str = "DAPI",
+    nuclear_pattern: str | None = None,
     before_image: Path | None = None,
     histogram_range: str = "channels-max",
 ) -> dict[str, Any]:
@@ -618,6 +701,36 @@ def collect(
     for name, hist in zip(channel_names, hists, strict=True):
         out["channels"]["per_channel"][name] = channel_metrics(hist, dtype_max, histogram_upper=shared_upper)
 
+    # What the sheet says each channel *is*, recorded next to what it measured.
+    # `role` is load-bearing -- it decides the nuclear stain here and the clustering
+    # exclusions in qc_images.py. `compartment` decides nothing: it is where the
+    # signal is expected to sit, which is the only thing that makes a marker image
+    # judgeable by eye, so it is reported beside the numbers rather than scored.
+    # Neither is invented when the sheet is silent; a channel simply has no entry.
+    if marker_rows is not None:
+        roles = {r["marker_name"]: r["channel_role"] for r in marker_rows if r.get("channel_role")}
+        compartments = compartments_by_channel(marker_rows)
+        for name in channel_names:
+            if name in roles:
+                out["channels"]["per_channel"][name]["role"] = roles[name]
+            if name in compartments:
+                out["channels"]["per_channel"][name]["compartment"] = compartments[name]
+        by_role = {
+            role: names
+            for role in ("dna", "marker", "autofluorescence", "blank")
+            if (names := channels_with_role(marker_rows, role))
+        }
+        if by_role:
+            out["channels"]["roles"] = by_role
+        if compartments:
+            out["channels"]["compartments"] = compartments
+        # A channel in the sheet with no role at all is the case that used to be
+        # invisible: it still clusters and still gets plotted, but nothing knows
+        # what it is. Named here so the report can say so.
+        unroled = [r["marker_name"] for r in marker_rows if not r.get("channel_role")]
+        if unroled:
+            out["channels"]["channels_without_role"] = unroled
+
     if before_image is not None:
         before_hists, before_max, before_shape = tiff_channel_histograms(before_image)
         out["before"] = {
@@ -641,21 +754,31 @@ def collect(
                 out["channels"]["per_channel"][name]["before"] = channel_metrics(hist, before_max)
 
     if marker_rows is not None:
+        nuclear_rows, nuclear_how = resolve_nuclear_rows(marker_rows, nuclear_pattern)
         pair = nuclear_cycle_pair(marker_rows, nuclear_pattern)
         cycles = sorted({r["cycle_number"] for r in marker_rows})
         if pair is None:
+            # Two different absences, and conflating them sent the last run looking
+            # for a marker sheet problem it did not have: either nothing was
+            # identified as nuclear, or one thing was but only in a single cycle.
+            reason = (
+                f"no nuclear channel identified by {nuclear_how}"
+                if not nuclear_rows
+                else f"nuclear channels found by {nuclear_how} span only "
+                f"{len({r['cycle_number'] for r in nuclear_rows})} of {len(cycles)} cycle(s); "
+                f"two are needed to compare"
+            )
             out["cycle_ratio"] = {
                 "available": False,
-                "reason": (
-                    f"need a channel matching {nuclear_pattern!r} in at least two cycles; "
-                    f"the sheet has {len(cycles)} cycle(s)"
-                ),
+                "reason": reason,
+                "nuclear_selected_by": nuclear_how,
                 "nuclear_pattern": nuclear_pattern,
             }
         elif pair[0] not in channel_names or pair[1] not in channel_names:
             out["cycle_ratio"] = {
                 "available": False,
                 "reason": f"{pair} not both present in the table's channels",
+                "nuclear_selected_by": nuclear_how,
                 "nuclear_pattern": nuclear_pattern,
             }
         else:
@@ -666,6 +789,7 @@ def collect(
             last_i = channel_names.index(pair[1])
             out["cycle_ratio"] = {
                 "available": True,
+                "nuclear_selected_by": nuclear_how,
                 "nuclear_pattern": nuclear_pattern,
                 "first_channel": pair[0],
                 "last_channel": pair[1],
@@ -723,9 +847,12 @@ def main() -> int:
     )
     ap.add_argument(
         "--nuclear-pattern",
-        default="DAPI",
-        help="substring identifying nuclear-stain channels in the marker sheet, used to "
-        "compare the first and last imaging cycle (default: DAPI)",
+        default=None,
+        help="override: substring identifying nuclear-stain channels by name, used to "
+        "compare the first and last imaging cycle. Normally unnecessary and unset -- the "
+        "marker sheet's channel_role == 'dna' is what identifies the nuclear stain. Pass "
+        "this only for a sheet with no channel_role column, or to override a wrong one. "
+        f"Without either, falls back to matching {DEFAULT_NUCLEAR_PATTERN!r}.",
     )
     args = ap.parse_args()
 
@@ -774,6 +901,11 @@ def main() -> int:
         )
     elif ratio:
         print(f"  cycles     : unavailable — {ratio['reason']}")
+    roles = metrics["channels"].get("roles")
+    if roles:
+        print("  roles      : " + ", ".join(f"{k}={len(v)}" for k, v in roles.items()))
+    if metrics["channels"].get("channels_without_role"):
+        print(f"  no role    : {', '.join(metrics['channels']['channels_without_role'])}")
     print(f"  written    : {args.out}")
     return 0
 

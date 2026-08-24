@@ -335,3 +335,118 @@ def test_cell_counts_render(n_cells):
     m = minimal_metrics()
     m["cells"]["n_cells"] = n_cells
     assert build(m).startswith("<!DOCTYPE html>")
+
+
+class TestRolesAndCompartmentsInTheReport:
+    """The sheet's claims about each channel, rendered beside the measurements.
+
+    `role` is what QC acts on; `compartment` is what a reader needs in order to judge
+    a marker image at all, since nothing in the pixels says where a stain was meant
+    to land.
+    """
+
+    def with_roles(self):
+        m = minimal_metrics()
+        per = m["channels"]["per_channel"]
+        names = list(per)
+        per[names[0]]["role"] = "dna"
+        per[names[0]]["compartment"] = "nuclear"
+        per[names[1]]["role"] = "marker"
+        per[names[1]]["compartment"] = "nuclear+cytoplasm"
+        m["channels"]["roles"] = {"dna": [names[0]], "marker": [names[1]]}
+        m["channels"]["compartments"] = {names[0]: "nuclear", names[1]: "nuclear+cytoplasm"}
+        return m
+
+    def test_columns_appear_when_the_sheet_supplied_them(self):
+        page = build(self.with_roles())
+        assert "<th>Role</th>" in page
+        assert "<th>Expected in</th>" in page
+
+    def test_columns_absent_when_the_sheet_did_not(self):
+        """A column of em dashes would suggest the sheet was read and said nothing,
+        which is a different fault from a sheet predating the column."""
+        page = build(minimal_metrics())
+        assert "<th>Role</th>" not in page
+        assert "<th>Expected in</th>" not in page
+
+    def test_multi_compartment_is_spaced_for_reading(self):
+        page = build(self.with_roles())
+        assert "nuclear + cytoplasm" in page
+
+    def test_declared_nuclear_stain_is_asserted(self):
+        page = build(self.with_roles())
+        assert "A nuclear stain is declared" in page
+
+    def test_a_missing_role_is_reported(self):
+        m = self.with_roles()
+        m["channels"]["channels_without_role"] = ["CD45"]
+        page = build(m)
+        assert "Every channel has a channel_role" in page
+        assert "CD45" in page
+
+    def test_no_role_checks_without_a_role_column(self):
+        """Not taking the check is not the same as passing it."""
+        page = build(minimal_metrics())
+        assert "A nuclear stain is declared" not in page
+        assert "Every channel has a channel_role" not in page
+
+    def test_selection_route_is_shown_with_the_cycle_ratio(self):
+        m = minimal_metrics()
+        ratio = m.get("cycle_ratio")
+        if ratio is None:
+            pytest.skip("the minimal fixture carries no cycle_ratio")
+        ratio["nuclear_selected_by"] = "channel_role 'dna'"
+        assert "Nuclear channel identified by channel_role &#x27;dna&#x27;" in build(m)
+
+    def test_route_omitted_when_not_recorded(self):
+        """Metrics from before this change render without an empty sentence."""
+        m = minimal_metrics()
+        if m.get("cycle_ratio") is None:
+            pytest.skip("the minimal fixture carries no cycle_ratio")
+        m["cycle_ratio"].pop("nuclear_selected_by", None)
+        assert "Nuclear channel identified by" not in build(m)
+
+
+class TestExclusionReasons:
+    """Why a channel was kept out of clustering, not just that it was."""
+
+    def clustering(self, **extra):
+        base = {
+            "clusters": [0],
+            "cluster_sizes": [10],
+            "n_cells_clustered": 10,
+            "n_cells_total": 10,
+            "top_marker": ["CD3e"],
+            "resolution": 0.5,
+            "resolution_chosen_by": "test",
+            "sweep": [],
+        }
+        base.update(extra)
+        return {"clustering": base}
+
+    def test_reasons_are_shown_when_recorded(self, tmp_path):
+        page = build(
+            minimal_metrics(),
+            asset_dir=tmp_path,
+            images=self.clustering(
+                excluded_channels=["DAPI_5", "AF_1"],
+                excluded_channels_why={
+                    "DAPI_5": "nuclear stain",
+                    "AF_1": "channel_role 'autofluorescence'",
+                },
+            ),
+        )
+        assert "DAPI_5 (nuclear stain)" in page
+        assert "AF_1 (channel_role &#x27;autofluorescence&#x27;)" in page
+
+    def test_older_index_without_reasons_still_renders(self, tmp_path):
+        """A qc_images.json written before the reasons existed keeps its sentence."""
+        page = build(
+            minimal_metrics(), images=self.clustering(excluded_channels=["DAPI_5"]), asset_dir=tmp_path
+        )
+        assert "Excluded from clustering: DAPI_5" in page
+        assert "background channels are an instrument reading" in page
+
+    def test_nothing_excluded_says_nothing(self, tmp_path):
+        page = build(minimal_metrics(), images=self.clustering(excluded_channels=[]), asset_dir=tmp_path)
+        assert "Excluded from clustering" not in page

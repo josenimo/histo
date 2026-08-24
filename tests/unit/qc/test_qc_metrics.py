@@ -10,14 +10,17 @@ import pytest
 from qc_metrics import (
     _pct_key,
     area_metrics,
-    cycle_ratio_metrics,
-    nuclear_cycle_pair,
-    read_marker_cycles,
     cells_per_patch,
     channel_metrics,
+    channels_with_role,
+    compartments_by_channel,
+    cycle_ratio_metrics,
     effective_bit_depth,
+    nuclear_cycle_pair,
     patch_metrics,
     percentiles_from_histogram,
+    read_marker_cycles,
+    resolve_nuclear_rows,
 )
 
 
@@ -283,7 +286,12 @@ class TestNuclearCyclePair:
         assert nuclear_cycle_pair(rows) is None
 
     def test_no_nuclear_channel_returns_none(self):
-        """Returns None rather than guessing a channel, since the sheet has no flag."""
+        """Rows with neither a role nor a DAPI-like name: nothing to compare.
+
+        Returns None rather than picking an arbitrary channel. These rows carry no
+        `channel_role` at all, which is the pre-channel_role sheet shape, so the
+        DAPI name fallback runs and finds nothing.
+        """
         rows = [
             {"channel_number": 1, "cycle_number": 1, "marker_name": "CD3e"},
             {"channel_number": 2, "cycle_number": 2, "marker_name": "CD8"},
@@ -361,3 +369,235 @@ class TestCycleRatioMetrics:
     def test_no_cells_refused(self):
         with pytest.raises(ValueError, match="no cells"):
             cycle_ratio_metrics(np.array([]), np.array([]))
+
+
+# The sheet from the exemplar001 run that exposed all of this: three nuclear stains,
+# none of them named DAPI. Reused across the classes below so that a regression fails
+# against the sheet that actually broke rather than against a constructed one.
+EXEMPLAR001 = [
+    (1, 1, "DNA_6", "dna", "nuclear"),
+    (2, 1, "ELANE", "marker", "cytoplasm"),
+    (3, 1, "CD57", "marker", "cytoplasm"),
+    (4, 1, "CD45", "marker", "cytoplasm"),
+    (5, 2, "DNA_7", "dna", "nuclear"),
+    (6, 2, "CD11B", "marker", "cytoplasm"),
+    (7, 2, "SMA", "marker", "cytoplasm"),
+    (8, 2, "CD16", "marker", "cytoplasm"),
+    (9, 3, "DNA_8", "dna", "nuclear"),
+    (10, 3, "ECAD", "marker", "cytoplasm"),
+    (11, 3, "FOXP3", "marker", "nuclear"),
+    (12, 3, "NCAM", "marker", "cytoplasm"),
+]
+
+
+def exemplar_rows():
+    return [
+        {
+            "channel_number": n,
+            "cycle_number": c,
+            "marker_name": m,
+            "channel_role": role,
+            "channel_compartment": comp,
+            "background": None,
+        }
+        for n, c, m, role, comp in EXEMPLAR001
+    ]
+
+
+class TestReadMarkerCyclesRoles:
+    def test_reads_role_compartment_and_background(self, tmp_path):
+        p = tmp_path / "m.csv"
+        p.write_text(
+            "channel_number,cycle_number,marker_name,channel_role,channel_compartment,background\n"
+            "1,1,DNA_6,dna,nuclear,\n"
+            "2,1,CD45,marker,membrane,AF_1\n"
+        )
+        rows = read_marker_cycles(p)
+        assert [r["channel_role"] for r in rows] == ["dna", "marker"]
+        assert [r["channel_compartment"] for r in rows] == ["nuclear", "membrane"]
+        assert rows[1]["background"] == "AF_1"
+
+    def test_absent_columns_are_none_not_empty_string(self, tmp_path):
+        """A sheet predating channel_role must still parse.
+
+        None rather than "" so that "the sheet does not say" is distinguishable from
+        a blank cell, which is what lets the callers decide to fall back.
+        """
+        p = tmp_path / "m.csv"
+        p.write_text("channel_number,cycle_number,marker_name\n1,1,DAPI\n")
+        row = read_marker_cycles(p)[0]
+        assert row["channel_role"] is None
+        assert row["channel_compartment"] is None
+        assert row["background"] is None
+
+    def test_role_is_lowercased(self, tmp_path):
+        """The schema's enum is lowercase; a sheet shouting DNA still matches."""
+        p = tmp_path / "m.csv"
+        p.write_text("channel_number,cycle_number,marker_name,channel_role\n1,1,DNA_6,DNA\n")
+        assert read_marker_cycles(p)[0]["channel_role"] == "dna"
+
+    def test_background_keeps_its_case(self, tmp_path):
+        """It names another channel, and channel names are matched exactly."""
+        p = tmp_path / "m.csv"
+        p.write_text(
+            "channel_number,cycle_number,marker_name,channel_role,background\n1,1,CD45,marker,AF_Cy5\n"
+        )
+        assert read_marker_cycles(p)[0]["background"] == "AF_Cy5"
+
+    def test_blank_cells_become_none(self, tmp_path):
+        p = tmp_path / "m.csv"
+        p.write_text(
+            "channel_number,cycle_number,marker_name,channel_role,channel_compartment\n1,1,DNA_6,dna,  \n"
+        )
+        assert read_marker_cycles(p)[0]["channel_compartment"] is None
+
+
+class TestResolveNuclearRows:
+    def test_channel_role_finds_stains_not_called_dapi(self):
+        """The regression. Three nuclear channels, zero DAPI substring matches."""
+        rows, how = resolve_nuclear_rows(exemplar_rows())
+        assert [r["marker_name"] for r in rows] == ["DNA_6", "DNA_7", "DNA_8"]
+        assert how == "channel_role 'dna'"
+
+    def test_role_beats_a_misleading_name(self):
+        """A channel named DAPI that the sheet says is not the stain is not chosen."""
+        rows = [
+            {"channel_number": 1, "cycle_number": 1, "marker_name": "DAPI_leak", "channel_role": "blank"},
+            {"channel_number": 2, "cycle_number": 1, "marker_name": "DNA_6", "channel_role": "dna"},
+        ]
+        got, how = resolve_nuclear_rows(rows)
+        assert [r["marker_name"] for r in got] == ["DNA_6"]
+        assert how == "channel_role 'dna'"
+
+    def test_explicit_pattern_overrides_the_sheet(self):
+        """The escape hatch for a sheet whose roles are wrong."""
+        rows, how = resolve_nuclear_rows(exemplar_rows(), pattern="ELANE")
+        assert [r["marker_name"] for r in rows] == ["ELANE"]
+        assert "ELANE" in how
+
+    def test_falls_back_to_dapi_without_a_role_column(self):
+        rows = [
+            {"channel_number": 1, "cycle_number": 1, "marker_name": "DAPI_bg"},
+            {"channel_number": 2, "cycle_number": 2, "marker_name": "CD3e"},
+        ]
+        got, how = resolve_nuclear_rows(rows)
+        assert [r["marker_name"] for r in got] == ["DAPI_bg"]
+        assert "no channel_role in the sheet" in how
+
+    def test_fallback_says_it_is_a_fallback(self):
+        """The route is reported so a report can weigh the result by how it was got."""
+        _, with_role = resolve_nuclear_rows(exemplar_rows())
+        _, without = resolve_nuclear_rows([{"channel_number": 1, "cycle_number": 1, "marker_name": "DAPI"}])
+        assert with_role != without
+
+    def test_no_nuclear_anywhere_is_empty_not_an_error(self):
+        rows = [
+            {"channel_number": 1, "cycle_number": 1, "marker_name": "CD3e", "channel_role": "marker"},
+        ]
+        got, _ = resolve_nuclear_rows(rows)
+        assert got == []
+
+
+class TestNuclearCyclePairByRole:
+    def test_first_and_last_cycle_by_role(self):
+        """The exemplar001 sheet: cycle 1 to cycle 3, skipping DNA_7 in between."""
+        assert nuclear_cycle_pair(exemplar_rows()) == ("DNA_6", "DNA_8")
+
+    def test_single_nuclear_cycle_still_returns_none(self):
+        rows = [
+            {"channel_number": 1, "cycle_number": 1, "marker_name": "DNA_6", "channel_role": "dna"},
+            {"channel_number": 2, "cycle_number": 2, "marker_name": "CD45", "channel_role": "marker"},
+        ]
+        assert nuclear_cycle_pair(rows) is None
+
+
+class TestChannelsWithRole:
+    def test_selects_one_role(self):
+        assert channels_with_role(exemplar_rows(), "dna") == ["DNA_6", "DNA_7", "DNA_8"]
+
+    def test_selects_several_roles_at_once(self):
+        rows = [
+            {"channel_number": 1, "cycle_number": 1, "marker_name": "AF", "channel_role": "autofluorescence"},
+            {"channel_number": 2, "cycle_number": 1, "marker_name": "Empty", "channel_role": "blank"},
+            {"channel_number": 3, "cycle_number": 1, "marker_name": "CD45", "channel_role": "marker"},
+        ]
+        assert channels_with_role(rows, "autofluorescence", "blank") == ["AF", "Empty"]
+
+    def test_channel_order_is_preserved(self):
+        rows = list(reversed(exemplar_rows()))
+        assert channels_with_role(rows, "dna") == ["DNA_8", "DNA_7", "DNA_6"]
+
+    def test_roleless_sheet_gives_nothing(self):
+        """Empty, which is what tells a caller to fall back rather than to conclude
+        that the slide has no nuclear stain."""
+        rows = [{"channel_number": 1, "cycle_number": 1, "marker_name": "DAPI"}]
+        assert channels_with_role(rows, "dna") == []
+
+
+class TestCompartmentsByChannel:
+    def test_maps_only_declared_channels(self):
+        got = compartments_by_channel(exemplar_rows())
+        assert got["DNA_6"] == "nuclear"
+        assert got["FOXP3"] == "nuclear"
+        assert got["CD45"] == "cytoplasm"
+        assert len(got) == len(EXEMPLAR001)
+
+    def test_channels_without_a_compartment_are_absent(self):
+        rows = [
+            {"channel_number": 1, "cycle_number": 1, "marker_name": "A", "channel_compartment": None},
+            {"channel_number": 2, "cycle_number": 1, "marker_name": "B", "channel_compartment": "membrane"},
+        ]
+        assert compartments_by_channel(rows) == {"B": "membrane"}
+
+    def test_multi_compartment_value_is_kept_whole(self):
+        """`nuclear+cytoplasm` is one claim, not two, and the schema allows it."""
+        rows = [
+            {
+                "channel_number": 1,
+                "cycle_number": 1,
+                "marker_name": "FOXP3",
+                "channel_compartment": "nuclear+cytoplasm",
+            }
+        ]
+        assert compartments_by_channel(rows) == {"FOXP3": "nuclear+cytoplasm"}
+
+
+class TestRoleDeclaringSheetIsAuthoritative:
+    """A sheet that declares roles is believed, including when it declares no dna.
+
+    The alternative -- falling back to a name match when no row says `dna` -- would
+    reintroduce the guess on the one input that explicitly ruled it out, and could
+    pick a channel the sheet declined to call nuclear.
+    """
+
+    def test_roles_present_but_no_dna_does_not_fall_back(self):
+        rows = [
+            {"channel_number": 1, "cycle_number": 1, "marker_name": "DAPI_leak", "channel_role": "blank"},
+            {"channel_number": 2, "cycle_number": 1, "marker_name": "CD45", "channel_role": "marker"},
+        ]
+        got, how = resolve_nuclear_rows(rows)
+        assert got == []
+        assert how == "channel_role 'dna'"
+
+    def test_the_same_rows_without_roles_do_fall_back(self):
+        """Same names, no role column: the historical behaviour is still available."""
+        rows = [
+            {"channel_number": 1, "cycle_number": 1, "marker_name": "DAPI_leak"},
+            {"channel_number": 2, "cycle_number": 1, "marker_name": "CD45"},
+        ]
+        got, how = resolve_nuclear_rows(rows)
+        assert [r["marker_name"] for r in got] == ["DAPI_leak"]
+        assert "no channel_role in the sheet" in how
+
+    def test_a_partly_roled_sheet_counts_as_roled(self):
+        """One declared role is enough to treat the sheet as speaking for itself.
+
+        A half-filled column is a sheet problem, and QC reports it as a missing role
+        rather than papering over it with a name match.
+        """
+        rows = [
+            {"channel_number": 1, "cycle_number": 1, "marker_name": "DAPI_leak", "channel_role": None},
+            {"channel_number": 2, "cycle_number": 1, "marker_name": "CD45", "channel_role": "marker"},
+        ]
+        _, how = resolve_nuclear_rows(rows)
+        assert how == "channel_role 'dna'"
