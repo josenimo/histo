@@ -60,8 +60,14 @@ graph LR
     AGGREGATE -->|mif, backsub, tma| QC_METRICS
     AGGREGATE -->|mif, backsub, tma| QC_IMAGES
 
-    %% One edge is missing on purpose. On the WSI line, ASHLAR's pre-subtraction
+    %% One edge is missing on purpose. Wherever backsub runs, the pre-subtraction
     %% image also reaches QC_METRICS, so the comparison before and after
     %% subtraction can be made. Adding `ASHLAR -->|backsub| QC_METRICS` aborts
     %% nf-metro 1.1.0's renderer with a CurveInvariantError, "a route hanging in
     %% open space", so it is described in docs/pipeline-paths.md instead.
+    %%
+    %% The three lines drawn here are mIF, WSI-with-backsub and TMA. A TMA run with
+    %% backsub is a fourth combination and is not one of them: it would run
+    %% COREOGRAPH then BACKSUB, per core. COREOGRAPH precedes BACKSUB in the
+    %% subworkflow so that each core is subtracted on its own and keeps an
+    %% unsubtracted twin of matching shape for QC to compare against.
