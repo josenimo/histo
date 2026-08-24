@@ -45,9 +45,11 @@ graph LR
         QC_METRICS([QC_METRICS])
         QC_IMAGES([QC_IMAGES])
         QC_REPORT([QC_REPORT])
+        MERGE_REPORT([MERGE_REPORT])
 
         QC_METRICS -->|mif, backsub, tma| QC_REPORT
         QC_IMAGES -->|mif, backsub, tma| QC_REPORT
+        QC_METRICS -->|tma| MERGE_REPORT
     end
 
     %% Between the sections

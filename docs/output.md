@@ -77,8 +77,10 @@ modifies.
     read.** Per-channel intensity statistics measured on every pixel of the full-resolution
     image, cell-area distribution and the count below a degenerate-cell threshold, channel-name
     agreement between the image, the table and the marker sheet, cells per segmentation patch,
-    and — when background subtraction ran on a non-dearrayed slide — the same channel statistics
-    from before subtraction, so the two can be compared. It sets no thresholds and returns no
+    and — when background subtraction ran — the same channel statistics from before
+    subtraction, so the two can be compared. That comparison is available on dearrayed slides
+    too: `COREOGRAPH` runs before `BACKSUB`, so every core is subtracted on its own and keeps
+    an unsubtracted twin of matching shape. It sets no thresholds and returns no
     exit code: the numbers that would justify a threshold need more than one dataset behind them.
 - `qc/{sample}_qc_report.html`
   - The same metrics rendered for a person, plus the images. Self-contained: no external
@@ -90,10 +92,19 @@ modifies.
 - `qc/{sample}_qc_images/`
   - The PNGs the report embeds, kept as files so they can be used on their own. Absent when
     `--use_qc_images false`.
+- `qc/{slide}_slide_report.html`
+  - **Dearrayed slides only.** One page for the whole slide, from the per-core metrics: cells
+    per core against the slide total, the integrity checks rolled up so a check passes only
+    when every core passes and the ones that failed are named, and mean intensity per channel
+    with one column per core. That last table is the comparison a single core's report cannot
+    make — its own page shows a channel against its own histogram, which says whether the
+    channel has signal, not whether it has the same signal as the rest of the slide. Core
+    detail that is only actionable on one core, the crops, the clusters, the per-channel
+    histograms and the patch layout, stays in that core's report rather than being repeated.
 
 </details>
 
-The QC report is produced per sample, which on a dearrayed slide means per core. `use_qc: false`
+The per-core QC report is produced per sample, which on a dearrayed slide means per core. `use_qc: false`
 skips it entirely; `use_qc_images: false` keeps the metrics and the charts but drops the
 clustering and the image crops, which are the slow part. Tuning for the image step — the Leiden
 resolution ladder, the arcsinh cofactor, how many crops — goes through `ext.args` for `QC_IMAGES`
