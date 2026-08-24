@@ -725,9 +725,16 @@ def channel_section(channels: dict[str, Any]) -> str:
 
     ceiling = next(iter(per.values()))["dtype_ceiling"]
     shared_upper = channels.get("histogram_upper", ceiling)
+    # Only shown when the marker sheet supplied them. A column of em dashes would
+    # suggest the sheet was read and had nothing to say, which is a different fault
+    # from a sheet that predates the column.
+    has_roles = any("role" in per[n] for n in names)
+    has_compartments = any("compartment" in per[n] for n in names)
     headers = [
         "Channel",
         f"Intensity distribution &middot; 0 to {thousands(shared_upper)} &middot; &radic;count",
+        *(["Role"] if has_roles else []),
+        *(["Expected in"] if has_compartments else []),
         "Mean",
         "Median",
         "p99",
@@ -743,6 +750,8 @@ def channel_section(channels: dict[str, Any]) -> str:
             [
                 esc(name),
                 sparkline(m["histogram"], width=340.0),
+                *([esc(m.get("role", "—"))] if has_roles else []),
+                *([esc(m.get("compartment", "—").replace("+", " + "))] if has_compartments else []),
                 f"{m['mean']:,.1f}",
                 thousands(m["p50"]),
                 thousands(m["p99"]),
@@ -841,11 +850,20 @@ def cycle_ratio_section(ratio: dict[str, Any]) -> str:
   <p class="note">Not computed: {esc(ratio.get("reason", "unavailable"))}.</p>
 </section>
 """
+    # How the stain was identified belongs next to the result. A ratio computed from
+    # a channel picked by a name fallback is weaker evidence than one computed from a
+    # channel the sheet declared, and the number alone does not show the difference.
+    chosen = (
+        f'<p class="note">Nuclear channel identified by {esc(ratio["nuclear_selected_by"])}.</p>'
+        if ratio.get("nuclear_selected_by")
+        else ""
+    )
     if "histogram" not in ratio:
         return f"""
 <section>
   <h2>Nuclear stain across cycles</h2>
   <p class="note">{esc(ratio.get("note", "no comparable cells"))}.</p>
+  {chosen}
 </section>
 """
 
@@ -896,6 +914,7 @@ def cycle_ratio_section(ratio: dict[str, Any]) -> str:
   <strong>{median:+.2f}</strong> and {lost:.2f}% of cells at least halved. Cells with
   no signal in one of the two cycles are excluded and counted, because their ratio is
   undefined rather than large.</p>
+  {chosen}
   {chart}
   {details("Show as table", summary)}
 </section>
@@ -1153,6 +1172,28 @@ def clustering_section(images: dict[str, Any], asset_dir: Path) -> str:
     if not clustering:
         return ""
     excluded = clustering.get("excluded_channels") or []
+    # Why each channel was held back, when qc_images recorded it. The older form
+    # listed only the names under a blanket sentence about background and nuclear
+    # channels, which stopped being the whole truth once channel_role started
+    # excluding autofluorescence and blank channels by declaration too.
+    excluded_why = clustering.get("excluded_channels_why") or {}
+    if excluded_why:
+        excluded_note = (
+            "Excluded from clustering: "
+            + esc(", ".join(f"{name} ({why})" for name, why in excluded_why.items()))
+            + (
+                " &mdash; none of these separates cell types, so all would pull the graph "
+                "toward staining intensity instead."
+            )
+        )
+    elif excluded:
+        excluded_note = (
+            f"Excluded from clustering: {esc(', '.join(excluded))} &mdash; background channels are an "
+            f"instrument reading rather than a phenotype, and nuclear stain is in every cell by "
+            f"construction, so neither separates cell types."
+        )
+    else:
+        excluded_note = ""
 
     rows = [
         [
@@ -1294,13 +1335,7 @@ drawn: {n_thin} of {n_all} would be, and at high resolution they bury the branch
   a statement about the staining alone: a run whose markers did not work collapses into
   one undifferentiated cluster, which nothing else in this report would show. Values are
   standard deviations from each marker's slide-wide mean.{subsample_note}
-  {
-        f"Excluded from clustering: {esc(', '.join(excluded))} &mdash; background channels are an "
-        f"instrument reading rather than a phenotype, and nuclear stain is in every cell by "
-        f"construction, so neither separates cell types."
-        if excluded
-        else ""
-    }</p>
+  {excluded_note}</p>
   {tree_block}
   {diverging_legend()}
   {cluster_heatmap(clustering)}
@@ -1339,6 +1374,32 @@ def build(
                 "identical"
                 if channels["matches_marker_sheet"]
                 else f"sheet says {', '.join(channels['marker_sheet_names'][:4])}…",
+            )
+        )
+    # Only asserted when the sheet carries roles at all. A sheet predating the column
+    # is not failing this check, it is not taking it, and reporting a pass would claim
+    # a guarantee that nothing verified.
+    if "roles" in channels:
+        unroled = channels.get("channels_without_role") or []
+        integrity.append(
+            status_row(
+                "Every channel has a channel_role",
+                not unroled,
+                "all declared"
+                if not unroled
+                else f"{len(unroled)} without one: {', '.join(unroled[:4])}"
+                + ("…" if len(unroled) > 4 else ""),
+            )
+        )
+        dna = channels["roles"].get("dna") or []
+        integrity.append(
+            status_row(
+                "A nuclear stain is declared",
+                bool(dna),
+                f"{len(dna)} channel(s): {', '.join(dna[:4])}"
+                if dna
+                else "no channel_role 'dna'; segmentation and the cross-cycle check "
+                "fall back to matching a channel name",
             )
         )
     degenerate_ok = cells["n_below_min_cell_area"] == 0
