@@ -13,6 +13,7 @@ include { MAKE_IMAGE_PATCHES      } from '../modules/local/make_image_patches'
 include { TISSUE_SEGMENTATION     } from '../modules/local/tissue_segmentation'
 include { AGGREGATE               } from '../modules/local/aggregate'
 include { MERGE_SPATIALDATA       } from '../modules/local/merge_spatialdata'
+include { MERGE_REPORT       } from '../modules/local/merge_report'
 include { SET_CHANNEL_NAMES       } from '../modules/local/set_channel_names'
 include { PUBLISH_SPATIALDATA     } from '../modules/local/publish_spatialdata'
 include { FLUO_ANNOTATION         } from '../modules/local/fluo_annotation'
@@ -181,6 +182,28 @@ workflow HISTO {
         // nothing published, rather than leaving cores in outdir from a run that
         // did not finish.
         ch_publish = MERGE_SPATIALDATA.out.merged
+
+        // One QC page for the slide, from the per-core metrics.
+        //
+        // A TMA run answers "is this core sound" N times and never answers "is this
+        // slide sound". Four cores mean four pages, and a cross-core comparison the
+        // reader has to hold in their head -- which is where a core that stained
+        // differently hides, because each of its own numbers looks unremarkable until
+        // it sits beside the other three.
+        //
+        // Grouped on meta.slide, the same key MERGE_SPATIALDATA groups on, so the
+        // report covers exactly the cores that were merged.
+        //
+        // Guarded on use_qc as well as use_tma_dearray: without QC there are no
+        // per-core metrics to summarise, and QC.out would not exist to reference.
+        if (params.use_qc) {
+            ch_slide_metrics = QC.out.metrics
+                .map { meta, metrics -> [[id: meta.slide, sample: meta.slide], metrics] }
+                .groupTuple()
+
+            MERGE_REPORT(ch_slide_metrics)
+            ch_versions = ch_versions.mix(MERGE_REPORT.out.versions)
+        }
     }
     else {
         ch_publish = ch_preprocessed

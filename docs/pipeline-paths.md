@@ -27,6 +27,7 @@ without writing to it, so they run alongside publishing rather than after it.
 | `QC_METRICS`                  |      x       |             x              |       x        |
 | `QC_IMAGES`                   |      x       |             x              |       x        |
 | `QC_REPORT`                   |      x       |             x              |       x        |
+| `MERGE_REPORT`                |              |                            |       x        |
 
 Everything after `COREOGRAPH`, `BACKSUB` included, runs once per core on the TMA path.
 `MERGE_SPATIALDATA` then puts one slide's cores back together, and `PUBLISH_SPATIALDATA`
