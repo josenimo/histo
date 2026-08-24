@@ -14,8 +14,8 @@ without writing to it, so they run alongside publishing rather than after it.
 | ----------------------------- | :----------: | :------------------------: | :------------: |
 | `BASICPY`                     |      x       |             x              |       x        |
 | `ASHLAR`                      |      x       |             x              |       x        |
-| `BACKSUB`                     |              |             x              |    optional    |
 | `COREOGRAPH`                  |              |                            |       x        |
+| `BACKSUB`                     |              |             x              |    optional    |
 | `TO_SPATIALDATA`              |      x       |             x              |       x        |
 | `SET_CHANNEL_NAMES`           |      x       |             x              |       x        |
 | `MAKE_IMAGE_PATCHES`          |      x       |             x              |       x        |
@@ -28,7 +28,7 @@ without writing to it, so they run alongside publishing rather than after it.
 | `QC_IMAGES`                   |      x       |             x              |       x        |
 | `QC_REPORT`                   |      x       |             x              |       x        |
 
-Everything from `COREOGRAPH` to `AGGREGATE` runs once per core on the TMA path.
+Everything after `COREOGRAPH`, `BACKSUB` included, runs once per core on the TMA path.
 `MERGE_SPATIALDATA` then puts one slide's cores back together, and `PUBLISH_SPATIALDATA`
 publishes the result, so publication happens once per slide rather than once per core. The
 per-core stores are not published: the merged store copies every element family and every table
@@ -75,8 +75,14 @@ nf-metro renders light only, so the figure keeps its own light surface on a dark
 - StarDist substitutes `PATCH_SEGMENTATION_STARDIST` and `RESOLVE_STARDIST` for the two Cellpose
   stations.
 
-One edge is deliberately absent. On the WSI line, `ASHLAR`'s pre-subtraction image also reaches
-`QC_METRICS`, which is how the report compares channel statistics before and after subtraction.
-It exists only when `use_backsub` is set and `use_tma_dearray` is not, because a dearrayed core
-has no whole-slide before-image to compare against. Drawing it aborts nf-metro 1.1.0's renderer
-with a `CurveInvariantError`, so it is written down here instead.
+One edge is deliberately absent. The pre-subtraction image also reaches `QC_METRICS`, which is
+how the report compares channel statistics before and after subtraction. It exists whenever
+`use_backsub` is set, on both the WSI and the TMA line: `COREOGRAPH` runs before `BACKSUB`, so a
+dearrayed core is subtracted individually and its own unsubtracted twin is what QC compares it
+against. Drawing this edge aborts nf-metro 1.1.0's renderer with a `CurveInvariantError`, so it
+is written down here instead.
+
+That ordering is the reason the TMA line lists `COREOGRAPH` before `BACKSUB`. The two orders
+produce the same pixels, since subtraction has no whole-slide term, but subtracting first leaves
+only a slide-sized before-image that cannot be paired with a core-sized store, and the
+comparison then silently does not happen.

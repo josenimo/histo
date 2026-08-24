@@ -33,7 +33,8 @@ workflow QC {
     // its own pre-subtraction image, and keeps stores that have neither.
     //
     // remainder matters for both. The pre-subtraction image exists only when backsub
-    // ran on a slide that was not dearrayed. The marker sheet is absent on the
+    // ran; it is keyed per core on the TMA path, which is why dearraying happens
+    // before subtraction rather than after. The marker sheet is absent on the
     // pre-stitched path, where preprocessing never ran and nothing describes the
     // channels. A missing side arrives as null and becomes [], which collapses to no
     // flag at all in the module.

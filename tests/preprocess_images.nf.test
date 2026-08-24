@@ -124,4 +124,148 @@ nextflow_workflow {
             )
         }
     }
+
+    test("backsub on a TMA subtracts each core and keeps its unsubtracted twin") {
+
+        // The combination that had no test, and the one the ordering change is for.
+        // Dearraying runs before subtraction, so `unsubtracted` is one entry per core
+        // keyed exactly like `images`. With the old order it was the whole slide, and
+        // QC's join produced nothing to compare a core against -- a backsub run whose
+        // report showed no subtraction and gave no reason.
+        when {
+            params {
+                use_backsub = true
+                use_tma_dearray = true
+            }
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'testslide', cycle_number: 1 ],
+                        file("\${projectDir}/tests/stub_data/cycle01.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ],
+                    [
+                        [ id: 'testslide', cycle_number: 2 ],
+                        file("\${projectDir}/tests/stub_data/cycle02.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ]
+                )
+                input[1] = Channel.of([
+                    [ id: 'testslide' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                ])
+                """
+            }
+        }
+
+        then {
+            def imageIds = workflow.out.images.collect { it[0].id }.sort()
+            def unsubIds = workflow.out.unsubtracted.collect { it[0].id }.sort()
+
+            assertAll(
+                { assert workflow.success },
+
+                // Two cores in, two subtracted cores out.
+                { assert workflow.out.images.size() == 2 },
+                { assert imageIds == ['testslide_core001', 'testslide_core002'] },
+
+                // The point of the reorder: one unsubtracted image per core, keyed
+                // the same way. Anything else and QC's join drops it.
+                { assert workflow.out.unsubtracted.size() == 2 },
+                { assert unsubIds == imageIds },
+
+                // Cores still know their slide after passing through backsub.
+                { assert workflow.out.images.every { it[0].slide == 'testslide' } },
+
+                // backsub writes its own sheet, per core rather than per slide,
+                // because the sheet reached it already fanned out. Keyed by slide
+                // instead, the downstream join keeps one core and drops the rest.
+                { assert workflow.out.markers.size() == 2 },
+                { assert workflow.out.markers.collect { it[0].id }.sort() == imageIds },
+
+                // The subtracted image is not the input file. The module errors when
+                // its prefix collides with the input name, and on this path the two
+                // are one rename apart.
+                { assert workflow.out.images.every { it[1].contains('backsub') } }
+            )
+        }
+    }
+
+    test("backsub without a TMA still yields one image and one unsubtracted twin") {
+
+        // The path that already worked, asserted so the reorder cannot quietly
+        // change it while fixing the TMA one.
+        when {
+            params {
+                use_backsub = true
+                use_tma_dearray = false
+            }
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'testsample', cycle_number: 1 ],
+                        file("\${projectDir}/tests/stub_data/cycle01.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ]
+                )
+                input[1] = Channel.of([
+                    [ id: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                ])
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.images.size() == 1 },
+                { assert workflow.out.unsubtracted.size() == 1 },
+                { assert workflow.out.unsubtracted[0][0].id == 'testsample' },
+                { assert workflow.out.markers.size() == 1 }
+            )
+        }
+    }
+
+    test("no backsub emits no unsubtracted image at all") {
+
+        // Absent rather than a copy of the image: an empty channel is what tells QC
+        // there is nothing to compare, and a copy would render a before-and-after
+        // chart showing two identical series.
+        when {
+            params {
+                use_backsub = false
+                use_tma_dearray = false
+            }
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'testsample', cycle_number: 1 ],
+                        file("\${projectDir}/tests/stub_data/cycle01.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ]
+                )
+                input[1] = Channel.of([
+                    [ id: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                ])
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.images.size() == 1 },
+                { assert workflow.out.unsubtracted.size() == 0 }
+            )
+        }
+    }
 }

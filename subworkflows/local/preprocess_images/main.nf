@@ -74,56 +74,28 @@ workflow PREPROCESS_IMAGES {
     ASHLAR(ch_ashlar.images, ch_ashlar.dfps, ch_ashlar.ffps)
 
     //
-    // Background subtraction. Optional, off by default.
-    //
-    // The sheet is passed through as the user wrote it. backsub reads it with
-    // pd.read_csv and addresses columns by name, so columns it has no use for,
-    // channel_role and channel_compartment among them, are carried through to its
-    // marker output rather than rejected. nf-core/mcmicro rewrites the sheet to six
-    // columns; that is not required, and rewriting it here is what previously forced
-    // the sheet to be a single broadcast file rather than one per sample.
-    //
-    if (params.use_backsub) {
-        // join() rather than combine(): each sample brings its own sheet, so the two
-        // are matched by key instead of one sheet being broadcast over every image.
-        ASHLAR.out.tif
-            .join(ch_markersheet)
-            .multiMap { meta, image, markers ->
-                image: [meta, image]
-                markers: [meta, markers]
-            }
-            .set { ch_backsub }
-
-        BACKSUB(ch_backsub.image, ch_backsub.markers)
-        ch_registered = BACKSUB.out.backsub_tif
-
-        // The sheet that describes what the image now contains, per sample.
-        //
-        // backsub writes a new sheet rather than echoing its input, and the
-        // difference matters twice over: rows whose remove column is set are gone,
-        // and channel_number is renumbered 1..N across what survives. So the input
-        // sheet would both name channels the image no longer has and number the rest
-        // wrongly, which is why this is the sheet everything downstream reads.
-        ch_effective_markers = BACKSUB.out.markerout
-    }
-    else {
-        ch_registered = ASHLAR.out.tif
-
-        // No backsub, so the sheet from the samplesheet still describes the image
-        // exactly, and it is passed through untouched. Every consumer parses the CSV
-        // by column name and ignores what it does not need.
-        ch_effective_markers = ch_markersheet
-    }
-
-    //
     // TMA dearray. Optional, off by default.
     //
     // This is the one step that changes the cardinality of the pipeline: one slide
     // becomes N cores, and each core continues through the downstream half as an
     // independent sample with its own SpatialData object.
     //
+    // Before background subtraction, deliberately. The two orders produce the same
+    // pixels -- backsub subtracts a scaled background channel per pixel and has no
+    // whole-slide term, so subtracting then cutting and cutting then subtracting
+    // agree -- but only this order leaves an unsubtracted image that is the same
+    // shape as the thing QC reads. With backsub first, the pre-subtraction image is
+    // a whole slide while the stores QC reads are single cores, so there is nothing
+    // to compare a core against and the before-and-after check silently does not
+    // happen on the TMA path. That is how a run with use_backsub = true produced a
+    // report that showed no subtraction at all and said nothing about why.
+    //
+    // Coreograph is unaffected by the swap: it detects cores on --channel 0, the
+    // nuclear stain, which has no background assigned and is therefore identical
+    // before and after subtraction.
+    //
     if (params.use_tma_dearray) {
-        COREOGRAPH(ch_registered)
+        COREOGRAPH(ASHLAR.out.tif)
 
         // transpose() turns [meta, [core1, core2, ...]] into one item per core.
         // The core's identity comes from its filename, which the patched module
@@ -134,7 +106,7 @@ workflow PREPROCESS_IMAGES {
         // `.ome.tif` (2.4.6). Matching only /\.tif$/ leaves a trailing ".ome" in
         // the ID on 2.4.6, which is the version we run, and that ID goes on to
         // become the sdata directory name and the prefix of every merged element.
-        ch_images = COREOGRAPH.out.cores
+        ch_dearrayed = COREOGRAPH.out.cores
             .transpose()
             .map { meta, core ->
                 def core_id = core.name.replaceFirst(/(?i)\.(ome\.)?tiff?$/, '')
@@ -158,38 +130,78 @@ workflow PREPROCESS_IMAGES {
         // has many cores, so it would keep the first core and drop the rest. Re-keying
         // to the core rather than leaving this keyed by slide means every consumer
         // downstream joins on the same meta it already uses.
-        ch_effective_markers = ch_images
+        ch_dearrayed_markers = ch_dearrayed
             .map { meta, _core -> [[id: meta.slide], meta] }
-            .combine(ch_effective_markers.map { meta, sheet -> [meta.subMap('id'), sheet] }, by: 0)
+            .combine(ch_markersheet.map { meta, sheet -> [meta.subMap('id'), sheet] }, by: 0)
             .map { _slide, core_meta, sheet -> [core_meta, sheet] }
     }
     else {
-        ch_images = ch_registered
+        ch_dearrayed = ASHLAR.out.tif
+        ch_dearrayed_markers = ch_markersheet
+    }
+
+    //
+    // Background subtraction. Optional, off by default.
+    //
+    // One code path for both shapes. Whatever came out of the step above -- one
+    // slide, or N cores each keyed by its own id -- is subtracted the same way, and
+    // the fan-out that used to be needed to spread a slide-level marker sheet across
+    // cores after subtraction is gone: the sheet is already per core by the time
+    // backsub sees it.
+    //
+    // The sheet is passed through as the user wrote it. backsub reads it with
+    // pd.read_csv and addresses columns by name, so columns it has no use for,
+    // channel_role and channel_compartment among them, are carried through to its
+    // marker output rather than rejected. nf-core/mcmicro rewrites the sheet to six
+    // columns; that is not required, and rewriting it here is what previously forced
+    // the sheet to be a single broadcast file rather than one per sample.
+    //
+    if (params.use_backsub) {
+        // join() rather than combine(): each image brings its own sheet, so the two
+        // are matched by key instead of one sheet being broadcast over every image.
+        ch_dearrayed
+            .join(ch_dearrayed_markers)
+            .multiMap { meta, image, markers ->
+                image: [meta, image]
+                markers: [meta, markers]
+            }
+            .set { ch_backsub }
+
+        BACKSUB(ch_backsub.image, ch_backsub.markers)
+        ch_images = BACKSUB.out.backsub_tif
+
+        // The sheet that describes what the image now contains, per sample or per
+        // core.
+        //
+        // backsub writes a new sheet rather than echoing its input, and the
+        // difference matters twice over: rows whose remove column is set are gone,
+        // and channel_number is renumbered 1..N across what survives. So the input
+        // sheet would both name channels the image no longer has and number the rest
+        // wrongly, which is why this is the sheet everything downstream reads.
+        ch_effective_markers = BACKSUB.out.markerout
+    }
+    else {
+        ch_images = ch_dearrayed
+
+        // No backsub, so the sheet from the samplesheet still describes the image
+        // exactly, and it is passed through untouched. Every consumer parses the CSV
+        // by column name and ignores what it does not need.
+        ch_effective_markers = ch_dearrayed_markers
     }
 
     // Versions are emitted on the `versions` topic by all four mcmicro modules,
     // and collected in workflows/histo.nf. Nothing to mix here.
 
-    // Ashlar's output, before background subtraction, for QC to compare against.
+    // The image before background subtraction, for QC to compare against.
     //
-    // Emitted only when backsub ran and the slide was not dearrayed. Without backsub
-    // there is nothing to compare, and on the TMA path this is the whole slide while
-    // the stores QC reads are single cores, so pairing them would compare a core
-    // against a slide. Empty rather than absent in those cases, so the consumer takes
-    // the same shape either way.
-    ch_unsubtracted = params.use_backsub && !params.use_tma_dearray
-        ? ASHLAR.out.tif
+    // Keyed exactly like the images QC reads, on both paths, because dearraying now
+    // happens first: one entry per sample without a TMA, one per core with one.
+    // Emitted only when backsub ran, since without it there is nothing to compare.
+    // Empty rather than absent in that case, so the consumer takes the same shape
+    // either way.
+    ch_unsubtracted = params.use_backsub
+        ? ch_dearrayed
         : channel.empty()
-
-    // markers is keyed the same way images is, one entry per sample or per core.
-    //
-    // It used to be a single unkeyed file broadcast to everything, which is a shape
-    // that only works by accident: as a queue channel holding one item it gets paired
-    // element-wise against the images and the consuming process stops at the shorter
-    // of the two, so a four-core slide had its channels named on one core and the
-    // other three vanished with the run reporting success. `.first()` papers over that
-    // by making the channel a value channel; keying it per sample removes the
-    // possibility instead, and is what the sheet being per sample demanded anyway.
 
     emit:
     images       = ch_images          // channel: [ val(meta), path(image) ] one per sample, or one per TMA core
