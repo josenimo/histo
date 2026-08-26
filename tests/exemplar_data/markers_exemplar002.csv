@@ -1,0 +1,9 @@
+channel_number,cycle_number,marker_name,channel_role,channel_compartment,filter,excitation_wavelength,emission_wavelength,exposure,background
+1,1,DNA_1,dna,nuclear,DAPI,395,431,10,
+2,1,AF488,marker,cytoplasm,FITC,485,525,50,A488_background
+3,1,AF555,marker,cytoplasm,Sytox,555,590,50,A555_background
+4,1,AF647,marker,cytoplasm,Cy5,640,690,50,A647_background
+5,2,DNA_2,dna,nuclear,DAPI,395,431,10,
+6,2,A488_background,autofluorescence,,FITC,485,525,40,
+7,2,A555_background,autofluorescence,,Sytox,555,590,30,
+8,2,A647_background,autofluorescence,,Cy5,640,690,60,

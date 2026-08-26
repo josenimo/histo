@@ -81,9 +81,43 @@ Ordered by how much harder each becomes if deferred.
    only in its stderr (see Longer term), and run-level resource QC, which is structurally blocked
    (see Open).
 6. **Phase 8, release.** Preparation is done and `nf-core pipelines lint --release` is clean.
-   What remains is mechanical: merge to `main` and tag `1.0.0`. Run the fixture test on the
-   cluster first — it is the only automated check that touches real pixels, and it is now
-   runnable (`tools/make_fixture_sheets.sh`), which it was not when this item was written.
+   What remains is the checklist below, then merge to `main` and tag.
+
+## Before every release
+
+Two runs on the cluster, by hand. Between them they cover every path the pipeline has, and
+neither can run in CI: the container images come to about 8.8 GB on disk for the mIF path and
+14.7 GB with Coreograph, against roughly 14 GB free on a GitHub-hosted runner and a 10 GB cache
+quota, re-pulled each run. nf-core reaches the same conclusion and runs its full tests on AWS at
+release time; this does the same with a cluster and a person.
+
+```bash
+export HISTO_EXEMPLARS=/fast/AG_Coscia/$USER/HISTO/exemplars
+bash tools/fetch_exemplars.sh          # 826 MB, public mcmicro S3, no credentials
+
+export TMPDIR=/fast/AG_Coscia/$USER/tmp && mkdir -p "$TMPDIR"
+export NXF_TEMP="$TMPDIR" NXF_OPTS="-Djava.io.tmpdir=$TMPDIR" NXF_OFFLINE=true
+
+nf-test test tests/exemplar001.nf.test --profile test_exemplar001,singularity,size_small,slurm
+nf-test test tests/exemplar002.nf.test --profile test_exemplar002,singularity,size_small,slurm
+
+uvx --from nf-core nf-core pipelines lint --release
+```
+
+| | exemplar-001 | exemplar-002 |
+| --- | --- | --- |
+| path | mIF, whole slide | TMA, dearrayed |
+| cycles | 6, 7, 8 — 12 channels | 1, 2 — 8 channels |
+| backsub | no | yes, on real autofluorescence channels |
+| unique coverage | BaSiCPy, Ashlar, tiled segmentation | Coreograph, per-core subtraction, merge, slide report |
+
+**Cell-count baselines are not recorded.** Both tests assert only that cells were produced; the
+±2% windows are commented out in the test files. Record them from the first green run and
+uncomment. A number guessed in advance is not a baseline, it is something for the first run to
+be unfairly judged against.
+
+Nothing checks H&E, `use_preprocessing = false` on real data, or StarDist. The first is
+unimplemented, the second has stub coverage in `tests/default.nf.test`, and the third has none.
 
 ## Longer term
 
@@ -214,9 +248,11 @@ blocks 1.0.0 on a decision.
   part it relies on. Needs a real spatialdata store rather than the JSON fixture `make_store`
   builds, so it is slower than the tests beside it.
 
-- **No real-data test** for the TMA path or for background subtraction. Both have wiring coverage
-  under `-stub` and have been run by hand on the cluster, but nothing automated asserts on their
-  numbers. `use_preprocessing = false` is now covered for wiring by `tests/default.nf.test`.
+- **The two pre-release checks have never run.** `tests/exemplar001.nf.test` and
+  `tests/exemplar002.nf.test` replace the old 43 MB fixture test, which could not run either --
+  it wanted a samplesheet that existed nowhere. These at least fetch their own data. Until one
+  goes green on the cluster, the TMA path, background subtraction and the whole real-pixel tier
+  are asserted by nothing.
 
 - **`MERGE_REPORT`'s guards have no automated test.** It must run on a TMA with QC on, and must
   not run without a TMA or without QC. All three were verified by hand with `-stub` pipeline runs.

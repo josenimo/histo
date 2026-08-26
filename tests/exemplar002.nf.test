@@ -1,0 +1,129 @@
+// Pre-release check 2 of 2: the TMA path with background subtraction, on real pixels.
+//
+// CLUSTER ONLY, and more so than its counterpart: Coreograph's image alone is 5.9 GB
+// on disk. Tagged `exemplar` and excluded from the CI tags.
+//
+//     export HISTO_EXEMPLARS=/fast/AG_Coscia/$USER/HISTO/exemplars
+//     bash tools/fetch_exemplars.sh
+//     nf-test test tests/exemplar002.nf.test \
+//         --profile test_exemplar002,singularity,size_small,slurm
+//
+// `test_exemplar002` must be repeated on the command line even though it is declared
+// below; nf-test's --profile replaces the directive rather than adding to it.
+//
+// Covers everything exemplar001.nf.test cannot: Coreograph splitting a slide into
+// cores, each core carried through independently, subtraction per core, the merge
+// back into one store, and the slide-level report. Cycles 1 and 2 are used because
+// cycle 2 holds this dataset's real autofluorescence channels -- a rare thing in
+// public data, and the reason this check is worth its download.
+//
+// BASELINE NOT YET RECORDED. Core count is asserted because it is a property of the
+// array rather than of the segmenter, but cell counts are left open until a real run
+// supplies them. A baseline invented in advance is a guess the first run gets judged
+// against.
+
+nextflow_pipeline {
+
+    name "Exemplar-002: the TMA path with background subtraction"
+    script "../main.nf"
+    profile "test_exemplar002"
+    tag "exemplar"
+
+    test("a TMA dearrays into cores, each subtracted, merged back into one slide") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            def slurp = new groovy.json.JsonSlurper()
+            def ran = workflow.trace.succeeded().collect { it.name }
+            def names = { proc -> ran.findAll { it.contains(proc) } }
+
+            def manifest = slurp.parse(file("$outputDir/exemplar-002_merge_manifest.json"))
+            def cores = manifest.keySet().sort()
+            def coreMetrics = cores.collect {
+                slurp.parse(file("$outputDir/qc/${it}_qc.json"))
+            }
+
+            assertAll(
+                { assert workflow.success },
+
+                // Four cores, which is a property of the array rather than of any
+                // model, so it is safe to assert exactly. A different number means
+                // Coreograph's detection changed, which is worth stopping for.
+                { assert names("COREOGRAPH").size() == 1 },
+                { assert cores.size() == 4 },
+                { assert cores == [
+                    'exemplar-002_core001', 'exemplar-002_core002',
+                    'exemplar-002_core003', 'exemplar-002_core004',
+                ] },
+
+                // Everything after dearray runs once per core, subtraction included.
+                // BACKSUB running four times rather than once is the whole point of
+                // COREOGRAPH preceding it: one run would mean it happened on the slide
+                // and no core has an unsubtracted twin to be compared against.
+                { assert names("BACKSUB").size() == 4 },
+                { assert names("TO_SPATIALDATA").size() == 4 },
+                { assert names("AGGREGATE").size() == 4 },
+                { assert names("QC_METRICS").size() == 4 },
+
+                // And these run once per slide.
+                { assert names("MERGE_SPATIALDATA").size() == 1 },
+                { assert names("MERGE_REPORT").size() == 1 },
+
+                // Every core keeps its slide's channels, named from the sheet.
+                { assert coreMetrics.every { it.channels.table_names == [
+                    'DNA_1', 'AF488', 'AF555', 'AF647',
+                    'DNA_2', 'A488_background', 'A555_background', 'A647_background',
+                ] } },
+
+                // The sheet decided which channel is nuclear, on every core. DNA_1 and
+                // DNA_2 contain no "DAPI", so a name-pattern route here is a regression.
+                { assert coreMetrics.every { it.channels.roles.dna == ['DNA_1', 'DNA_2'] } },
+                { assert coreMetrics.every { it.channels.roles.autofluorescence.size() == 3 } },
+                { assert coreMetrics.every { it.cycle_ratio.nuclear_selected_by == "channel_role 'dna'" } },
+
+                // The before-and-after comparison, which is the reason dearray runs
+                // ahead of subtraction. Absent on every core before that change.
+                { assert coreMetrics.every { it.containsKey('before') } },
+                { assert coreMetrics.every { it.before.n_channels == 8 } },
+
+                // A background channel is never itself subtracted, so its zero-pixel
+                // fraction must not move. A channel that does have a background
+                // assigned should move, or subtraction did nothing.
+                { assert coreMetrics.every { m ->
+                    m.channels.per_channel['A488_background'].fraction_zero ==
+                    m.channels.per_channel['A488_background'].before.fraction_zero
+                } },
+                { assert coreMetrics.any { m ->
+                    m.channels.per_channel['AF488'].fraction_zero >
+                    m.channels.per_channel['AF488'].before.fraction_zero
+                } },
+
+                // Per-core reports and the slide report beside them.
+                { assert cores.every { file("$outputDir/qc/${it}_qc_report.html").exists() } },
+                { assert file("$outputDir/qc/exemplar-002_slide_report.html").exists() },
+
+                // The merged store holds one table per core, and only the merged store
+                // is published -- the per-core stores are not.
+                { assert file("$outputDir/exemplar-002_merged.zarr").exists() },
+                { assert cores.every {
+                    file("$outputDir/exemplar-002_merged.zarr/tables/${it}__table").exists()
+                } },
+                { assert !file("$outputDir/exemplar-002_core001.zarr").exists() },
+
+                // Provenance, including the two processes only this path exercises.
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('COREOGRAPH') },
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('BACKSUB') },
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('MERGE_SPATIALDATA') },
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('MERGE_REPORT') },
+
+                // Sanity only, until a baseline exists: every core produced cells.
+                { assert coreMetrics.every { it.cells.n_cells > 0 } },
+            )
+        }
+    }
+}
