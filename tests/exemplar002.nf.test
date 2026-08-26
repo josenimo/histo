@@ -13,9 +13,16 @@
 //
 // Covers everything exemplar001.nf.test cannot: Coreograph splitting a slide into
 // cores, each core carried through independently, subtraction per core, the merge
-// back into one store, and the slide-level report. Cycles 1 and 2 are used because
-// cycle 2 holds this dataset's real autofluorescence channels -- a rare thing in
-// public data, and the reason this check is worth its download.
+// back into one store, and the slide-level report.
+//
+// Three cycles, subtracted the way the dataset intends. Cycle 1 is a pre-stain
+// autofluorescence round and cycles 2 and 3 subtract it, following mcmicro's own
+// marker sheet for this data; the three AF channels are then dropped by the sheet's
+// remove column, so twelve acquired channels become nine in the store. That last
+// part is why three cycles and not two: two would have subtracted one background
+// cycle from another, and nothing would have exercised remove -- the column that
+// makes backsub change the channel count and renumber what survives, which nothing
+// else in the test suite touches.
 //
 // BASELINE NOT YET RECORDED. Core count is asserted because it is a property of the
 // array rather than of the segmenter, but cell counts are left open until a real run
@@ -74,33 +81,53 @@ nextflow_pipeline {
                 { assert names("MERGE_SPATIALDATA").size() == 1 },
                 { assert names("MERGE_REPORT").size() == 1 },
 
-                // Every core keeps its slide's channels, named from the sheet.
+                // Twelve channels were acquired; the marker sheet marks the three
+                // autofluorescence channels remove, so nine reach the store, renumbered
+                // in the order the survivors had. If AF488/AF555/AF647 appear here,
+                // backsub ignored remove and every downstream channel index is shifted.
                 { assert coreMetrics.every { it.channels.table_names == [
-                    'DNA_1', 'AF488', 'AF555', 'AF647',
-                    'DNA_2', 'A488_background', 'A555_background', 'A647_background',
+                    'DNA_1', 'DNA_2',
+                    'A488_background', 'A555_background', 'A647_background',
+                    'DNA_3', 'FDX1', 'CD357', 'CD1D',
                 ] } },
+                { assert coreMetrics.every { it.channels.n_channels == 9 } },
+                { assert coreMetrics.every { m ->
+                    !m.channels.table_names.any { it in ['AF488', 'AF555', 'AF647'] }
+                } },
 
-                // The sheet decided which channel is nuclear, on every core. DNA_1 and
-                // DNA_2 contain no "DAPI", so a name-pattern route here is a regression.
-                { assert coreMetrics.every { it.channels.roles.dna == ['DNA_1', 'DNA_2'] } },
-                { assert coreMetrics.every { it.channels.roles.autofluorescence.size() == 3 } },
+                // The sheet decided which channel is nuclear, on every core. None of
+                // DNA_1/2/3 contains "DAPI", so a name-pattern route here is a regression.
+                { assert coreMetrics.every { it.channels.roles.dna == ['DNA_1', 'DNA_2', 'DNA_3'] } },
                 { assert coreMetrics.every { it.cycle_ratio.nuclear_selected_by == "channel_role 'dna'" } },
+                { assert coreMetrics.every { it.cycle_ratio.first_channel == 'DNA_1' } },
+                { assert coreMetrics.every { it.cycle_ratio.last_channel == 'DNA_3' } },
+
+                // The autofluorescence channels are gone from the store, so the role
+                // must be gone from the post-backsub sheet QC reads too. Present here
+                // would mean the sheet and the pixels disagree about what exists.
+                { assert coreMetrics.every { !(it.channels.roles.containsKey('autofluorescence')) } },
 
                 // The before-and-after comparison, which is the reason dearray runs
                 // ahead of subtraction. Absent on every core before that change.
                 { assert coreMetrics.every { it.containsKey('before') } },
-                { assert coreMetrics.every { it.before.n_channels == 8 } },
 
-                // A background channel is never itself subtracted, so its zero-pixel
-                // fraction must not move. A channel that does have a background
-                // assigned should move, or subtraction did nothing.
+                // The before-image is Ashlar's output, so it still has all twelve
+                // channels while the store has nine. QC refuses to pair them by
+                // position when the counts differ and says so, rather than comparing
+                // channels that are not the same channel.
+                { assert coreMetrics.every { it.before.n_channels == 12 } },
+                { assert coreMetrics.every { it.before.containsKey('error') } },
+
+                // And it refused rather than guessing: no channel carries a `before`
+                // block, because pairing 12 against 9 by position would compare
+                // A488_background with AF555 and report the difference as subtraction.
+                // This is the cost of the realistic arrangement, and it is worth being
+                // explicit about: using `remove` buys the channel-dropping path its
+                // only coverage and gives up the per-channel before-and-after numbers.
+                // A TMA run without `remove` still gets them, which is what the
+                // COREOGRAPH-before-BACKSUB ordering made possible.
                 { assert coreMetrics.every { m ->
-                    m.channels.per_channel['A488_background'].fraction_zero ==
-                    m.channels.per_channel['A488_background'].before.fraction_zero
-                } },
-                { assert coreMetrics.any { m ->
-                    m.channels.per_channel['AF488'].fraction_zero >
-                    m.channels.per_channel['AF488'].before.fraction_zero
+                    m.channels.per_channel.values().every { !it.containsKey('before') }
                 } },
 
                 // Per-core reports and the slide report beside them.

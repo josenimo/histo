@@ -93,7 +93,7 @@ release time; this does the same with a cluster and a person.
 
 ```bash
 export HISTO_EXEMPLARS=/fast/AG_Coscia/$USER/HISTO/exemplars
-bash tools/fetch_exemplars.sh          # 826 MB, public mcmicro S3, no credentials
+bash tools/fetch_exemplars.sh          # 1.1 GB, public mcmicro S3, no credentials
 
 export TMPDIR=/fast/AG_Coscia/$USER/tmp && mkdir -p "$TMPDIR"
 export NXF_TEMP="$TMPDIR" NXF_OPTS="-Djava.io.tmpdir=$TMPDIR" NXF_OFFLINE=true
@@ -107,9 +107,9 @@ uvx --from nf-core nf-core pipelines lint --release
 | | exemplar-001 | exemplar-002 |
 | --- | --- | --- |
 | path | mIF, whole slide | TMA, dearrayed |
-| cycles | 6, 7, 8 — 12 channels | 1, 2 — 8 channels |
+| cycles | 6, 7, 8 — 12 channels | 1, 2, 3 — 12 acquired, 9 after subtraction |
 | backsub | no | yes, on real autofluorescence channels |
-| unique coverage | BaSiCPy, Ashlar, tiled segmentation | Coreograph, per-core subtraction, merge, slide report |
+| unique coverage | BaSiCPy, Ashlar, tiled segmentation | Coreograph, per-core subtraction, `remove`, merge, slide report |
 
 **Cell-count baselines are not recorded.** Both tests assert only that cells were produced; the
 ±2% windows are commented out in the test files. Record them from the first green run and

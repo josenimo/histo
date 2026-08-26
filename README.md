@@ -90,7 +90,7 @@ none of them substitutes for another.
 | Validation tests         | That bad input is actually rejected | none          | CI + local        | seconds |
 | Stub tests               | Channel topology                    | placeholders  | CI + local        | seconds |
 | Pre-release, exemplar-001 | The WSI path, on real images       | 191 MB, fetched | Cluster, by hand | minutes |
-| Pre-release, exemplar-002 | The TMA path with subtraction      | 635 MB, fetched | Cluster, by hand | minutes |
+| Pre-release, exemplar-002 | The TMA path with subtraction      | 953 MB, fetched | Cluster, by hand | minutes |
 
 ### Pre-commit hooks — `prek run --all-files`
 
@@ -154,10 +154,12 @@ nf-test test tests/exemplar002.nf.test --profile test_exemplar002,singularity,si
 
 Between them they cover every path the pipeline has. **exemplar-001** is three mIF cycles on a
 whole slide — BaSiCPy, Ashlar, tiled segmentation, no subtraction or dearray. **exemplar-002** is
-a two-cycle TMA with background subtraction, which adds Coreograph, per-core subtraction, the
-merge back into one store and the slide-level report. exemplar-002 is used for that because its
-cycle 2 holds real autofluorescence channels, which is rare in public data and better than
-relabelling a marker to stand in for one.
+a three-cycle TMA with background subtraction, which adds Coreograph, per-core subtraction, the
+merge back into one store and the slide-level report. Cycle 1 is a pre-stain autofluorescence
+round that cycles 2 and 3 subtract, following mcmicro's own sheet for this data, and is then
+dropped by the sheet's `remove` column — so twelve acquired channels become nine in the store,
+which is the only coverage the channel-dropping path has. Public data with genuine
+autofluorescence channels is rare and worth using properly.
 
 `tools/fetch_exemplars.sh` downloads the images from the public mcmicro S3 bucket — the same
 datasets mcmicro's own tutorial uses, no credentials — taking only the cycles the tests need.

@@ -6,11 +6,17 @@
 #     export HISTO_EXEMPLARS=/fast/AG_Coscia/$USER/HISTO/exemplars
 #     bash tools/fetch_exemplars.sh
 #
-# Downloads about 826 MB from the public mcmicro S3 bucket, no credentials. Only
+# Downloads about 1.1 GB from the public mcmicro S3 bucket, no credentials. Only
 # the cycles the tests use, not the whole ten-cycle sets:
 #
 #   exemplar-001 cycles 6, 7, 8    191 MB   mIF slide, the WSI check
-#   exemplar-002 cycles 1, 2       635 MB   TMA, the dearray and backsub check
+#   exemplar-002 cycles 1, 2, 3    953 MB   TMA, the dearray and backsub check
+#
+# Three cycles of exemplar-002 rather than two, so subtraction runs the way the
+# dataset intends: cycle 1 is the autofluorescence reference, cycles 2 and 3 subtract
+# it, and cycle 1 is dropped afterwards by the marker sheet's remove column. Two
+# cycles would have subtracted one background cycle from another, which works but is
+# not what anyone does.
 #
 # Run it on a machine with internet and copy the directory to the cluster, or run
 # it on a login node if that one has outbound access. Re-running skips files that
@@ -66,9 +72,9 @@ for c in 06 07 08; do
           "$dest/exemplar-001/exemplar-001-cycle-$c.ome.tiff"
 done
 
-echo "exemplar-002, cycles 1-2, into $dest"
+echo "exemplar-002, cycles 1-3, into $dest"
 mkdir -p "$dest/exemplar-002"
-for c in 01 02; do
+for c in 01 02 03; do
     fetch "$BUCKET/002/exemplar-002/raw/exemplar-002-cycle-$c.ome.tiff" \
           "$dest/exemplar-002/exemplar-002-cycle-$c.ome.tiff"
 done
@@ -88,6 +94,7 @@ cat > "$dest/samplesheet_exemplar002.csv" <<CSV
 sample,cycle_number,image_tiles,marker_sheet
 exemplar-002,1,$dest/exemplar-002/exemplar-002-cycle-01.ome.tiff,$SHEETS/markers_exemplar002.csv
 exemplar-002,2,$dest/exemplar-002/exemplar-002-cycle-02.ome.tiff,$SHEETS/markers_exemplar002.csv
+exemplar-002,3,$dest/exemplar-002/exemplar-002-cycle-03.ome.tiff,$SHEETS/markers_exemplar002.csv
 CSV
 
 echo
