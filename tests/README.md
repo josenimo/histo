@@ -46,7 +46,13 @@ declare versions with `eval()`, which Nextflow evaluates in the task environment
 under `-stub`, so `tests/stub_bin` must be on PATH.
 
 CI runs `--tag stub,validation`, which is both of the tiers above and nothing else.
-Neither needs a container.
+Neither needs a container, which is why they fit on an ordinary GitHub runner.
+
+Until 2026-08-26 that sentence was false. `nf-test.yml` requested self-hosted runners
+using labels inherited from the nf-core template, nothing in this repository provides
+them, and so every run sat queued indefinitely and the matrix was skipped. The tiers
+had never run in CI. `gh run list` showed it plainly once anyone looked: every "Run
+nf-test" with a blank conclusion, going back as far as the history goes.
 
 ## Real tests — minutes, containers required
 
