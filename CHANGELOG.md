@@ -34,6 +34,24 @@ limitations.
 
 ### Added
 
+- The preprocessing half, from nf-core/mcmicro: BaSiCPy and ASHLAR under `use_preprocessing`,
+  then optional background subtraction (`use_backsub`) and Coreograph TMA dearray
+  (`use_tma_dearray`).
+
+- The TMA path. Each dearrayed core is processed on its own, then `MERGE_SPATIALDATA` merges
+  the cores into one store per slide and `MERGE_REPORT` writes one QC page per slide,
+  `{sample}_slide_report.html`.
+
+- Resource profiles `size_tiny`, `size_small`, `size_medium` and `size_huge`, and
+  `conf/slurm.config`.
+
+- A container manifest (`tools/container_manifest.py`) and pre-staging instructions in
+  [docs/containers.md](docs/containers.md).
+
+- Tests: pytest, validation and stub nf-tests in CI, and two exemplar runs on the cluster (`tests/exemplar00{1,2}.nf.test`) with cell-count baselines.
+
+- StarDist to `CITATIONS.md`.
+
 - `PUBLISH_SPATIALDATA`, a publish sink whose only job is to copy the finished store into the
   output directory. `publishDir` is a process directive, so publishing a channel means declaring
   it as some process's output; aggregation and fluorescence annotation both write into the store
@@ -49,7 +67,7 @@ limitations.
 - Citations for the Leiden algorithm and python-igraph, which the QC report's clustering calls
   through `sc.tl.leiden(flavor="igraph")`.
 
-- Project context (`AGENT_CONTEXT.md`) and the phased plan (`ROADMAP.md`). The linting
+- Project context (`CLAUDE.md`) and the phased plan (`ROADMAP.md`). The linting
   configuration that was proposed under `planning/` now lives in `.pre-commit-config.yaml`.
 
 - Copyright notice alongside the retained nf-core/sopa notice in `LICENSE`, as MIT requires for
@@ -81,11 +99,11 @@ limitations.
 - Replaced the nf-core ASCII logo in the startup banner with a plain banner driven by
   `workflow.manifest`, so it cannot go stale.
 
-- Emptied `docs/usage.md` rather than rebranding it. It documented sopa's samplesheet format for
-  spatial transcriptomics platforms, none of which is in scope, and the mIF input format is undecided.
+- Rewrote `docs/usage.md` for mIF input. It documented sopa's samplesheet format for spatial
+  transcriptomics platforms, none of which is in scope.
 
 - Replaced `docs/CONTRIBUTING.md`'s nf-core community contribution process with pointers to
-  `AGENT_CONTEXT.md` and `AGENTS.md`, keeping the AI and LLM guidance.
+  `CLAUDE.md` and `AGENTS.md`, keeping the AI and LLM guidance.
 
 - **Breaking.** The marker sheet moved from the `--marker_sheet` parameter to a required
   `marker_sheet` column in the samplesheet, one sheet per sample. The parameter is gone, and a
@@ -99,13 +117,20 @@ limitations.
   `membrane` or a `+`-joined combination. They are separate columns because role decides control
   flow and compartment decides interpretation. Two checks arrive with them: every cycle needs at
   least one `dna` channel, and `background` must name a channel whose role is `autofluorescence`.
-  The QC scripts still find the nuclear channel by matching its name; `channel_role` replaces that
-  next.
+  QC finds the nuclear channel by `channel_role`, not by its name.
 
 - backsub receives the marker sheet as written instead of a six-column rewrite. It reads the CSV
   with `pd.read_csv` and addresses columns by name, so columns it has no use for pass through into
   its own marker output. Dropping the rewrite is what allowed the sheet to become per sample: the
   rewrite produced one shared file.
+
+- On the TMA path, Coreograph runs before background subtraction, so each core keeps a
+  before-image and the QC report can compare before and after.
+
+- `MERGE_SPATIALDATA` publishes only its manifest, from a selector in `conf/modules.config`
+  rather than a `publishDir` in the module. The merged store itself is published by
+  `PUBLISH_SPATIALDATA`, and the unfiltered directive this replaces also dropped a stray
+  `versions.yml` in the output root.
 
 ### Fixed
 
@@ -196,19 +221,11 @@ limitations.
 
 - `.devcontainer/`, which configured a GitHub Codespaces environment that is unused.
 
-### Changed
-
-- `MERGE_SPATIALDATA` publishes only its manifest, from a selector in `conf/modules.config`
-  rather than a `publishDir` in the module. The merged store itself is published by
-  `PUBLISH_SPATIALDATA`, and the unfiltered directive this replaces also dropped a stray
-  `versions.yml` in the output root.
-
 ### Not yet done
 
-- No **real-data** test for the TMA path or for background subtraction. Both are covered by
-  stub tests for their wiring and have been run by hand on the cluster, but nothing automated
-  asserts on their numbers. The `use_preprocessing = false` entry point is now covered by
-  `tests/default.nf.test`, for wiring.
+- `use_preprocessing = false` and StarDist are tested by stub runs only, not on real data.
+
+- Cellpose downloads its model weights at run time, so segmentation needs network access.
 
 - H&E input. Only `ome_tif` mIF works today, which the manifest description now says.
 
