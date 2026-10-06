@@ -1,8 +1,5 @@
 process QC_IMAGES {
-    // Heavier than QC_METRICS on purpose, and a separate process for that reason: this
-    // builds a nearest-neighbour graph over every cell and rasterises polygons, which is
-    // minutes rather than seconds. Splitting them means the fast numbers do not wait on
-    // the slow pictures and a failure here does not cost the metrics.
+    // Separate from QC_METRICS because it is slow (neighbour graph, polygon rasterising).
     label "process_medium"
     tag "${meta.sample}"
 
@@ -12,13 +9,10 @@ process QC_IMAGES {
 :         'community.wave.seqera.io/library/python_sopa:54a97bc5a187152d' }"
 
     input:
-    // markers is per sample, carried in the tuple so it is matched by key rather
-    // than broadcast.
     tuple val(meta), path(sdata_path), path(markers)
 
     output:
-    // A directory, because the count of PNGs depends on the number of clusters the data
-    // turns out to have, and a glob would make the output shape depend on the result.
+    // A directory, since the number of PNGs depends on the number of clusters.
     tuple val(meta), path("${meta.sample}_qc_images"), emit: images
     path "versions.yml"                              , emit: versions
 

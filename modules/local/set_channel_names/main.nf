@@ -8,34 +8,17 @@ process SET_CHANNEL_NAMES {
 :         'community.wave.seqera.io/library/python_sopa:54a97bc5a187152d' }"
 
     input:
-    // markers arrives in the tuple rather than as a separate input, so it is matched
-    // to its own store by key. As a separate `path` input it was a single file
-    // broadcast to every sample, which silently processed one sample and dropped the
-    // rest whenever that channel held one item rather than being a value channel.
+    // markers is in the tuple so it joins to its own store by key, not broadcast.
     tuple val(meta), path(sdata_path), path(markers)
 
     output:
-    // Pass-through: this mutates the store in place and declares its input as its
-    // output, the same shape as the sopa modules. Only ~5 KB of group metadata
-    // changes, so it costs the same on a 320 MB image as on a 100 GB one.
+    // Mutates the store in place (metadata only) and passes it through.
     tuple val(meta), path(sdata_path), emit: sdata
     path "versions.yml"              , emit: versions
 
     script:
-    // No --element. The channel labels come from the marker sheet; the element name
-    // was only ever an address for which image inside the store to write them onto,
-    // and passing meta.sample tied that address to the input filename.
-    //
-    // Those two agree only by luck. sopa convert names the image element after the
-    // stem of the file it converted, so any step that renames the image breaks the
-    // lookup: with use_backsub the element is {sample}_backsub while meta.sample is
-    // still {sample}, and the run dies with "no image element".
-    //
-    // Without --element the script takes the sole image element and fails if there
-    // is more than one. After conversion there is exactly one, and on the TMA path
-    // each core is its own store, so nothing is weakened: the guard is now "exactly
-    // one image" rather than "an image with this name", which is the property we
-    // actually depend on.
+    // No --element: the image element name follows the converted file (e.g. {sample}_backsub),
+    // not meta.sample, so the script takes the sole image element instead.
     """
     set_channel_names.py \\
         --sdata ${sdata_path} \\

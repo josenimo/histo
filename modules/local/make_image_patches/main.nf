@@ -28,8 +28,7 @@ process MAKE_IMAGE_PATCHES {
     """
 
     stub:
-    // patches_file_image holds the patch count, which the segmentation subworkflows
-    // read to fan out. Two exercises the fan-out without being slow.
+    // Patch count read by the segmentation fan-out; 2 exercises it cheaply.
     """
     echo 2 > patches_file_image
 
