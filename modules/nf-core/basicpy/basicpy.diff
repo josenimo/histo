@@ -1,0 +1,18 @@
+Changes in component 'nf-core/basicpy'
+'modules/nf-core/basicpy/meta.yml' is unchanged
+Changes in 'basicpy/main.nf':
+--- modules/nf-core/basicpy/main.nf
++++ modules/nf-core/basicpy/main.nf
+@@ -22,7 +22,7 @@
+     def args    = task.ext.args   ?: ''
+     def prefix  = task.ext.prefix ?: "${meta.id}"
+     """
+-    /opt/main.py -i $image -o . --output-flatfield $prefix --output-darkfield $prefix $args
++    basicpy_main.py -i $image -o . --output-flatfield $prefix --output-darkfield $prefix $args
+     """
+ 
+     stub:
+
+'modules/nf-core/basicpy/tests/main.nf.test.snap' is unchanged
+'modules/nf-core/basicpy/tests/main.nf.test' is unchanged
+************************************************************

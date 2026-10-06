@@ -1,0 +1,75 @@
+%%metro title: josenimo/histo: three paths through the pipeline
+%%metro style: light
+%%metro line: mif | mIF slide | #2a78d6
+%%metro line: backsub | WSI, background subtracted | #eb6834
+%%metro line: tma | TMA, dearrayed | #1baf7a
+
+graph LR
+    subgraph preprocessing [Preprocessing]
+        BASICPY([BASICPY])
+        ASHLAR([ASHLAR])
+        BACKSUB([BACKSUB])
+        COREOGRAPH([COREOGRAPH])
+
+        BASICPY -->|mif, backsub, tma| ASHLAR
+        ASHLAR -->|backsub| BACKSUB
+        ASHLAR -->|tma| COREOGRAPH
+    end
+
+    subgraph store [SpatialData store]
+        TO_SPATIALDATA([TO_SPATIALDATA])
+        SET_CHANNEL_NAMES([SET_CHANNEL_NAMES])
+
+        TO_SPATIALDATA -->|mif, backsub, tma| SET_CHANNEL_NAMES
+    end
+
+    subgraph segmentation [Segmentation]
+        MAKE_IMAGE_PATCHES([MAKE_IMAGE_PATCHES])
+        PATCH_SEGMENTATION_CELLPOSE([PATCH_SEGMENTATION_CELLPOSE])
+        RESOLVE_CELLPOSE([RESOLVE_CELLPOSE])
+        AGGREGATE([AGGREGATE])
+
+        MAKE_IMAGE_PATCHES -->|mif, backsub, tma| PATCH_SEGMENTATION_CELLPOSE
+        PATCH_SEGMENTATION_CELLPOSE -->|mif, backsub, tma| RESOLVE_CELLPOSE
+        RESOLVE_CELLPOSE -->|mif, backsub, tma| AGGREGATE
+    end
+
+    subgraph output [Output]
+        MERGE_SPATIALDATA([MERGE_SPATIALDATA])
+        PUBLISH_SPATIALDATA([PUBLISH_SPATIALDATA])
+
+        MERGE_SPATIALDATA -->|tma| PUBLISH_SPATIALDATA
+    end
+
+    subgraph qc [Quality control]
+        QC_METRICS([QC_METRICS])
+        QC_IMAGES([QC_IMAGES])
+        QC_REPORT([QC_REPORT])
+        MERGE_REPORT([MERGE_REPORT])
+
+        QC_METRICS -->|mif, backsub, tma| QC_REPORT
+        QC_IMAGES -->|mif, backsub, tma| QC_REPORT
+        QC_METRICS -->|tma| MERGE_REPORT
+    end
+
+    %% Between the sections
+    ASHLAR -->|mif| TO_SPATIALDATA
+    BACKSUB -->|backsub| TO_SPATIALDATA
+    COREOGRAPH -->|tma| TO_SPATIALDATA
+    SET_CHANNEL_NAMES -->|mif, backsub, tma| MAKE_IMAGE_PATCHES
+    AGGREGATE -->|mif, backsub| PUBLISH_SPATIALDATA
+    AGGREGATE -->|tma| MERGE_SPATIALDATA
+    AGGREGATE -->|mif, backsub, tma| QC_METRICS
+    AGGREGATE -->|mif, backsub, tma| QC_IMAGES
+
+    %% One edge is missing on purpose. Wherever backsub runs, the pre-subtraction
+    %% image also reaches QC_METRICS, so the comparison before and after
+    %% subtraction can be made. Adding `ASHLAR -->|backsub| QC_METRICS` aborts
+    %% nf-metro 1.1.0's renderer with a CurveInvariantError, "a route hanging in
+    %% open space", so it is described in docs/pipeline-paths.md instead.
+    %%
+    %% The three lines drawn here are mIF, WSI-with-backsub and TMA. A TMA run with
+    %% backsub is a fourth combination and is not one of them: it would run
+    %% COREOGRAPH then BACKSUB, per core. COREOGRAPH precedes BACKSUB in the
+    %% subworkflow so that each core is subtracted on its own and keeps an
+    %% unsubtracted twin of matching shape for QC to compare against.

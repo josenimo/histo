@@ -1,0 +1,81 @@
+// Undeclared parameters must stop the run. Our own check, because nf-schema's
+// failUnrecognisedParams throws MissingPropertyException in every released version.
+
+nextflow_function {
+
+    name "rejectUnknownParams"
+    script "../subworkflows/local/utils_nfcore_histo_pipeline/main.nf"
+    function "rejectUnknownParams"
+    tag "unit"
+    tag "validation"
+
+    test("parameters the schema declares are accepted") {
+        when {
+            function {
+                """
+                input[0] = [
+                    input: 'samplesheet.csv',
+                    outdir: 'results',
+                    use_cellpose: true,
+                    patch_width_pixel: 1000
+                ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("a doubled prefix is rejected and the message names the parameter meant") {
+        when {
+            function {
+                """
+                input[0] = [
+                    outdir: 'results',
+                    use_use_tma_dearray: true
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains('use_use_tma_dearray') }
+            assert function.stdout.any { it.contains('did you mean: use_tma_dearray') }
+        }
+    }
+
+    test("a parameter with no near match is still rejected, without a bogus suggestion") {
+        when {
+            function {
+                """
+                input[0] = [
+                    outdir: 'results',
+                    completely_made_up: 42
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains('completely_made_up') }
+            assert !function.stdout.any { it.contains('did you mean') }
+        }
+    }
+
+    test("nf_test_output is injected by the test runner, not the user, so it is ignored") {
+        when {
+            function {
+                """
+                input[0] = [
+                    outdir: 'results',
+                    nf_test_output: 'somewhere'
+                ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+}

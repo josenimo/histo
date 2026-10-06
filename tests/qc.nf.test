@@ -1,0 +1,141 @@
+// Channel wiring of the QC half under -stub, mainly the optional inputs.
+// An empty channel in the wrong place does not fail; it silently stops a process running.
+
+nextflow_workflow {
+
+    name "QC"
+    script "../subworkflows/local/qc/main.nf"
+    workflow "QC"
+    profile "laptop"
+    options "-stub"
+    tag "stub"
+    tag "qc"
+
+    test("metrics, images and report all run when everything is supplied") {
+
+        when {
+            params {
+                use_qc_images = true
+            }
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id: 'testsample', sample: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data", checkIfExists: true)
+                ])
+                input[1] = Channel.of([
+                    [ id: 'testsample', sample: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                ])
+                input[2] = Channel.of([
+                    [ id: 'testsample', sample: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data/cycle01.ome.tiff", checkIfExists: true)
+                ])
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.metrics.size() == 1
+            assert workflow.out.report.size() == 1
+            // The metrics JSON name is a contract for downstream gates.
+            assert workflow.out.metrics.get(0).get(1).endsWith('testsample_qc.json')
+            assert workflow.out.report.get(0).get(1).endsWith('testsample_qc_report.html')
+        }
+    }
+
+    test("a report is still produced with no pre-subtraction image") {
+        // Runs without backsub: the join must keep the store when there is no unsubtracted image.
+        when {
+            params {
+                use_qc_images = false
+            }
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id: 'testsample', sample: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data", checkIfExists: true)
+                ])
+                input[1] = Channel.of([
+                    [ id: 'testsample', sample: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                ])
+                input[2] = Channel.empty()
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.metrics.size() == 1
+            assert workflow.out.report.size() == 1
+        }
+    }
+
+    test("a report is still produced with no marker sheet") {
+        // Pre-stitched input has no marker sheet; ifEmpty([]) must hold or QC produces nothing.
+        when {
+            params {
+                use_qc_images = false
+            }
+            workflow {
+                """
+                input[0] = Channel.of([
+                    [ id: 'testsample', sample: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data", checkIfExists: true)
+                ])
+                input[1] = Channel.empty()
+                input[2] = Channel.empty()
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.report.size() == 1
+        }
+    }
+
+    test("every core of a dearrayed slide gets its own report") {
+        // QC must fan out per core, not collapse to one report per slide.
+        when {
+            params {
+                use_qc_images = false
+            }
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'slide_core001', sample: 'slide_core001', slide: 'slide' ],
+                        file("\${projectDir}/tests/stub_data", checkIfExists: true)
+                    ],
+                    [
+                        [ id: 'slide_core002', sample: 'slide_core002', slide: 'slide' ],
+                        file("\${projectDir}/tests/stub_data", checkIfExists: true)
+                    ]
+                )
+                input[1] = Channel.of(
+                    [
+                        [ id: 'slide_core001', sample: 'slide_core001', slide: 'slide' ],
+                        file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                    ],
+                    [
+                        [ id: 'slide_core002', sample: 'slide_core002', slide: 'slide' ],
+                        file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                    ]
+                )
+                input[2] = Channel.empty()
+                """
+            }
+        }
+
+        then {
+            assert workflow.success
+            assert workflow.out.report.size() == 2
+            // Sort on file name: work directory hashes sort independently of the core.
+            def names = workflow.out.report.collect { it.get(1).split('/').last() }.sort()
+            assert names == ['slide_core001_qc_report.html', 'slide_core002_qc_report.html']
+        }
+    }
+}

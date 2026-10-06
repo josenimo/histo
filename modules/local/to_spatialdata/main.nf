@@ -27,4 +27,17 @@ process TO_SPATIALDATA {
         spatialdata_io: \$(python -c "import spatialdata_io; print(spatialdata_io.__version__)" 2> /dev/null)
     END_VERSIONS
     """
+
+    stub:
+    """
+    mkdir -p ${meta.sdata_dir}
+    touch ${meta.sdata_dir}/.zgroup
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: stub
+        spatialdata: stub
+        spatialdata_io: stub
+    END_VERSIONS
+    """
 }

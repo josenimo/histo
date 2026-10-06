@@ -1,0 +1,61 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/josenimo/histo/main/assets/schema_input_cycle.json",
+    "title": "josenimo/histo pipeline - params.input_cycle schema",
+    "description": "One row per acquisition cycle. Rows sharing a sample name are grouped and ordered by cycle_number before stitching. Derived from nf-core/mcmicro's schema_input_cycle.json.",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "sample": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9._-]+$",
+                "description": "Sample name. Becomes meta.id and is used to group cycles and to name outputs.",
+                "errorMessage": "sample must be provided and may contain only letters, digits, dot, underscore and hyphen",
+                "meta": "id"
+            },
+            "cycle_number": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "1-based acquisition cycle. Determines the order in which cycles are passed to Ashlar, and must match the cycle_number column of the marker sheet. Must run 1..N per sample without repeats or gaps: a repeat makes two rows indistinguishable, since a cycle is identified by sample and cycle_number together. JSON Schema validates rows independently and cannot express that, so it is checked by validateCycleNumbers at startup.",
+                "errorMessage": "cycle_number must be an integer of 1 or greater, sequential and without gaps",
+                "meta": "cycle_number"
+            },
+            "image_tiles": {
+                "type": "string",
+                "format": "path",
+                "exists": true,
+                "pattern": "^\\S+$",
+                "description": "Path to the raw image tiles for this cycle: either a single multi-tile file or a directory of tiles.",
+                "errorMessage": "image_tiles must be an existing path without spaces"
+            },
+            "dfp": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^\\S+$",
+                "description": "Optional pre-computed dark-field profile for this cycle. Supply only when skipping BaSiCPy; if given for one cycle it must be given for all.",
+                "errorMessage": "dfp must be an existing file without spaces"
+            },
+            "ffp": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "pattern": "^\\S+$",
+                "description": "Optional pre-computed flat-field profile for this cycle. Supply only when skipping BaSiCPy; if given for one cycle it must be given for all.",
+                "errorMessage": "ffp must be an existing file without spaces"
+            },
+            "marker_sheet": {
+                "type": "string",
+                "format": "file-path",
+                "exists": true,
+                "mimetype": "text/csv",
+                "pattern": "^\\S+\\.csv$",
+                "description": "Path to the marker sheet for this sample, one row per channel. Every cycle row of a sample must name the same file: the sheet describes the whole stitched image, not one cycle of it. Two samples may name different sheets, which is the point of the column.",
+                "errorMessage": "marker_sheet must be an existing .csv file without spaces"
+            }
+        },
+        "required": ["sample", "cycle_number", "image_tiles", "marker_sheet"],
+        "additionalProperties": false
+    }
+}

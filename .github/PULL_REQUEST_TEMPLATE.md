@@ -4,7 +4,7 @@
 PRs go against `dev`, unless preparing a release, which goes against `main`.
 
 Conventions: [docs/CONTRIBUTING.md](https://github.com/josenimo/histo/blob/main/docs/CONTRIBUTING.md),
-[AGENT_CONTEXT.md](https://github.com/josenimo/histo/blob/main/AGENT_CONTEXT.md).
+[CLAUDE.md](https://github.com/josenimo/histo/blob/main/CLAUDE.md).
 
 Delete whatever is not relevant.
 -->

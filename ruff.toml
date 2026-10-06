@@ -1,0 +1,44 @@
+# Scoped to bin/ only; nothing else in the pipeline is Python. bin/ does not exist
+# yet: mcmicro's helper scripts arrive with the metadata stack, so these rules are
+# inert until then rather than unused.
+
+line-length = 110
+target-version = "py311" # TODO: match the Python in the sopa container
+
+# Vendored third-party scripts, copied verbatim out of a container so the module
+# can patch one thing. Their whole value is being diffable against the image, and
+# both linting and formatting destroy that: ruff-format rewrote basicpy_main.py by
+# 90 lines, turning a 12-line patch into an unreviewable one. Every finding in it
+# is upstream's (PTH122 in the arg parser, F821 on aicsimageio in a code path this
+# pipeline never takes), so there is nothing here for us to fix.
+#
+# The header comment in each excluded file must name the exact image it came from.
+extend-exclude = ["bin/basicpy_main.py"]
+
+[lint]
+select = [
+    "E", # pycodestyle errors
+    "F", # pyflakes: unused imports, unused variables, undefined names
+    "W", # pycodestyle warnings
+    "B", # flake8-bugbear: likely bugs, mutable defaults, loop-variable binding
+    "S", # flake8-bandit: security. S602/S604 flag subprocess with shell=True,
+    #    which is the run_coreograph.py defect.
+    "UP", # pyupgrade
+    "SIM", # flake8-simplify
+    "PTH", # prefer pathlib over os.path
+    "RET", # flake8-return
+    "ARG", # unused function arguments
+]
+
+ignore = [
+    "E501", # line length is handled by ruff-format
+    "S101", # bare assert. Fine in test helpers, and see per-file-ignores below.
+]
+
+[lint.per-file-ignores]
+# Test helpers legitimately assert, shell out to the pipeline, and read whole
+# tiny fixtures. Keep them linted, but not against production rules.
+"bin/test_*.py" = ["S101", "S602", "S603", "S604", "S607", "ARG"]
+
+[format]
+quote-style = "double"

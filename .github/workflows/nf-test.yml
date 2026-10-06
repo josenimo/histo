@@ -27,19 +27,12 @@ env:
 jobs:
   nf-test-changes:
     name: nf-test-changes
-    runs-on: # use self-hosted runners
-      - runs-on=${{ github.run_id }}-nf-test-changes
-      - runner=4cpu-linux-x64
+    # GitHub-hosted: no runs-on.com runners exist for this repository, and these tests need no containers.
+    runs-on: ubuntu-latest
     outputs:
       shard: ${{ steps.set-shards.outputs.shard }}
       total_shards: ${{ steps.set-shards.outputs.total_shards }}
     steps:
-      - name: Clean Workspace # Purge the workspace in case it's running on a self-hosted runner
-        run: |
-          ls -la ./
-          rm -rf ./* || true
-          rm -rf ./.??* || true
-          ls -la ./
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
         with:
           fetch-depth: 0
@@ -51,6 +44,8 @@ jobs:
           NFT_VER: ${{ env.NFT_VER }}
         with:
           max_shards: 7
+          # stub and validation only: no containers needed. Real-data tests run by hand (tests/README.md).
+          tags: stub,validation
 
       - name: debug
         run: |
@@ -61,10 +56,8 @@ jobs:
     name: "${{ matrix.profile }} | ${{ matrix.NXF_VER }} | ${{ matrix.shard }}/${{ needs.nf-test-changes.outputs.total_shards }}"
     needs: [nf-test-changes]
     if: ${{ needs.nf-test-changes.outputs.total_shards != '0' }}
-    runs-on: # use self-hosted runners
-      - runs-on=${{ github.run_id }}-nf-test
-      - runner=4cpu-linux-x64
-      - volume=80gb
+    # Fine while no container is pulled; real-data tiers would exceed a standard runner's disk.
+    runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
@@ -101,6 +94,8 @@ jobs:
           profile: ${{ matrix.profile }}
           shard: ${{ matrix.shard }}
           total_shards: ${{ env.TOTAL_SHARDS }}
+          # Must match the tags given to get-shards above.
+          tags: stub,validation
 
       - name: Report test status
         if: ${{ always() }}
@@ -116,9 +111,7 @@ jobs:
             fi
           fi
 
-      # continue-on-error keeps latest-everything from failing the job, so it never shows up in
-      # `needs.nf-test.result` downstream and CI stays green. Surface it via a PR comment instead;
-      # other NXF_VER failures already fail the job/CI directly, so no comment is needed for those.
+      # latest-everything failures do not fail the job, so surface them as a PR comment.
       - name: Prepare PR comment fragment
         if: ${{ always() && steps.run_nf_test.outcome == 'failure' && matrix.NXF_VER == 'latest-everything' }}
         run: |
@@ -135,9 +128,7 @@ jobs:
   confirm-pass:
     needs: [nf-test]
     if: always()
-    runs-on: # use self-hosted runners
-      - runs-on=${{ github.run_id }}-confirm-pass
-      - runner=2cpu-linux-x64
+    runs-on: ubuntu-latest
     steps:
       - name: One or more tests failed (excluding latest-everything)
         if: ${{ contains(needs.*.result, 'failure') }}
@@ -168,8 +159,7 @@ jobs:
           path: pr-comment-fragments
           merge-multiple: true
 
-      # Build a comment for the shared pr-comment.yml poster to publish on the PR.
-      # Based on the fragments above (not needs.*.result) so non-blocking failures are still reported.
+      # Built from the fragments, not needs.*.result, so non-blocking failures are still reported.
       - name: Prepare PR comment
         if: ${{ always() }}
         env:

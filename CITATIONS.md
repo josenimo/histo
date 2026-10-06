@@ -4,8 +4,8 @@ This pipeline has no DOI of its own and should not be cited in place of the tool
 use it, please cite the tools below.
 
 > [!NOTE]
-> The pipeline is under construction. Entries marked **(planned)** are tools the design depends on
-> but which are not yet wired in. This file is maintained as modules are added, not retrofitted.
+> This file is maintained as modules are added, not retrofitted. Nothing here is marked as planned
+> any more: every tool listed runs in the pipeline today.
 
 ## Pipelines this project is derived from
 
@@ -35,16 +35,16 @@ Both are MIT licensed. This pipeline would not exist without them.
 
 ## Preprocessing tools
 
-- [BaSiC / BaSiCPy](https://www.nature.com/articles/ncomms14836) — illumination correction **(planned)**
+- [BaSiC / BaSiCPy](https://www.nature.com/articles/ncomms14836) — illumination correction
 
   > Peng T, Thorn K, Schroeder T, Wang L, Theis FJ, Marr C, Navab N. A BaSiC tool for background and shading correction of optical microscopy images. Nat Commun 8, 14836 (2017). https://doi.org/10.1038/ncomms14836
 
-- [ASHLAR](https://academic.oup.com/bioinformatics/article/38/19/4613/6668278) — stitching and registration **(planned)**
+- [ASHLAR](https://academic.oup.com/bioinformatics/article/38/19/4613/6668278) — stitching and registration
 
   > Muhlich JL, Chen YA, Yapp C, Russell D, Santagata S, Sorger PK. Stitching and registering highly multiplexed whole-slide images of tissues and tumors using ASHLAR. Bioinformatics. 2022 Sep 30;38(19):4613-4621. doi: 10.1093/bioinformatics/btac544.
 
 - [background_subtraction](https://github.com/SchapiroLabor/Background_subtraction) — pixel-level
-  background subtraction, from the Schapiro Lab **(planned)**
+  background subtraction, from the Schapiro Lab
 
   > No publication found. Cite the repository. TODO verify whether a paper now exists.
 
@@ -54,20 +54,36 @@ Both are MIT licensed. This pipeline would not exist without them.
 
   > Stringer C, Wang T, Michaelos M, Pachitariu M. Cellpose: a generalist algorithm for cellular segmentation. Nat Methods 18, 100–106 (2021). https://doi.org/10.1038/s41592-020-01018-x
 
-- [SpatialData](https://www.biorxiv.org/content/10.1101/2023.05.05.539647v1) — the Zarr-backed data
+- [StarDist](https://doi.org/10.1007/978-3-030-00934-2_30) — alternative nucleus segmentation,
+  under `use_stardist`
+
+  > Schmidt U, Weigert M, Broaddus C, Myers G. Cell Detection with Star-Convex Polygons. MICCAI 2018, LNCS 11071, 265–273 (2018). https://doi.org/10.1007/978-3-030-00934-2_30
+
+- [SpatialData](https://www.nature.com/articles/s41592-024-02212-x) — the Zarr-backed data
   structure the whole downstream half is built on
 
-  > Marconato L, Palla G, Yamauchi K, Virshup I, Heidari E, Treis T, Toth M, Shrestha R, Vöhringer H, Huber W, Gerstung M, Moore J, Theis F, Stegle O. SpatialData: an open and universal data framework for spatial omics. bioRxiv 2023.05.05.539647; doi: https://doi.org/10.1101/2023.05.05.539647
-
-  > TODO this preprint may now be published; verify and update.
+  > Marconato L, Palla G, Yamauchi KA, Virshup I, Heidari E, Treis T, Vierdag WM, Toth M, Stockhaus S, Shrestha RB, Rombaut B, Pollaris L, Lehner L, Vöhringer H, Kats I, Saeys Y, Saka SK, Huber W, Gerstung M, Moore J, Theis FJ, Stegle O. SpatialData: an open and universal data framework for spatial omics. Nat Methods 22, 58–62 (2025). https://doi.org/10.1038/s41592-024-02212-x
 
 - [AnnData](https://github.com/scverse/anndata)
 
   > Virshup I, Rybakov S, Theis FJ, Angerer P, Wolf FA. bioRxiv 2021.12.16.473007; doi: https://doi.org/10.1101/2021.12.16.473007
 
-- [Scanpy](https://github.com/theislab/scanpy)
+- [Scanpy](https://github.com/theislab/scanpy). The QC report's clustering is `sc.tl.leiden`.
 
   > Wolf F, Angerer P, Theis F. SCANPY: large-scale single-cell gene expression data analysis. Genome Biol 19, 15 (2018). doi: https://doi.org/10.1186/s13059-017-1382-0
+
+- [Leiden](https://www.nature.com/articles/s41598-019-41695-z). The community-detection algorithm
+  behind the QC report's clusters. The report presents them as a summary of staining rather than
+  as cell types, because seed-to-seed agreement on the one slide measured so far peaked at 0.596
+  adjusted Rand.
+
+  > Traag VA, Waltman L, van Eck NJ. From Louvain to Leiden: guaranteeing well-connected communities. Sci Rep 9, 5233 (2019). https://doi.org/10.1038/s41598-019-41695-z
+
+- [python-igraph](https://igraph.org/). The Leiden implementation actually called.
+  `bin/qc_images.py` passes `flavor="igraph"` to `sc.tl.leiden`, so the clustering runs through
+  igraph's own implementation rather than through leidenalg, which is not a sopa dependency.
+
+  > Csardi G, Nepusz T. The igraph software package for complex network research. InterJournal, Complex Systems, 1695 (2006). https://igraph.org
 
 ## Software packaging and containerisation
 

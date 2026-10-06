@@ -1,21 +1,88 @@
+# Every exemption below is a deliberate divergence from the nf-core template,
+# grouped by reason. If you add one, say why. An unexplained exemption is
+# indistinguishable from a bug someone silenced.
+
 lint:
   files_exist:
-    - conf/igenomes.config
-    - conf/igenomes_ignored.config
-    - assets/multiqc_config.yml
+    # Template features disabled at creation (see template.skip_features)
     - conf/igenomes.config
     - conf/igenomes_ignored.config
     - assets/multiqc_config.yml
     - .github/workflows/linting_comment.yml
+
+    # nf-core organisation files. This is not an nf-core pipeline and must not
+    # be branded as one. Removed in commit 2dc2fa2.
+    - CODE_OF_CONDUCT.md
+    - ro-crate-metadata.json
+    - assets/nf-core-histo_logo_light.png
+    - docs/images/nf-core-histo_logo_light.png
+    - docs/images/nf-core-histo_logo_dark.png
+
+    # nf-core organisation CI. Requires nf-core credentials (AWS megatests via
+    # TOWER_ACCESS_TOKEN) or serves nf-core repository triage. Removed in c7bcad4.
+    - .github/.dockstore.yml
+    - .github/workflows/branch.yml
+    - .github/workflows/pr-comment.yml
+    - .github/workflows/awstest.yml
+    - .github/workflows/awsfulltest.yml
+
   files_unchanged:
-    - assets/sendmail_template.txt
+    # Rewritten because they carried nf-core/sopa branding or an nf-core
+    # community process that does not apply to a single-maintainer pipeline.
+    - .github/ISSUE_TEMPLATE/bug_report.yml
+    - .github/ISSUE_TEMPLATE/config.yml
+    - .github/PULL_REQUEST_TEMPLATE.md
+    - docs/README.md
     - .github/workflows/linting.yml
+
+    # Email templates: the sendmail template embedded a logo read from disk at
+    # runtime, which broke when the logos were deleted. Rebuilt in 81e180b.
+    - assets/sendmail_template.txt
+    - assets/email_template.html
+    - assets/email_template.txt
+
+    # LICENSE carries a second copyright notice alongside the retained
+    # nf-core/sopa one, as MIT requires for derivative works. Commit 82c4466.
+    - LICENSE
+
+    # .gitignore diverges from the template on purpose:
+    #   /local/ -> /scratch/  a bare `local/` matched modules/local/ at any depth
+    #                         and silently ignored a whole module directory
+    #   fixture/              43 MB test fixture; git keeps binaries forever, so it
+    #                         lives in a separate test-data repository
+    #   .params_*.json        written into the launch directory by a run; one was
+    #                         committed by accident because it is a dotfile
+    - .gitignore
+
+  # None of these are pipeline tests, and both checks in this rule assume a pipeline:
+  #   - `outdir` is meaningless, nothing here publishes anything
+  #   - a versions.yml snapshot asserts nothing. preprocess_images has no versions output
+  #     at all, because the modules it calls emit on the `versions` topic which is
+  #     collected in workflows/histo.nf. qc does emit versions, but these tests run under
+  #     -stub, so the snapshot would pin the stub blocks' literal "stub" strings.
+  #
+  # The first two are `nextflow_workflow` tests of a subworkflow. The rest are
+  # `nextflow_function` tests of the input validators, where no process runs at all:
+  # they call a Groovy function and assert on what it rejects.
+  #
+  # Listing the files skips only those files; the other test files stay checked.
+  nf_test_content:
+    - tests/preprocess_images.nf.test
+    - tests/qc.nf.test
+    - tests/validate_markersheet.nf.test
+    - tests/validate_marker_sheet_column.nf.test
+    - tests/reject_unknown_params.nf.test
+    - tests/reject_spaced_booleans.nf.test
+    - tests/reject_string_booleans.nf.test
+    - tests/validate_cycle_numbers.nf.test
+
   multiqc_config: false
+
 nf_core_version: 4.0.3
 repository_type: pipeline
 template:
   author: Jose Nimo
-  description: Processing, segmentation and quantification of H&E and multiplex immunofluorescence images
+  description: Processing, segmentation and quantification of multiplex immunofluorescence (mIF) images
   force: false
   is_nfcore: false
   name: histo
@@ -25,4 +92,4 @@ template:
     - igenomes
     - multiqc
     - fastqc
-  version: 0.1.0dev
+  version: 1.0.0

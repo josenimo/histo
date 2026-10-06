@@ -5,15 +5,29 @@
         "https://github.com/nf-core/modules.git": {
             "modules": {
                 "nf-core": {
-                    "spaceranger/count": {
+                    "ashlar": {
                         "branch": "master",
-                        "git_sha": "21e4662ae927fdbc5fc04eec9bde38b0689d4954",
-                        "installed_by": ["modules"]
+                        "git_sha": "6d46786420b4d7bc88eba026eb389c0c5535d120",
+                        "installed_by": ["modules"],
+                        "patch": "modules/nf-core/ashlar/ashlar.diff"
                     },
-                    "untar": {
+                    "backsub": {
                         "branch": "master",
-                        "git_sha": "41dfa3f7c0ffabb96a6a813fe321c6d1cc5b6e46",
-                        "installed_by": ["modules"]
+                        "git_sha": "7a22732d2e89775b51eefdf647d790f2b1fea862",
+                        "installed_by": ["modules"],
+                        "patch": "modules/nf-core/backsub/backsub.diff"
+                    },
+                    "basicpy": {
+                        "branch": "master",
+                        "git_sha": "001f16039e0577eac8bb373d5209bdc023880151",
+                        "installed_by": ["modules"],
+                        "patch": "modules/nf-core/basicpy/basicpy.diff"
+                    },
+                    "coreograph": {
+                        "branch": "master",
+                        "git_sha": "23c5535328a9837510b9e2dafd5eef457aee7719",
+                        "installed_by": ["modules"],
+                        "patch": "modules/nf-core/coreograph/coreograph.diff"
                     }
                 }
             },
@@ -21,7 +35,7 @@
                 "nf-core": {
                     "utils_nextflow_pipeline": {
                         "branch": "master",
-                        "git_sha": "05954dab2ff481bcb999f24455da29a5828af08d",
+                        "git_sha": "1a545fcbd762911c21a64ced3dbef99b2b51ac75",
                         "installed_by": ["subworkflows"]
                     },
                     "utils_nfcore_pipeline": {
@@ -31,7 +45,7 @@
                     },
                     "utils_nfschema_plugin": {
                         "branch": "master",
-                        "git_sha": "fdc08b8b1ae74f56686ce21f7ea11ad11990ce57",
+                        "git_sha": "a7b27fd25bfa8dcc07d299e88bd790585901a436",
                         "installed_by": ["subworkflows"]
                     }
                 }

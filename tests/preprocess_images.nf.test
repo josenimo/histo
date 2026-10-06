@@ -1,0 +1,237 @@
+// Channel wiring of the preprocessing half under -stub; nothing here checks image quality.
+// -profile laptop is required: it puts tests/stub_bin on PATH for the eval() version shims.
+
+nextflow_workflow {
+
+    name "PREPROCESS_IMAGES"
+    script "../subworkflows/local/preprocess_images/main.nf"
+    workflow "PREPROCESS_IMAGES"
+    profile "laptop"
+    options "-stub"
+    tag "stub"
+    tag "preprocess"
+
+    test("two cycles are grouped into one stitched image") {
+
+        when {
+            params {
+                use_backsub = false
+                use_tma_dearray = false
+            }
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'testsample', cycle_number: 1 ],
+                        file("\${projectDir}/tests/stub_data/cycle01.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ],
+                    [
+                        [ id: 'testsample', cycle_number: 2 ],
+                        file("\${projectDir}/tests/stub_data/cycle02.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ]
+                )
+                input[1] = Channel.of([
+                    [ id: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                ])
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                // Two cycles in, one stitched image out.
+                { assert workflow.out.images.size() == 1 },
+                // The marker sheet must be emitted even without backsub; SET_CHANNEL_NAMES consumes it.
+                { assert workflow.out.markers.size() == 1 }
+            )
+        }
+    }
+
+    test("a TMA fans out into cores that remember their slide") {
+
+        when {
+            params {
+                use_backsub = false
+                use_tma_dearray = true
+            }
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'testslide', cycle_number: 1 ],
+                        file("\${projectDir}/tests/stub_data/cycle01.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ],
+                    [
+                        [ id: 'testslide', cycle_number: 2 ],
+                        file("\${projectDir}/tests/stub_data/cycle02.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ]
+                )
+                input[1] = Channel.of([
+                    [ id: 'testslide' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                ])
+                """
+            }
+        }
+
+        then {
+            def metas = workflow.out.images.collect { it[0] }
+
+            assertAll(
+                { assert workflow.success },
+                // The Coreograph stub emits two cores, so one slide becomes two samples.
+                { assert workflow.out.images.size() == 2 },
+                // No file extension in core IDs: they become zarr names and merged element prefixes.
+                { assert metas.every { it.id ==~ /testslide_core\d{3}/ } },
+                // MERGE_SPATIALDATA groups on meta.slide; without it unrelated slides merge together.
+                { assert metas.every { it.slide == 'testslide' } },
+                { assert metas.collect { it.id }.toSet().size() == 2 },
+                // One marker sheet per core, keyed by core: keyed by slide, the join keeps only one core.
+                { assert workflow.out.markers.size() == 2 },
+                { assert workflow.out.markers.collect { it[0].id }.sort() == ['testslide_core001', 'testslide_core002'] },
+                { assert workflow.out.markers.every { it[1].endsWith('markers.csv') } }
+            )
+        }
+    }
+
+    test("backsub on a TMA subtracts each core and keeps its unsubtracted twin") {
+
+        // Dearray runs before subtraction, so `unsubtracted` must be keyed per core like `images`.
+        when {
+            params {
+                use_backsub = true
+                use_tma_dearray = true
+            }
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'testslide', cycle_number: 1 ],
+                        file("\${projectDir}/tests/stub_data/cycle01.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ],
+                    [
+                        [ id: 'testslide', cycle_number: 2 ],
+                        file("\${projectDir}/tests/stub_data/cycle02.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ]
+                )
+                input[1] = Channel.of([
+                    [ id: 'testslide' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                ])
+                """
+            }
+        }
+
+        then {
+            def imageIds = workflow.out.images.collect { it[0].id }.sort()
+            def unsubIds = workflow.out.unsubtracted.collect { it[0].id }.sort()
+
+            assertAll(
+                { assert workflow.success },
+
+                // Two cores in, two subtracted cores out.
+                { assert workflow.out.images.size() == 2 },
+                { assert imageIds == ['testslide_core001', 'testslide_core002'] },
+
+                // One unsubtracted image per core, keyed the same way, or QC's join drops it.
+                { assert workflow.out.unsubtracted.size() == 2 },
+                { assert unsubIds == imageIds },
+
+                // Cores still know their slide after passing through backsub.
+                { assert workflow.out.images.every { it[0].slide == 'testslide' } },
+
+                // backsub's sheet is per core; keyed by slide, the join keeps only one core.
+                { assert workflow.out.markers.size() == 2 },
+                { assert workflow.out.markers.collect { it[0].id }.sort() == imageIds },
+
+                // The output name must differ from the input, or the module errors.
+                { assert workflow.out.images.every { it[1].contains('backsub') } }
+            )
+        }
+    }
+
+    test("backsub without a TMA still yields one image and one unsubtracted twin") {
+
+        when {
+            params {
+                use_backsub = true
+                use_tma_dearray = false
+            }
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'testsample', cycle_number: 1 ],
+                        file("\${projectDir}/tests/stub_data/cycle01.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ]
+                )
+                input[1] = Channel.of([
+                    [ id: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                ])
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.images.size() == 1 },
+                { assert workflow.out.unsubtracted.size() == 1 },
+                { assert workflow.out.unsubtracted[0][0].id == 'testsample' },
+                { assert workflow.out.markers.size() == 1 }
+            )
+        }
+    }
+
+    test("no backsub emits no unsubtracted image at all") {
+
+        // Empty, not a copy: an empty channel tells QC there is nothing to compare.
+        when {
+            params {
+                use_backsub = false
+                use_tma_dearray = false
+            }
+            workflow {
+                """
+                input[0] = Channel.of(
+                    [
+                        [ id: 'testsample', cycle_number: 1 ],
+                        file("\${projectDir}/tests/stub_data/cycle01.ome.tiff", checkIfExists: true),
+                        [],
+                        []
+                    ]
+                )
+                input[1] = Channel.of([
+                    [ id: 'testsample' ],
+                    file("\${projectDir}/tests/stub_data/markers.csv", checkIfExists: true)
+                ])
+                """
+            }
+        }
+
+        then {
+            assertAll(
+                { assert workflow.success },
+                { assert workflow.out.images.size() == 1 },
+                { assert workflow.out.unsubtracted.size() == 0 }
+            )
+        }
+    }
+}

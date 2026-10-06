@@ -7,114 +7,104 @@ include { paramsSummaryMap        } from 'plugin/nf-schema'
 include { softwareVersionsToYAML  } from '../subworkflows/nf-core/utils_nfcore_pipeline'
 include { methodsDescriptionText  } from '../subworkflows/local/utils_nfcore_histo_pipeline'
 
+include { PREPROCESS_IMAGES       } from '../subworkflows/local/preprocess_images'
 include { TO_SPATIALDATA          } from '../modules/local/to_spatialdata'
 include { MAKE_IMAGE_PATCHES      } from '../modules/local/make_image_patches'
-include { MAKE_TRANSCRIPT_PATCHES } from '../modules/local/make_transcript_patches'
 include { TISSUE_SEGMENTATION     } from '../modules/local/tissue_segmentation'
 include { AGGREGATE               } from '../modules/local/aggregate'
-include { EXPLORER                } from '../modules/local/explorer'
-include { EXPLORER_RAW            } from '../modules/local/explorer_raw'
-include { SCANPY_PREPROCESS       } from '../modules/local/scanpy_preprocess'
-include { REPORT                  } from '../modules/local/report'
+include { MERGE_SPATIALDATA       } from '../modules/local/merge_spatialdata'
+include { MERGE_REPORT       } from '../modules/local/merge_report'
+include { SET_CHANNEL_NAMES       } from '../modules/local/set_channel_names'
+include { PUBLISH_SPATIALDATA     } from '../modules/local/publish_spatialdata'
 include { FLUO_ANNOTATION         } from '../modules/local/fluo_annotation'
-include { SPACERANGER             } from '../subworkflows/local/spaceranger'
-include { INPUT_CHECK             } from '../subworkflows/local/input_check'
 include { CELLPOSE                } from '../subworkflows/local/cellpose'
 include { STARDIST                } from '../subworkflows/local/stardist'
-include { PROSEG                  } from '../subworkflows/local/proseg'
-include { COMSEG                  } from '../subworkflows/local/comseg'
-include { BAYSOR                  } from '../subworkflows/local/baysor'
+include { QC                      } from '../subworkflows/local/qc'
 
 
 include { argsCLI        } from '../modules/local/utils'
-include { extractOutsDir } from '../modules/local/utils'
 /*
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
     RUN MAIN WORKFLOW
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 */
 
+// Adds per-sample keys after stitching. Images and marker sheets must both use it, as they join on meta.
+// Top-level def because Nextflow 26 does not resolve a local closure called inside a map closure.
+def addSampleKeys(meta) {
+    return meta + [
+        sample: meta.id,
+        sdata_dir: "${meta.id}.zarr",
+    ]
+}
+
 workflow HISTO {
     take:
     ch_samplesheet // channel: samplesheet read in from --input
+    ch_markersheet // channel: [ val(meta), path(csv) ] one marker sheet per sample
     outdir
 
     main:
 
     def ch_versions = channel.empty()
 
-    if (params.technology == "visium_hd") {
-        INPUT_CHECK(ch_samplesheet)
-        (ch_input_spatialdata, versions) = SPACERANGER(INPUT_CHECK.out.ch_spaceranger_input, INPUT_CHECK.out.ch_versions)
+    if (params.use_preprocessing) {
+        PREPROCESS_IMAGES(ch_samplesheet, ch_markersheet)
 
-        ch_input_spatialdata = ch_input_spatialdata.map { meta, out -> [meta, extractOutsDir(out[0]), meta.image] }
-
-        ch_versions = ch_versions.mix(versions)
+        ch_input_spatialdata = PREPROCESS_IMAGES.out.images.map { meta, image ->
+            [addSampleKeys(meta), image, []]
+        }
+        ch_markers = PREPROCESS_IMAGES.out.markers.map { meta, markers ->
+            [addSampleKeys(meta), markers]
+        }
     }
     else {
         ch_input_spatialdata = ch_samplesheet.map { meta -> [meta, meta.data_dir, []] }
+
+        // Pre-stitched images are assumed to carry their own channel names.
+        ch_markers = channel.empty()
     }
 
     (ch_spatialdata, versions) = TO_SPATIALDATA(ch_input_spatialdata)
     ch_versions = ch_versions.mix(versions)
 
-    ch_explorer_raw = ch_spatialdata.map { meta, sdata_path -> [meta, sdata_path, params.technology == "xenium" ? meta.data_dir : []] }
-    EXPLORER_RAW(ch_explorer_raw)
-
-    if (params.use_tissue_segmentation) {
-        ch_tissue_seg = TISSUE_SEGMENTATION(ch_spatialdata, argsCLI("tissue_segmentation"))
+    // Ashlar output has only Channel:0:N names; rename from the marker sheet. Must precede
+    // AGGREGATE (feature column names) and segmentation (cellpose_channels by marker name).
+    if (params.use_preprocessing) {
+        SET_CHANNEL_NAMES(ch_spatialdata.join(ch_markers))
+        ch_named = SET_CHANNEL_NAMES.out.sdata
+        ch_versions = ch_versions.mix(SET_CHANNEL_NAMES.out.versions)
     }
     else {
-        ch_tissue_seg = ch_spatialdata
+        ch_named = ch_spatialdata
+    }
+
+    if (params.use_tissue_segmentation) {
+        (ch_tissue_seg, versions) = TISSUE_SEGMENTATION(ch_named, argsCLI("tissue_segmentation"))
+        ch_versions = ch_versions.mix(versions)
+    }
+    else {
+        ch_tissue_seg = ch_named
     }
 
     if (params.use_cellpose) {
-        ch_image_patches = MAKE_IMAGE_PATCHES(ch_tissue_seg, argsCLI("image_patches"))
-        (ch_resolved, versions) = CELLPOSE(ch_image_patches)
+        (ch_image_patches, versions) = MAKE_IMAGE_PATCHES(ch_tissue_seg, argsCLI("image_patches"))
+        ch_versions = ch_versions.mix(versions)
 
+        (ch_resolved, versions) = CELLPOSE(ch_image_patches)
         ch_versions = ch_versions.mix(versions)
     }
 
     if (params.use_stardist) {
-        ch_image_patches = MAKE_IMAGE_PATCHES(ch_tissue_seg, argsCLI("image_patches"))
+        (ch_image_patches, versions) = MAKE_IMAGE_PATCHES(ch_tissue_seg, argsCLI("image_patches"))
+        ch_versions = ch_versions.mix(versions)
+
         (ch_resolved, versions) = STARDIST(ch_image_patches)
-
         ch_versions = ch_versions.mix(versions)
     }
 
-    if (params.use_baysor) {
-        ch_input_baysor = params.use_cellpose ? ch_resolved : ch_tissue_seg
-
-        ch_transcripts_patches = MAKE_TRANSCRIPT_PATCHES(ch_input_baysor, argsCLI("transcript_patches"))
-        (ch_resolved, versions) = BAYSOR(ch_transcripts_patches)
-
-        ch_versions = ch_versions.mix(versions)
-    }
-
-    if (params.use_comseg) {
-        ch_input_comseg = params.use_cellpose ? ch_resolved : ch_tissue_seg
-
-        ch_transcripts_patches = MAKE_TRANSCRIPT_PATCHES(ch_input_comseg, argsCLI("transcript_patches") + " --write-cells-centroids")
-        (ch_resolved, versions) = COMSEG(ch_transcripts_patches)
-
-        ch_versions = ch_versions.mix(versions)
-    }
-
-    if (params.use_proseg) {
-        if (params.technology == "visium_hd") {
-            ch_resolved = params.use_stardist ? ch_resolved : ch_tissue_seg
-            ch_input_proseg = ch_resolved.map { meta, sdata_path -> [meta, sdata_path, []] }
-        } else {
-            ch_proseg_patches = params.use_cellpose ? ch_resolved : ch_tissue_seg
-            ch_input_proseg = MAKE_TRANSCRIPT_PATCHES(ch_proseg_patches, argsCLI("transcript_patches"))
-        }
-
-        (ch_resolved, versions) = PROSEG(ch_input_proseg)
-
-        ch_versions = ch_versions.mix(versions)
-    }
-
-    ch_aggregated = AGGREGATE(ch_resolved, argsCLI("aggregate"))
+    (ch_aggregated, versions) = AGGREGATE(ch_resolved, argsCLI("aggregate"))
+    ch_versions = ch_versions.mix(versions)
 
     if (params.use_fluorescence_annotation) {
         (ch_annotated, versions) = FLUO_ANNOTATION(ch_aggregated, argsCLI("fluorescence_annotation"))
@@ -124,17 +114,47 @@ workflow HISTO {
         ch_annotated = ch_aggregated
     }
 
-    if (params.use_scanpy_preprocessing) {
-        (ch_preprocessed, versions) = SCANPY_PREPROCESS(ch_annotated, argsCLI("scanpy_preprocessing"))
-        ch_versions = ch_versions.mix(versions)
+    ch_preprocessed = ch_annotated
+
+    // QC needs the aggregated intensity matrix. Nothing writes to the store after this point,
+    // so QC and the merge can read it concurrently.
+    if (params.use_qc) {
+        def ch_unsubtracted = params.use_preprocessing
+            ? PREPROCESS_IMAGES.out.unsubtracted
+            : channel.empty()
+
+        QC(ch_preprocessed, ch_markers, ch_unsubtracted)
+        ch_versions = ch_versions.mix(QC.out.versions)
+    }
+
+    // TMA cores are merged last so each core is segmented and QCed on its own.
+    // `sample` is set because downstream processes tag on meta.sample.
+    if (params.use_tma_dearray) {
+        ch_cores_by_slide = ch_preprocessed
+            .map { meta, sdata -> [[id: meta.slide, sample: meta.slide], sdata] }
+            .groupTuple()
+
+        MERGE_SPATIALDATA(ch_cores_by_slide)
+        ch_versions = ch_versions.mix(MERGE_SPATIALDATA.out.versions)
+
+        // Only the merged store is published; it already contains every core's elements.
+        ch_publish = MERGE_SPATIALDATA.out.merged
+
+        // One slide-level QC page from the per-core metrics, grouped on the same key as the merge.
+        if (params.use_qc) {
+            ch_slide_metrics = QC.out.metrics
+                .map { meta, metrics -> [[id: meta.slide, sample: meta.slide], metrics] }
+                .groupTuple()
+
+            MERGE_REPORT(ch_slide_metrics)
+            ch_versions = ch_versions.mix(MERGE_REPORT.out.versions)
+        }
     }
     else {
-        ch_preprocessed = ch_annotated
+        ch_publish = ch_preprocessed
     }
 
-    EXPLORER(ch_preprocessed, argsCLI("explorer"))
-
-    REPORT(ch_preprocessed)
+    PUBLISH_SPATIALDATA(ch_publish)
 
     //
     // Collate and save software versions

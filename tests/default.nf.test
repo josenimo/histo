@@ -1,11 +1,16 @@
+// The pre-stitched entry point (use_preprocessing = false) end to end.
+// Under -stub so it runs in CI without containers; it checks wiring, not numbers.
+
 nextflow_pipeline {
 
-    name "Test pipeline"
+    name "Default profile: the pre-stitched entry point"
     script "../main.nf"
     profile "test"
+    options "-stub"
+    tag "stub"
     tag "pipeline"
 
-    test("-profile test") {
+    test("a pre-stitched image skips preprocessing and still reaches QC") {
 
         when {
             params {
@@ -14,30 +19,42 @@ nextflow_pipeline {
         }
 
         then {
-            // stable_path: All files + folders in ${params.outdir}/ with a stable path (including file name)
-            def stable_path = getAllFilesFromDir(params.outdir, relative: true, includeDir: true, ignore: ['pipeline_info/*.{html,json,txt}'])
-            // stable_content: All files in ${params.outdir}/ with stable content
-            def stable_content = getAllFilesFromDir(params.outdir, ignoreFile: 'tests/.nftignore')
-            assert workflow.success
+            def ran = workflow.trace.succeeded().collect { it.name }
+            def names = { proc -> ran.findAll { it.contains(proc) } }
+
             assertAll(
-                { assert snapshot(
-                    // pipeline versions.yml file for multiqc from which Nextflow version is removed because we test pipelines on multiple Nextflow versions
-                    removeNextflowVersion("$outputDir/pipeline_info/nf_core_sopa_software_versions.yml"),
-                    // All stable path name, with a relative path
-                    stable_path,
-                    // All files with stable contents
-                    stable_content
-                ).match() }
+                { assert workflow.success },
+
+                // Pre-stitched input: nothing preprocesses.
+                { assert names("BASICPY").isEmpty() },
+                { assert names("ASHLAR").isEmpty() },
+                { assert names("COREOGRAPH").isEmpty() },
+                { assert names("BACKSUB").isEmpty() },
+
+                // No marker sheet on this path, so no channel renaming.
+                { assert names("SET_CHANNEL_NAMES").isEmpty() },
+
+                // Two patches at 5000 px; one would mean tiling silently collapsed.
+                { assert names("PATCH_SEGMENTATION_CELLPOSE").size() == 2 },
+                { assert names("RESOLVE_CELLPOSE").size() == 1 },
+                { assert names("AGGREGATE").size() == 1 },
+
+                // Enabled in conf/test.config so this path is exercised.
+                { assert names("FLUO_ANNOTATION").size() == 1 },
+
+                // Not a TMA, so no slide-level steps.
+                { assert names("MERGE_SPATIALDATA").isEmpty() },
+                { assert names("MERGE_REPORT").isEmpty() },
+
+                { assert names("PUBLISH_SPATIALDATA").size() == 1 },
+                { assert names("QC_METRICS").size() == 1 },
+                { assert names("QC_IMAGES").size() == 1 },
+                { assert names("QC_REPORT").size() == 1 },
+
+                // A missing entry means a module lost its version capture.
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").exists() },
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('AGGREGATE') }
             )
-
-            // ensure we have >=1500 non-zero genes over >=350 cells
-            def json_X = new groovy.json.JsonSlurper().parse(file("$outputDir/sample_name.zarr/tables/table/X/zarr.json"))
-            def nCells = json_X.attributes.shape[0] as int
-            assert nCells >= 350
-
-            def json_data = new groovy.json.JsonSlurper().parse(file("$outputDir/sample_name.zarr/tables/table/X/data/zarr.json"))
-            def nElements = json_data.shape[0] as int
-            assert nElements >= 1500
         }
     }
 }

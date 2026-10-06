@@ -1,0 +1,94 @@
+// Pre-release check 1 of 2: the WSI path on real pixels. Cluster only: the containers
+// (~8.8 GB) do not fit a GitHub runner, so the `exemplar` tag is excluded from CI.
+//     export HISTO_EXEMPLARS=/fast/AG_Coscia/$USER/HISTO/exemplars
+//     bash tools/fetch_exemplars.sh
+//     nf-test test tests/exemplar001.nf.test \
+//         --profile test_exemplar001,singularity,size_small,slurm
+// nf-test's --profile replaces the profile directive, so repeat test_exemplar001 (or use --profile=+...).
+// Property assertions, not snapshots: Cellpose output drifts with version and hardware.
+// Baseline 9,877 cells: cluster run of 3717ea0, 2026-10-06, at patch_width_pixel 2000 (tiling moves it <0.5%).
+
+nextflow_pipeline {
+
+    name "Exemplar-001: the WSI path end to end"
+    script "../main.nf"
+    profile "test_exemplar001"
+    tag "exemplar"
+
+    test("three mIF cycles stitch, segment and reach a published store") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            def zarr = "$outputDir/exemplar-001.zarr"
+            def slurp = new groovy.json.JsonSlurper()
+
+            def channels = slurp
+                .parse(file("${zarr}/images/exemplar-001/zarr.json"))
+                .attributes.ome.omero.channels
+                .collect { it.label }
+
+            def cells = slurp.parse(file("${zarr}/tables/table/X/zarr.json")).shape[0]
+            def imageShape = slurp.parse(file("${zarr}/images/exemplar-001/s0/zarr.json")).shape
+
+            def ran = workflow.trace.succeeded().collect { it.name }
+            def names = { proc -> ran.findAll { it.contains(proc) } }
+
+            def metrics = slurp.parse(file("$outputDir/qc/exemplar-001_qc.json"))
+
+            assertAll(
+                { assert workflow.success },
+
+                // Exactly the marker sheet in channel_number order; failure means SET_CHANNEL_NAMES broke.
+                { assert channels == [
+                    'DNA_6', 'ELANE', 'CD57', 'CD45',
+                    'DNA_7', 'CD11B', 'SMA', 'CD16',
+                    'DNA_8', 'ECAD', 'FOXP3', 'NCAM',
+                ] },
+                { assert imageShape[0] == 12 },
+
+                // Three cycles in, one stitched image out.
+                { assert names("ASHLAR").size() == 1 },
+                { assert names("BASICPY").size() == 3 },
+
+                // More than one patch, so boundary resolution is exercised.
+                { assert names("PATCH_SEGMENTATION_CELLPOSE").size() > 1 },
+
+                // The plain path: neither of these may run under this profile.
+                { assert names("BACKSUB").isEmpty() },
+                { assert names("COREOGRAPH").isEmpty() },
+                { assert names("MERGE_SPATIALDATA").isEmpty() },
+                { assert names("MERGE_REPORT").isEmpty() },
+
+                // The elements downstream analysis expects.
+                { assert file("${zarr}/images/exemplar-001").exists() },
+                { assert file("${zarr}/shapes/cellpose_boundaries").exists() },
+                { assert file("${zarr}/shapes/image_patches").exists() },
+                { assert file("${zarr}/tables/table").exists() },
+                { assert file("$outputDir/preprocessing/registration/exemplar-001.ome.tif").exists() },
+
+                // DNA_6/7/8 contain no "DAPI", so these prove QC read roles from the sheet, not names.
+                { assert metrics.channels.roles.dna == ['DNA_6', 'DNA_7', 'DNA_8'] },
+                { assert metrics.cycle_ratio.available },
+                { assert metrics.cycle_ratio.nuclear_selected_by == "channel_role 'dna'" },
+                { assert metrics.cycle_ratio.first_channel == 'DNA_6' },
+                { assert metrics.cycle_ratio.last_channel == 'DNA_8' },
+                // No subtraction ran, so the block must be absent rather than empty.
+                { assert !metrics.containsKey('before') },
+                { assert file("$outputDir/qc/exemplar-001_qc_report.html").exists() },
+
+                // A missing entry means a module lost its version capture.
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('ASHLAR') },
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('BASICPY') },
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('SET_CHANNEL_NAMES') },
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('AGGREGATE') },
+
+                { assert cells > 9877 * 0.98 && cells < 9877 * 1.02 },
+            )
+        }
+    }
+}

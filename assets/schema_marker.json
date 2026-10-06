@@ -1,0 +1,90 @@
+{
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "$id": "https://raw.githubusercontent.com/josenimo/histo/main/assets/schema_marker.json",
+    "title": "josenimo/histo pipeline - params.marker_sheet schema",
+    "description": "One row per channel, across all cycles. Reconciled against the OME-XML read from the raw images, so channel_number and cycle_number must match what the microscope wrote. Derived from nf-core/mcmicro's schema_marker.json.",
+    "type": "array",
+    "items": {
+        "type": "object",
+        "properties": {
+            "channel_number": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "1-based channel index, counted continuously across all cycles rather than restarting each cycle.",
+                "errorMessage": "channel_number must be an integer of 1 or greater",
+                "meta": "channel_number"
+            },
+            "cycle_number": {
+                "type": "integer",
+                "minimum": 1,
+                "description": "1-based acquisition cycle this channel belongs to. Must match a cycle_number in the input samplesheet.",
+                "errorMessage": "cycle_number must be an integer of 1 or greater",
+                "meta": "cycle_number"
+            },
+            "marker_name": {
+                "type": "string",
+                "pattern": "^[A-Za-z0-9._-]+$",
+                "description": "Channel name, for example DAPI or CD3. This is what reaches the SpatialData object and the feature table, so it should be the name you want in your results.",
+                "errorMessage": "marker_name must be provided and may contain only letters, digits, dot, underscore and hyphen",
+                "meta": "marker_name"
+            },
+            "channel_role": {
+                "type": "string",
+                "enum": ["dna", "marker", "autofluorescence", "blank"],
+                "description": "What the pipeline should do with this channel. dna is a nuclear stain, used for segmentation and as the reference for the cross-cycle photobleaching check. marker is a biological readout. autofluorescence is a channel acquired to be subtracted rather than interpreted, and is what the background column points at. blank is a channel expected to be dark, which QC checks rather than reports. This replaces guessing the nuclear channel by matching its name.",
+                "errorMessage": "channel_role must be provided and must be one of: dna, marker, autofluorescence, blank",
+                "meta": "channel_role"
+            },
+            "channel_compartment": {
+                "type": "string",
+                "default": null,
+                "pattern": "^(nuclear|cytoplasm|membrane)(\\+(nuclear|cytoplasm|membrane))*$",
+                "description": "Optional. Where the signal is expected to sit within a cell. Combine with + for a marker that stains more than one compartment, for example nuclear+cytoplasm. Read by QC, which can only judge whether a marker landed where it should if the sheet says where that is. Order is not significant.",
+                "errorMessage": "channel_compartment must be one or more of nuclear, cytoplasm, membrane, joined with + (for example: membrane, or nuclear+cytoplasm)",
+                "meta": "channel_compartment"
+            },
+            "filter": {
+                "type": "string",
+                "default": null,
+                "pattern": "\\S",
+                "description": "Optional filter cube or channel descriptor.",
+                "meta": "filter"
+            },
+            "excitation_wavelength": {
+                "type": "integer",
+                "default": null,
+                "description": "Optional excitation wavelength in nm.",
+                "meta": "excitation_wavelength"
+            },
+            "emission_wavelength": {
+                "type": "integer",
+                "default": null,
+                "description": "Optional emission wavelength in nm.",
+                "meta": "emission_wavelength"
+            },
+            "exposure": {
+                "type": "number",
+                "default": null,
+                "minimum": 0.001,
+                "description": "Exposure time. Required when background subtraction is enabled, since backsub scales by exposure.",
+                "errorMessage": "exposure must be a positive number",
+                "meta": "exposure"
+            },
+            "background": {
+                "type": "string",
+                "default": null,
+                "pattern": "\\S",
+                "description": "Name of the marker to use as the background channel for this channel, used by background subtraction.",
+                "meta": "background"
+            },
+            "remove": {
+                "type": "boolean",
+                "default": null,
+                "description": "Set true to drop this channel from downstream output.",
+                "meta": "remove"
+            }
+        },
+        "required": ["channel_number", "cycle_number", "marker_name", "channel_role"],
+        "additionalProperties": false
+    }
+}

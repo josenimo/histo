@@ -1,0 +1,234 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 2801.9 674.88">
+  <!-- Generator: Adobe Illustrator 30.6.0, SVG Export Plug-In . SVG Version: 2.1.4 Build 109)  -->
+  <defs>
+    <style>
+      .st0, .st1, .st2, .st3 {
+        fill: none;
+      }
+
+      .st4, .st5, .st6 {
+        font-size: 20px;
+        isolation: isolate;
+      }
+
+      .st4, .st6 {
+        font-family: IBMPlexSans-Bold, 'IBM Plex Sans';
+        font-weight: 700;
+      }
+
+      .st5 {
+        font-family: IBMPlexSans, 'IBM Plex Sans';
+      }
+
+      .st7, .st1 {
+        stroke: #2a78d6;
+      }
+
+      .st7, .st1, .st2, .st3, .st8, .st9 {
+        stroke-linecap: round;
+        stroke-width: 3px;
+      }
+
+      .st1, .st2, .st3 {
+        stroke-linejoin: round;
+      }
+
+      .st2, .st8 {
+        stroke: #eb6834;
+      }
+
+      .st6, .st10 {
+        fill: #fff;
+      }
+
+      .st10 {
+        stroke: #333;
+        stroke-width: 2px;
+      }
+
+      .st3, .st9 {
+        stroke: #1baf7a;
+      }
+
+      .st11 {
+        fill: #333;
+      }
+    </style>
+  </defs>
+  <text class="st4" transform="translate(30 16.98)"><tspan x="0" y="0">josenimo/histo: three paths through the pipeline</tspan></text>
+  <rect class="st0" y="56.98" width="732" height="229" rx="8" ry="8" data-section-id="preprocessing" data-section-lines="backsub,mif,tma"/>
+  <circle class="st11" cx="11" cy="41.98" r="11" data-section-id="preprocessing"/>
+  <text class="st6" data-section-id="preprocessing" transform="translate(7.66 45.58)"><tspan x="0" y="0">1</tspan></text>
+  <text class="st4" data-section-id="preprocessing" transform="translate(27 47.08)"><tspan x="0" y="0">Preprocessing</tspan></text>
+  <rect class="st0" x="782" y="56.98" width="345" height="100" rx="8" ry="8" data-section-id="store" data-section-lines="backsub,mif,tma"/>
+  <circle class="st11" cx="793" cy="41.98" r="11" data-section-id="store"/>
+  <text class="st6" data-section-id="store" transform="translate(789.66 45.58)"><tspan x="0" y="0">2</tspan></text>
+  <text class="st4" data-section-id="store" transform="translate(809 47.08)"><tspan x="0" y="0">SpatialData store</tspan></text>
+  <rect class="st0" x="1177" y="56.98" width="727.5" height="100" rx="8" ry="8" data-section-id="segmentation" data-section-lines="backsub,mif,tma"/>
+  <circle class="st11" cx="1188" cy="41.98" r="11" data-section-id="segmentation"/>
+  <text class="st6" data-section-id="segmentation" transform="translate(1184.6641 45.5803)"><tspan x="0" y="0">3</tspan></text>
+  <text class="st4" data-section-id="segmentation" transform="translate(1204 47.0803)"><tspan x="0" y="0">Segmentation</tspan></text>
+  <rect class="st0" x="1954.5" y="56.98" width="574" height="186" rx="8" ry="8" data-section-id="output" data-section-lines="backsub,mif,tma"/>
+  <circle class="st11" cx="1965.5" cy="41.98" r="11" data-section-id="output"/>
+  <text class="st6" data-section-id="output" transform="translate(1962.1641 45.5803)"><tspan x="0" y="0">4</tspan></text>
+  <text class="st4" data-section-id="output" transform="translate(1981.5 47.0803)"><tspan x="0" y="0">Output</tspan></text>
+  <rect class="st0" x="1954.5" y="348.21" width="661" height="180" rx="8" ry="8" data-section-id="qc" data-section-lines="backsub,mif,tma"/>
+  <circle class="st11" cx="1965.5" cy="333.21" r="11" data-section-id="qc"/>
+  <text class="st6" data-section-id="qc" transform="translate(1962.1641 336.8133)"><tspan x="0" y="0">5</tspan></text>
+  <text class="st4" data-section-id="qc" transform="translate(1981.5 338.3133)"><tspan x="0" y="0">Quality control</tspan></text>
+  <path class="st9" d="M50,157.98h197.5" data-line-id="tma"/>
+  <path class="st3" d="M247.5,157.98h15.96c6.67,0,11.1,3.15,13.29,9.44l23.41,67.12c2.2,6.29,6.63,9.44,13.29,9.44h182.29" data-line-id="tma"/>
+  <path class="st9" d="M849,114.98h197.5" data-line-id="tma"/>
+  <path class="st9" d="M1262,114.98h197.5" data-line-id="tma"/>
+  <path class="st9" d="M1459.5,114.98h197.5" data-line-id="tma"/>
+  <path class="st9" d="M1657,114.98h197.5" data-line-id="tma"/>
+  <path class="st3" d="M2123,200.98h152c6.67,0,11.1-3.15,13.29-9.44l23.41-67.12c2.2-6.29,6.63-9.44,13.29-9.44h114" data-line-id="tma"/>
+  <path class="st3" d="M2123,406.21h34.09c6.67,0,12.77,1.85,18.32,5.55l13.36,8.91c5.55,3.7,11.65,5.55,18.32,5.55h350.41" data-line-id="tma"/>
+  <path class="st3" d="M2123,446.21h50.09M2188.09,446.21h290.12c6.67,0,12.77-1.85,18.32-5.55l13.36-8.91c5.55-3.7,11.65-5.55,18.32-5.55h29.29" data-line-id="tma"/>
+  <path class="st3" d="M2123,406.21h34.09c6.67,0,11.17,3.12,13.51,9.36l22.98,61.27c2.34,6.24,6.84,9.36,13.51,9.36h350.41" data-line-id="tma"/>
+  <path class="st3" d="M495.75,243.98h184.09c6.67,0,10.76-3.25,12.27-9.74l25.47-109.52c1.51-6.49,5.6-9.74,12.27-9.74h2.16" data-line-id="tma"/>
+  <path class="st9" d="M782,114.98h67" data-line-id="tma"/>
+  <path class="st9" d="M1046.5,114.98h80.5" data-line-id="tma"/>
+  <path class="st9" d="M1177,114.98h85" data-line-id="tma"/>
+  <path class="st9" d="M1854.5,114.98h50" data-line-id="tma"/>
+  <path class="st3" d="M1954.5,114.98h-13.5c-6.67,0-8.9,3.15-6.71,9.44l23.41,67.12c2.2,6.29,6.63,9.44,13.29,9.44h152" data-line-id="tma"/>
+  <path class="st9" d="M1954.5,406.21h168.5" data-line-id="tma"/>
+  <path class="st3" d="M1954.5,406.21h3c6.67,0,12,2.67,16,8l18,24c4,5.33,9.33,8,16,8h115.5" data-line-id="tma"/>
+  <path class="st9" d="M732,114.98h50" data-line-id="tma"/>
+  <path class="st9" d="M1127,114.98h50" data-line-id="tma"/>
+  <path class="st9" d="M1904.5,114.98h10" data-line-id="tma"/>
+  <path class="st9" d="M1914.5,114.98h40" data-line-id="tma"/>
+  <path class="st3" d="M1914.5,114.98h1c6.67,0,10,3.33,10,10v263.23c0,12,6,18,18,18h11" data-line-id="tma"/>
+  <path class="st8" d="M50,153.98h197.5" data-line-id="backsub"/>
+  <path class="st2" d="M247.5,153.98h18.04c6.67,0,11.91,2.73,15.72,8.2l18.56,26.6c3.81,5.47,9.06,8.2,15.72,8.2h180.21" data-line-id="backsub"/>
+  <path class="st8" d="M849,110.98h197.5" data-line-id="backsub"/>
+  <path class="st8" d="M1262,110.98h197.5" data-line-id="backsub"/>
+  <path class="st8" d="M1459.5,110.98h197.5" data-line-id="backsub"/>
+  <path class="st8" d="M1657,110.98h197.5" data-line-id="backsub"/>
+  <path class="st2" d="M2123,402.21h35.3c6.67,0,12.77,1.85,18.32,5.55l13.36,8.91c5.55,3.7,11.65,5.55,18.32,5.55h349.2" data-line-id="backsub"/>
+  <path class="st2" d="M2123,442.21h50.09M2188.09,442.21h288.91c6.67,0,12.77-1.85,18.32-5.55l13.36-8.91c5.55-3.7,11.65-5.55,18.32-5.55h30.5" data-line-id="backsub"/>
+  <path class="st2" d="M495.75,196.98h181.25c6.67,0,11.1-3.15,13.29-9.44l23.41-67.12c2.2-6.29,6.63-9.44,13.29-9.44h5" data-line-id="backsub"/>
+  <path class="st8" d="M782,110.98h67" data-line-id="backsub"/>
+  <path class="st8" d="M1046.5,110.98h80.5" data-line-id="backsub"/>
+  <path class="st8" d="M1177,110.98h85" data-line-id="backsub"/>
+  <path class="st8" d="M1854.5,110.98h50" data-line-id="backsub"/>
+  <path class="st8" d="M1954.5,110.98h484.5" data-line-id="backsub"/>
+  <path class="st8" d="M1954.5,402.21h168.5" data-line-id="backsub"/>
+  <path class="st2" d="M1954.5,402.21h5c6.67,0,12,2.67,16,8l18,24c4,5.33,9.33,8,16,8h113.5" data-line-id="backsub"/>
+  <path class="st8" d="M732,110.98h50" data-line-id="backsub"/>
+  <path class="st8" d="M1127,110.98h50" data-line-id="backsub"/>
+  <path class="st8" d="M1904.5,110.98h10" data-line-id="backsub"/>
+  <path class="st8" d="M1914.5,110.98h40" data-line-id="backsub"/>
+  <path class="st2" d="M1914.5,110.98h1c9.33,0,14,4.67,14,14v263.23c0,9.33,4.67,14,14,14h11" data-line-id="backsub"/>
+  <path class="st7" d="M50,149.98h197.5" data-line-id="mif"/>
+  <path class="st7" d="M849,106.98h197.5" data-line-id="mif"/>
+  <path class="st7" d="M1262,106.98h197.5" data-line-id="mif"/>
+  <path class="st7" d="M1459.5,106.98h197.5" data-line-id="mif"/>
+  <path class="st7" d="M1657,106.98h197.5" data-line-id="mif"/>
+  <path class="st1" d="M2123,398.21h36.51c6.67,0,12.77,1.85,18.32,5.55l13.36,8.91c5.55,3.7,11.65,5.55,18.32,5.55h347.99" data-line-id="mif"/>
+  <path class="st1" d="M2123,438.21h50.09M2188.09,438.21h287.7c6.67,0,12.77-1.85,18.32-5.55l13.36-8.91c5.55-3.7,11.65-5.55,18.32-5.55h31.71" data-line-id="mif"/>
+  <path class="st7" d="M782,106.98h67" data-line-id="mif"/>
+  <path class="st7" d="M1046.5,106.98h80.5" data-line-id="mif"/>
+  <path class="st7" d="M1177,106.98h85" data-line-id="mif"/>
+  <path class="st7" d="M1854.5,106.98h50" data-line-id="mif"/>
+  <path class="st7" d="M1954.5,106.98h484.5" data-line-id="mif"/>
+  <path class="st7" d="M1954.5,398.21h168.5" data-line-id="mif"/>
+  <path class="st1" d="M1954.5,398.21h7c6.67,0,12,2.67,16,8l18,24c4,5.33,9.33,8,16,8h111.5" data-line-id="mif"/>
+  <path class="st7" d="M732,106.98h50" data-line-id="mif"/>
+  <path class="st7" d="M1127,106.98h50" data-line-id="mif"/>
+  <path class="st7" d="M1904.5,106.98h10" data-line-id="mif"/>
+  <path class="st7" d="M1914.5,106.98h40" data-line-id="mif"/>
+  <path class="st1" d="M1914.5,106.98h1c12,0,18,6,18,18v263.23c0,6.67,3.33,10,10,10h11" data-line-id="mif"/>
+  <path class="st1" d="M247.5,149.98h256c6.67,0,11.91-2.73,15.72-8.2l18.56-26.6c3.81-5.47,9.06-8.2,15.72-8.2h84.25" data-line-id="mif"/>
+  <path class="st7" d="M637.75,106.98h94.25" data-line-id="mif"/>
+  <path class="st7" d="M247.5,149.98h168" data-line-id="mif"/>
+  <path class="st1" d="M415.5,149.98h155.16c6.67,0,11.91-2.73,15.72-8.2l18.56-26.6c3.81-5.47,9.06-8.2,15.72-8.2h111.34" data-line-id="mif"/>
+  <g data-node-cx="80.0" data-node-cy="167.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="BASICPY" data-node-r="6.0" data-node-region="preprocessing" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M50,143.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="preprocessing" data-section-name="Preprocessing" data-station-id="BASICPY" data-station-label="BASICPY" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="277.5" data-node-cy="167.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="ASHLAR" data-node-r="6.0" data-node-region="preprocessing" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M247.5,143.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="preprocessing" data-section-name="Preprocessing" data-station-id="ASHLAR" data-station-label="ASHLAR" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="525.8" data-node-cy="210.0" data-node-groups="backsub" data-node-h="12.0" data-node-id="BACKSUB" data-node-r="6.0" data-node-region="preprocessing" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M495.75,190.98h0c3.31,0,6,2.69,6,6h0c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6h0c0-3.31,2.69-6,6-6Z" data-section-id="preprocessing" data-section-name="Preprocessing" data-station-id="BACKSUB" data-station-label="BACKSUB" data-station-lines="backsub"/>
+  </g>
+  <g data-node-cx="525.8" data-node-cy="257.0" data-node-groups="tma" data-node-h="12.0" data-node-id="COREOGRAPH" data-node-r="6.0" data-node-region="preprocessing" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M495.75,237.98h0c3.31,0,6,2.69,6,6h0c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6h0c0-3.31,2.69-6,6-6Z" data-section-id="preprocessing" data-section-name="Preprocessing" data-station-id="COREOGRAPH" data-station-label="COREOGRAPH" data-station-lines="tma"/>
+  </g>
+  <g data-node-cx="879.0" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="TO_SPATIALDATA" data-node-r="6.0" data-node-region="store" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M849,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="store" data-section-name="SpatialData store" data-station-id="TO_SPATIALDATA" data-station-label="TO_SPATIALDATA" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="1076.5" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="SET_CHANNEL_NAMES" data-node-r="6.0" data-node-region="store" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M1046.5,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="store" data-section-name="SpatialData store" data-station-id="SET_CHANNEL_NAMES" data-station-label="SET_CHANNEL_NAMES" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="1292.0" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="MAKE_IMAGE_PATCHES" data-node-r="6.0" data-node-region="segmentation" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M1262,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="segmentation" data-section-name="Segmentation" data-station-id="MAKE_IMAGE_PATCHES" data-station-label="MAKE_IMAGE_PATCHES" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="1489.5" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="PATCH_SEGMENTATION_CELLPOSE" data-node-r="6.0" data-node-region="segmentation" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M1459.5,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="segmentation" data-section-name="Segmentation" data-station-id="PATCH_SEGMENTATION_CELLPOSE" data-station-label="PATCH_SEGMENTATION_CELLPOSE" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="1687.0" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="RESOLVE_CELLPOSE" data-node-r="6.0" data-node-region="segmentation" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M1657,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="segmentation" data-section-name="Segmentation" data-station-id="RESOLVE_CELLPOSE" data-station-label="RESOLVE_CELLPOSE" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="1884.5" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="AGGREGATE" data-node-r="6.0" data-node-region="segmentation" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M1854.5,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="segmentation" data-section-name="Segmentation" data-station-id="AGGREGATE" data-station-label="AGGREGATE" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="2153.0" data-node-cy="214.0" data-node-groups="tma" data-node-h="12.0" data-node-id="MERGE_SPATIALDATA" data-node-r="6.0" data-node-region="output" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M2123,194.98h0c3.31,0,6,2.69,6,6h0c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6h0c0-3.31,2.69-6,6-6Z" data-section-id="output" data-section-name="Output" data-station-id="MERGE_SPATIALDATA" data-station-label="MERGE_SPATIALDATA" data-station-lines="tma"/>
+  </g>
+  <g data-node-cx="2469.0" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="PUBLISH_SPATIALDATA" data-node-r="6.0" data-node-region="output" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M2439,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="output" data-section-name="Output" data-station-id="PUBLISH_SPATIALDATA" data-station-label="PUBLISH_SPATIALDATA" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="2153.0" data-node-cy="415.2" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="QC_METRICS" data-node-r="6.0" data-node-region="qc" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M2123,392.21h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="qc" data-section-name="Quality control" data-station-id="QC_METRICS" data-station-label="QC_METRICS" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="2153.0" data-node-cy="455.2" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="QC_IMAGES" data-node-r="6.0" data-node-region="qc" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M2123,432.21h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="qc" data-section-name="Quality control" data-station-id="QC_IMAGES" data-station-label="QC_IMAGES" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="2587.5" data-node-cy="435.2" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="QC_REPORT" data-node-r="6.0" data-node-region="qc" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M2557.5,412.21h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="qc" data-section-name="Quality control" data-station-id="QC_REPORT" data-station-label="QC_REPORT" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="2587.5" data-node-cy="499.2" data-node-groups="tma" data-node-h="12.0" data-node-id="MERGE_REPORT" data-node-r="6.0" data-node-region="qc" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M2557.5,480.21h0c3.31,0,6,2.69,6,6h0c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6h0c0-3.31,2.69-6,6-6Z" data-section-id="qc" data-section-name="Quality control" data-station-id="MERGE_REPORT" data-station-label="MERGE_REPORT" data-station-lines="tma"/>
+  </g>
+  <text class="st4" transform="translate(2076.8564 384.2133)"><tspan x="0" y="0">QC_METRICS</tspan></text>
+  <text class="st4" data-station-id="QC_METRICS" transform="translate(2076.8564 384.2133)"><tspan x="0" y="0">QC_METRICS</tspan></text>
+  <text class="st4" transform="translate(19.14 180.98)"><tspan x="0" y="0">BASICPY</tspan></text>
+  <text class="st4" data-station-id="BASICPY" transform="translate(19.14 180.98)"><tspan x="0" y="0">BASICPY</tspan></text>
+  <text class="st4" transform="translate(789.88 137.98)"><tspan x="0" y="0">TO_SPATIALDATA</tspan></text>
+  <text class="st4" data-station-id="TO_SPATIALDATA" transform="translate(789.88 137.98)"><tspan x="0" y="0">TO_SPATIALDATA</tspan></text>
+  <text class="st4" transform="translate(1179.1765 137.9782)"><tspan x="0" y="0">MAKE_IMAGE_PATCHES</tspan></text>
+  <text class="st4" data-station-id="MAKE_IMAGE_PATCHES" transform="translate(1179.1765 137.9782)"><tspan x="0" y="0">MAKE_IMAGE_PATCHES</tspan></text>
+  <text class="st4" transform="translate(2081.2664 469.2112)"><tspan x="0" y="0">QC_IMAGES</tspan></text>
+  <text class="st4" data-station-id="QC_IMAGES" transform="translate(2081.2664 469.2112)"><tspan x="0" y="0">QC_IMAGES</tspan></text>
+  <text class="st4" transform="translate(2047.8135 223.9782)"><tspan x="0" y="0">MERGE_SPATIALDATA</tspan></text>
+  <text class="st4" data-station-id="MERGE_SPATIALDATA" transform="translate(2047.8135 223.9782)"><tspan x="0" y="0">MERGE_SPATIALDATA</tspan></text>
+  <text class="st4" transform="translate(218.98 135.98)"><tspan x="0" y="0">ASHLAR</tspan></text>
+  <text class="st4" data-station-id="ASHLAR" transform="translate(218.98 135.98)"><tspan x="0" y="0">ASHLAR</tspan></text>
+  <text class="st4" transform="translate(966.5 92.98)"><tspan x="0" y="0">SET_CHANNEL_NAMES</tspan></text>
+  <text class="st4" data-station-id="SET_CHANNEL_NAMES" transform="translate(966.5 92.98)"><tspan x="0" y="0">SET_CHANNEL_NAMES</tspan></text>
+  <text class="st4" transform="translate(1337.1058 92.9803)"><tspan x="0" y="0">PATCH_SEGMENTATION_CELLPOSE</tspan></text>
+  <text class="st4" transform="translate(2358.8716 92.9803)"><tspan x="0" y="0">PUBLISH_SPATIALDATA</tspan></text>
+  <text class="st4" data-station-id="PUBLISH_SPATIALDATA" transform="translate(2358.8716 92.9803)"><tspan x="0" y="0">PUBLISH_SPATIALDATA</tspan></text>
+  <text class="st4" transform="translate(2514.4573 404.2133)"><tspan x="0" y="0">QC_REPORT</tspan></text>
+  <text class="st4" data-station-id="QC_REPORT" transform="translate(2514.4573 404.2133)"><tspan x="0" y="0">QC_REPORT</tspan></text>
+  <text class="st4" transform="translate(2499.3025 509.2112)"><tspan x="0" y="0">MERGE_REPORT</tspan></text>
+  <text class="st4" data-station-id="MERGE_REPORT" transform="translate(2499.3025 509.2112)"><tspan x="0" y="0">MERGE_REPORT</tspan></text>
+  <text class="st4" transform="translate(1584.2498 137.9782)"><tspan x="0" y="0">RESOLVE_CELLPOSE</tspan></text>
+  <text class="st4" data-station-id="RESOLVE_CELLPOSE" transform="translate(1584.2498 137.9782)"><tspan x="0" y="0">RESOLVE_CELLPOSE</tspan></text>
+  <text class="st4" transform="translate(461.13 219.98)"><tspan x="0" y="0">BACKSUB</tspan></text>
+  <text class="st4" data-station-id="BACKSUB" transform="translate(461.13 219.98)"><tspan x="0" y="0">BACKSUB</tspan></text>
+  <text class="st4" transform="translate(445.06 266.98)"><tspan x="0" y="0">COREOGRAPH</tspan></text>
+  <text class="st4" data-station-id="COREOGRAPH" transform="translate(445.06 266.98)"><tspan x="0" y="0">COREOGRAPH</tspan></text>
+  <text class="st4" transform="translate(1811.2125 92.9803)"><tspan x="0" y="0">AGGREGATE</tspan></text>
+  <text class="st4" data-station-id="AGGREGATE" transform="translate(1811.2125 92.9803)"><tspan x="0" y="0">AGGREGATE</tspan></text>
+  <rect class="st0" y="558.21" width="288.8" height="96" rx="6" ry="6"/>
+  <path class="st7" d="M12,582.21h24"/>
+  <text class="st5" transform="translate(48 587.01)"><tspan x="0" y="0">mIF slide</tspan></text>
+  <path class="st8" d="M12,606.21h24"/>
+  <text class="st5" transform="translate(48 611.01)"><tspan x="0" y="0">WSI, background subtracted</tspan></text>
+  <path class="st9" d="M12,630.21h24"/>
+  <text class="st5" transform="translate(48 635.01)"><tspan x="0" y="0">TMA, dearrayed</tspan></text>
+  <text class="st5" transform="translate(2544.0813 669.9803)"><tspan x="0" y="0">created with nf-metro v1.1.0</tspan></text>
+</svg>

@@ -1,0 +1,81 @@
+// `--use_qc false` sets use_qc to true and discards `false`; only workflow.commandLine keeps it.
+// The check takes the command line as an argument so it can be tested.
+
+nextflow_function {
+
+    name "rejectSpacedBooleans"
+    script "../subworkflows/local/utils_nfcore_histo_pipeline/main.nf"
+    function "rejectSpacedBooleans"
+    tag "unit"
+    tag "validation"
+
+    test("a boolean written with a space is rejected") {
+        when {
+            function {
+                """
+                input[0] = "nextflow run . -profile test '--use_qc false'"
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains('written with a space') }
+            assert function.stdout.any { it.contains('--use_qc false') }
+        }
+    }
+
+    test("the spaced form is rejected even when it would have produced the right answer") {
+        // Rejected too: a form that works for one value and inverts the other is a trap.
+        when {
+            function {
+                """
+                input[0] = "nextflow run . --use_qc true"
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains('--use_qc true') }
+        }
+    }
+
+    test("a bare flag is accepted, and so is the option that follows it") {
+        when {
+            function {
+                """
+                input[0] = "nextflow run . --use_cellpose --outdir results"
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("a non-boolean parameter with a value is left alone") {
+        when {
+            function {
+                """
+                input[0] = "nextflow run . --outdir results --patch_width_pixel 1000"
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("-stub does not trip it") {
+        // -stub puts a bare `true` in the positional args, so a positional check would fail every stub run.
+        when {
+            function {
+                """
+                input[0] = "nextflow run . -profile laptop -stub"
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+}

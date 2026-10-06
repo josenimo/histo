@@ -1,0 +1,99 @@
+// cycle_number plus sample name identifies a cycle; a repeat silently mismatches illumination profiles.
+
+nextflow_function {
+
+    name "validateCycleNumbers"
+    script "../subworkflows/local/utils_nfcore_histo_pipeline/main.nf"
+    function "validateCycleNumbers"
+    tag "unit"
+    tag "validation"
+
+    test("cycles numbered 1..N are accepted") {
+        when {
+            function {
+                """
+                input[0] = [
+                    [ [ id: 'slideA', cycle_number: 1 ], 'c1.tif', [], [], 'm.csv' ],
+                    [ [ id: 'slideA', cycle_number: 2 ], 'c2.tif', [], [], 'm.csv' ],
+                    [ [ id: 'slideA', cycle_number: 3 ], 'c3.tif', [], [], 'm.csv' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("the real 1, 2, 2 sheet is rejected") {
+        when {
+            function {
+                """
+                input[0] = [
+                    [ [ id: 'slideA', cycle_number: 1 ], 'c1.tif', [], [], 'm.csv' ],
+                    [ [ id: 'slideA', cycle_number: 2 ], 'c2.tif', [], [], 'm.csv' ],
+                    [ [ id: 'slideA', cycle_number: 2 ], 'c3.tif', [], [], 'm.csv' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains('cycle_number is repeated: [2]') }
+            assert function.stdout.any { it.contains("Sample 'slideA'") }
+        }
+    }
+
+    test("a gap is rejected, since a cycle is probably missing") {
+        when {
+            function {
+                """
+                input[0] = [
+                    [ [ id: 'slideA', cycle_number: 1 ], 'c1.tif', [], [], 'm.csv' ],
+                    [ [ id: 'slideA', cycle_number: 3 ], 'c3.tif', [], [], 'm.csv' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains('without gaps') }
+            assert function.stdout.any { it.contains('Got [1, 3]') }
+        }
+    }
+
+    test("numbering that does not start at 1 is rejected") {
+        when {
+            function {
+                """
+                input[0] = [
+                    [ [ id: 'slideA', cycle_number: 2 ], 'c2.tif', [], [], 'm.csv' ],
+                    [ [ id: 'slideA', cycle_number: 3 ], 'c3.tif', [], [], 'm.csv' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains('without gaps') }
+        }
+    }
+
+    test("each sample is numbered independently") {
+        // Two samples both starting at 1 is normal, not a collision.
+        when {
+            function {
+                """
+                input[0] = [
+                    [ [ id: 'slideA', cycle_number: 1 ], 'a1.tif', [], [], 'a.csv' ],
+                    [ [ id: 'slideA', cycle_number: 2 ], 'a2.tif', [], [], 'a.csv' ],
+                    [ [ id: 'slideB', cycle_number: 1 ], 'b1.tif', [], [], 'b.csv' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+}

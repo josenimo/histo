@@ -1,0 +1,30 @@
+name: Unit tests
+
+# Pure-Python tests of bin/ and tools/; no containers or imaging data.
+# Dependencies come from uv.lock (pyproject.toml dev group), not a pip line here.
+
+on:
+  push:
+    branches: [dev, main]
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: "${{ github.workflow }}-${{ github.ref }}"
+  cancel-in-progress: true
+
+jobs:
+  pytest:
+    name: pytest
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # No setup-python: uv reads .python-version, shared with local runs.
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+
+      # --frozen fails if uv.lock is out of step with pyproject.toml instead of re-resolving.
+      - name: Run
+        run: uv run --frozen --group dev pytest tests/unit -v

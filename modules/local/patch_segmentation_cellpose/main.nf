@@ -12,6 +12,7 @@ process PATCH_SEGMENTATION_CELLPOSE {
 
     output:
     tuple val(meta), path(sdata_path), path("${index}.parquet"), val(n_patches)
+    path "versions.yml"
 
     script:
     """
@@ -21,5 +22,22 @@ process PATCH_SEGMENTATION_CELLPOSE {
     sopa segmentation cellpose ${sdata_path} --patch-index ${index} ${cli_arguments}
 
     mv ${sdata_path}/.sopa_cache/cellpose_boundaries/${index}.parquet ${index}.parquet
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: \$(sopa --version)
+        cellpose: \$(cellpose --version | grep 'cellpose version:' | head -n1 | awk '{print \$3}')
+    END_VERSIONS
+    """
+
+    stub:
+    """
+    touch ${index}.parquet
+
+    cat <<-END_VERSIONS > versions.yml
+    "${task.process}":
+        sopa: stub
+        cellpose: stub
+    END_VERSIONS
     """
 }

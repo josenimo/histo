@@ -1,10 +1,18 @@
+# Run with `prek`. The first three repos follow sopa:dev verbatim; ADDED marks ours.
+# Custom entries use folded scalars (>-) with explicit `;`, because pre-commit shlex-splits `entry:`.
+
 repos:
+  # ---------------------------------------------------------------------------
+  # Inherited from nf-core/sopa:dev. Do not diverge without reason.
+  # ---------------------------------------------------------------------------
+
   - repo: https://github.com/pre-commit/mirrors-prettier
     rev: "v3.1.0"
     hooks:
       - id: prettier
         additional_dependencies:
           - prettier@3.8.3
+
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
     hooks:
@@ -25,9 +33,127 @@ repos:
               subworkflows/(?!local/).*|
               .*\.snap$
           )$
+
+      # ADDED. Inputs are 5-100 GB; a stray fixture is painful to remove from history.
+      - id: check-added-large-files
+        args: [--maxkb=1024]
+      - id: check-merge-conflict
+      - id: detect-private-key
+      - id: check-executables-have-shebangs
+      - id: check-shebang-scripts-are-executable
+        # main.nf is 100644 in the nf-core template; chmod +x would conflict at every sync.
+        exclude: ^main\.nf$
+
   - repo: https://github.com/seqeralabs/nf-lint-pre-commit
     rev: v0.3.0
     hooks:
       - id: nextflow-lint
         files: '\.nf$|nextflow\.config$'
         args: ["-output", "json"]
+
+  # ---------------------------------------------------------------------------
+  # ADDED: Python. Rule selection lives in ruff.toml.
+  # ---------------------------------------------------------------------------
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.14.0 # TODO: pin to current at merge time
+    hooks:
+      - id: ruff-check
+        args: [--fix]
+        files: ^(bin|tools|tests/unit)/.*\.py$
+      - id: ruff-format
+        files: ^(bin|tools|tests/unit)/.*\.py$
+
+  # ---------------------------------------------------------------------------
+  # ADDED: shell.
+  # ---------------------------------------------------------------------------
+
+  - repo: https://github.com/koalaman/shellcheck-precommit
+    rev: v0.11.0 # TODO: pin to current at merge time
+    hooks:
+      - id: shellcheck
+
+  # ---------------------------------------------------------------------------
+  # ADDED: custom guards. Nothing off the shelf catches these.
+  # ---------------------------------------------------------------------------
+
+  - repo: local
+    hooks:
+      # Cluster image paths belong in config, not module bodies. Registry URIs do not match.
+      - id: no-absolute-container-paths
+        name: no absolute filesystem paths in container directives
+        language: system
+        files: '\.(nf|config)$'
+        entry: >-
+          bash -c 'fail=0; for f in "$@"; do
+          if grep -nE "^[[:space:]]*container[[:space:]]+.?/" "$f"; then
+          echo "  ^ absolute container path in $f; put it in conf/mdc.config, not the module" >&2;
+          fail=1; fi; done; exit $fail' --
+
+      # Nextflow manages containers, and the cluster has no Docker daemon.
+      - id: no-nested-container-invocation
+        name: no docker/podman/singularity invocation from inside the pipeline
+        language: system
+        files: '^(bin/|modules/|subworkflows/|workflows/).*\.(nf|py|sh)$'
+        entry: >-
+          bash -c 'fail=0; for f in "$@"; do
+          if grep -nE "(docker|podman)[[:space:]]+run|(singularity|apptainer)[[:space:]]+exec" "$f"; then
+          echo "  ^ nested container invocation in $f; Nextflow manages containers, declare one" >&2;
+          fail=1; fi; done; exit $fail' --
+
+      # Images are 5-100 GB, so reads must be lazy. test_* helpers use tiny fixtures and are exempt.
+      - id: no-eager-image-reads
+        name: no eager whole-image reads outside tests
+        language: system
+        files: '^bin/(?!test_).*\.py$'
+        entry: >-
+          bash -c 'fail=0; for f in "$@"; do
+          if grep -nE "tifffile\.imread|imageio\.imread|skimage\.io\.imread" "$f"; then
+          echo "  ^ eager image read in $f; use dask or tifffile aszarr" >&2;
+          fail=1; fi; done; exit $fail' --
+
+      # Stub required only when output: has a quoted path literal (a new file); in-place
+      # zarr modules use bare path(var) and need none. See CLAUDE.md §6.
+      - id: module-has-stub
+        name: local modules that create files must have a stub block
+        language: system
+        files: '^modules/local/.*/main\.nf$'
+        entry: >-
+          bash -c 'fail=0; for f in "$@"; do
+          creates=$(awk "/^[[:space:]]*output:/{o=1;next} /^[[:space:]]*(script|shell|exec|stub|when):/{o=0} o" "$f"
+          | grep -cE "path[[:space:]]*\(?[\"]"); [ "${creates:-0}" -eq 0 ] && continue;
+          grep -qE "^[[:space:]]*stub:" "$f" ||
+          { echo "$f: declares $creates new output file(s) but has no stub: block" >&2; fail=1; };
+          done; exit $fail' --
+
+      # Accepts versions.yml or `topic: versions`. Exemptions go in .lint-allow-no-versions
+      # (one path per line, `#` reason above), a burn-down list rather than a permanent one.
+      - id: module-emits-versions
+        name: every local module records tool versions
+        language: system
+        files: '^modules/local/.*/main\.nf$'
+        entry: >-
+          bash -c 'fail=0; for f in "$@"; do
+          if [ -f .lint-allow-no-versions ] && grep -v "^#" .lint-allow-no-versions | grep -qxF "$f";
+          then continue; fi;
+          grep -qE "versions\.yml|topic:[[:space:]]*versions" "$f" ||
+          { echo "$f: no versions.yml and no versions topic" >&2; fail=1; }; done; exit $fail' --
+
+      # A changed output: block with an unchanged stub: block (vs HEAD) means the stub has rotted.
+      # Comment lines are ignored. New files are skipped (module-has-stub covers them).
+      # cksum because macOS lacks md5sum.
+      - id: stub-drift
+        name: stub block must change when outputs change
+        language: system
+        files: '^modules/local/.*/main\.nf$'
+        entry: >-
+          bash -c 'ob() { awk "/^[[:space:]]*\/\//{next} /^[[:space:]]*output:/{f=1;next}
+          /^[[:space:]]*(script|shell|exec|stub|when):/{f=0} f"; };
+          sb() { awk "/^[[:space:]]*stub:/{f=1;next} f"; }; fail=0;
+          for f in "$@"; do old=$(git show "HEAD:$f" 2>/dev/null) || continue;
+          new=$(cat "$f");
+          oo=$(printf "%s" "$old" | ob | cksum); on=$(printf "%s" "$new" | ob | cksum);
+          so=$(printf "%s" "$old" | sb | cksum); sn=$(printf "%s" "$new" | sb | cksum);
+          if [ "$oo" != "$on" ] && [ "$so" = "$sn" ]; then
+          echo "$f: output: block changed but stub: block did not; update the stub in this commit" >&2;
+          fail=1; fi; done; exit $fail' --
