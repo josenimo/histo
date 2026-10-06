@@ -54,12 +54,15 @@ Both are MIT licensed. This pipeline would not exist without them.
 
   > Stringer C, Wang T, Michaelos M, Pachitariu M. Cellpose: a generalist algorithm for cellular segmentation. Nat Methods 18, 100–106 (2021). https://doi.org/10.1038/s41592-020-01018-x
 
-- [SpatialData](https://www.biorxiv.org/content/10.1101/2023.05.05.539647v1) — the Zarr-backed data
+- [StarDist](https://doi.org/10.1007/978-3-030-00934-2_30) — alternative nucleus segmentation,
+  under `use_stardist`
+
+  > Schmidt U, Weigert M, Broaddus C, Myers G. Cell Detection with Star-Convex Polygons. MICCAI 2018, LNCS 11071, 265–273 (2018). https://doi.org/10.1007/978-3-030-00934-2_30
+
+- [SpatialData](https://www.nature.com/articles/s41592-024-02212-x) — the Zarr-backed data
   structure the whole downstream half is built on
 
-  > Marconato L, Palla G, Yamauchi K, Virshup I, Heidari E, Treis T, Toth M, Shrestha R, Vöhringer H, Huber W, Gerstung M, Moore J, Theis F, Stegle O. SpatialData: an open and universal data framework for spatial omics. bioRxiv 2023.05.05.539647; doi: https://doi.org/10.1101/2023.05.05.539647
-
-  > TODO this preprint may now be published; verify and update.
+  > Marconato L, Palla G, Yamauchi KA, Virshup I, Heidari E, Treis T, Vierdag WM, Toth M, Stockhaus S, Shrestha RB, Rombaut B, Pollaris L, Lehner L, Vöhringer H, Kats I, Saeys Y, Saka SK, Huber W, Gerstung M, Moore J, Theis FJ, Stegle O. SpatialData: an open and universal data framework for spatial omics. Nat Methods 22, 58–62 (2025). https://doi.org/10.1038/s41592-024-02212-x
 
 - [AnnData](https://github.com/scverse/anndata)
 
