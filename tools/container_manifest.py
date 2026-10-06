@@ -1,17 +1,5 @@
 #!/usr/bin/env python3
-"""Generate (or verify) containers.tsv, the list of every image this pipeline needs.
-
-Why this exists: pre-staging images onto the cluster means knowing the complete
-set in advance, and that set is currently spread across fifteen `main.nf` files
-in a two-branch conditional. Reading it by eye is exactly the kind of manual step
-that silently goes stale after a module update.
-
-The manifest is keyed on the *image*, not the module, because several modules
-share one image. Fifteen modules currently need far fewer than fifteen pulls, and
-that difference is the whole point when each image is gigabytes over a slow link.
-
-This lives in tools/ rather than bin/ deliberately: bin/ is staged onto the PATH
-of every pipeline task, and development tooling has no business being there.
+"""Generate or verify containers.tsv, one row per container image used by modules/**/main.nf.
 
 Usage:
     tools/container_manifest.py            # rewrite containers.tsv
@@ -31,8 +19,7 @@ MANIFEST = REPO / "containers.tsv"
 
 HEADER = ["singularity_uri", "docker_uri", "conda", "modules"]
 
-# The container directive spans several lines and holds two quoted URIs in a
-# ternary. Grab the whole directive, then pull the quoted strings out of it.
+# The directive is a multi-line ternary of two quoted URIs.
 CONTAINER_BLOCK = re.compile(
     r"^\s*container\s+(.*?)(?=^\s*(?:input|output|script|stub|when|label|tag|conda|publishDir|process|\})\b)",
     re.MULTILINE | re.DOTALL,
@@ -42,7 +29,7 @@ SIMPLE = re.compile(r"^\s*container\s+['\"]([^'\"]+)['\"]\s*$", re.MULTILINE)
 
 
 def conda_spec(module_dir: Path) -> str:
-    """The conda environment is the human-readable statement of what the image is."""
+    """Return the module's environment.yml dependencies, comma-joined ("" if absent)."""
     env = module_dir / "environment.yml"
     if not env.exists():
         return ""
@@ -80,7 +67,7 @@ def extract(main_nf: Path) -> tuple[str, str]:
 
 
 def collect() -> list[list[str]]:
-    # Keyed on the image pair so that modules sharing an image collapse to one row.
+    # Modules sharing an image collapse to one row.
     by_image: dict[tuple[str, str], dict] = defaultdict(lambda: {"conda": set(), "modules": set()})
 
     for main_nf in sorted(REPO.glob("modules/**/main.nf")):
@@ -104,8 +91,6 @@ def collect() -> list[list[str]]:
                 ",".join(sorted(entry["modules"])),
             ]
         )
-    # Sorted on the docker URI: it is the readable one, and it keeps the file
-    # diffable when a single image is bumped.
     return sorted(rows, key=lambda r: (r[1], r[0]))
 
 
@@ -121,16 +106,10 @@ def render(rows: list[list[str]]) -> str:
 
 
 def cache_filename(uri: str) -> str:
-    """The exact filename Nextflow will look for in NXF_SINGULARITY_CACHEDIR.
+    """Return the filename Nextflow expects in NXF_SINGULARITY_CACHEDIR.
 
-    Mirrors Nextflow's SingularityCache.simpleName: drop the scheme, replace ':'
-    and '/' with '-', append '.img'. Reproduced rather than approximated on
-    purpose. An earlier version of this check matched on the tool name and
-    version appearing anywhere in a directory listing, and reported an image as
-    present when the cache held it under a different URI's name --
-    `labsyspharm-unetcoreograph-2.4.6.img` when Nextflow wanted
-    `docker.io-labsyspharm-unetcoreograph-2.4.6.img`. Same image, same version,
-    and Nextflow still went to the network for it mid-run.
+    Mirrors Nextflow's SingularityCache.simpleName exactly; a fuzzy match missed
+    registry-prefix differences such as `docker.io-`.
     """
     p = uri.find("://")
     name = uri[p + 3 :] if p != -1 else uri
@@ -146,13 +125,11 @@ def check_cache(rows: list[list[str]], cachedir: Path) -> int:
     missing = []
     print(f"cache: {cachedir}\n")
     for singularity, docker, _conda, modules in rows:
-        # Under a singularity profile Nextflow prefers the https URI when the
-        # module offers one, and falls back to the docker URI otherwise.
+        # Nextflow prefers the https URI under singularity.
         uri = singularity or docker
         want = cache_filename(uri)
         target = cachedir / want
-        # exists() follows symlinks, which is what Nextflow needs too: a dangling
-        # symlink is a miss even though `ls` shows the name.
+        # exists() follows symlinks, so a dangling symlink counts as missing.
         if target.exists():
             print(f"  ok      {want}")
         else:

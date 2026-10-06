@@ -1,58 +1,12 @@
 #!/usr/bin/env python3
-"""Cut a small fixture out of the full-size exemplar001 fixture.
+"""Re-tile one exemplar-001 tile into a 2 x 2, 320 px mini fixture that Ashlar can stitch (unused).
 
-**Not currently used.** Real-pixel testing happens as two manual runs on the cluster
-before a release, not in CI, so nothing here needs a committed fixture and none is
-committed. This is kept because the analysis behind it was expensive and the
-conclusion is worth not re-deriving: if CI ever gains somewhere to run containers,
-this produces a 2.7 MB fixture that Ashlar reads and stitches, verified.
-
-Why CI was ruled out, in the numbers that decided it: the pipeline's images are
-about 8.8 GB on disk for the mIF path and 14.7 GB with Coreograph, against roughly
-14 GB of free space on a GitHub-hosted runner and a 10 GB cache quota. Every image
-would be re-pulled per run. That is not a fixture problem and a smaller fixture does
-not solve it.
-
-Shrinking it is not a crop. The tiles are 1280 x 1080 with stage positions 817 um
-apart, which at 0.65 um/px is a pitch of 1257 px and therefore an overlap of only
-23 px. Crop a tile below 1257 px and the overlap goes negative, leaving Ashlar
-nothing to register on. Compression does not help either: the source is entirely
-uncompressed and deflate returns 1.18x, because sensor noise does not compress.
-
-So this re-tiles instead. It takes one real tile, cuts a square region out of it,
-and re-cuts that region into a 2 x 2 grid with an overlap we choose, writing stage
-positions to match. The pixels are real, the cells are real, the overlap regions
-contain the same real cells seen twice, and both cycles are cut from the same stage
-region so the cross-cycle comparison is real too.
-
-What this is a weaker test of, stated plainly: registration. Re-cutting one tile
-means the correct alignment is exactly the pitch, with no stage-position error, no
-illumination falloff across a tile boundary and no real misregistration to recover
-from. It exercises BaSiCPy and Ashlar and asserts the wiring and the outputs are
-consistent; it does not prove Ashlar can rescue a badly positioned mosaic. The
-full-size fixture still does that, and still exists.
-
-Metadata is lifted from the source rather than invented: instrument, objective,
-acquisition date, channel wavelengths, exposure times, DeltaT, PositionZ, physical
-pixel size and the position units all carry through unchanged. Only the image
-dimensions and the X/Y stage positions differ, because those are what re-tiling
-changes. Channel names are absent in the source and stay absent, since
-SET_CHANNEL_NAMES sets them from the marker sheet.
+Reads two cycles from --source-dir and writes deterministic OME-TIFFs with inherited
+metadata to --out-dir. Re-cut tiles align exactly, so registration is barely tested.
 
     python tools/make_mini_fixture.py \\
         --source-dir /path/to/full/fixture \\
         --out-dir tests/fixture_data
-
-Deterministic: same inputs, same bytes out, verified across runs. That mattered when
-the output was going to be committed, and still matters if it ever is again: a
-committed binary that changes whenever anyone re-derives it is what makes a
-repository grow without bound.
-
-Verified when written, on 2026-08-26: Ashlar reads the output and stitches it to
-exactly the predicted 576 x 576 mosaic with no gaps; the file has the same
-four-Image structure Bio-Formats wrote; adjacent tiles' overlap regions are
-pixel-identical; the two cycles correlate at 0.992 after the crop follows the
-tissue rather than the stage coordinates.
 """
 
 from __future__ import annotations
@@ -65,21 +19,13 @@ from xml.sax.saxutils import escape
 
 OME_NS = "http://www.openmicroscopy.org/Schemas/OME/2016-06"
 
-# Deliberately not a parameter. The overlap has to clear whatever Ashlar needs to
-# find a correlation peak, and the tile has to be big enough that a patch grid over
-# the mosaic is more than one patch. These two were chosen together; exposing them
-# would invite a combination that produces a fixture nothing can stitch.
+# Chosen together so Ashlar finds a correlation peak; not exposed as parameters.
 TILE = 320
 PITCH = 256  # 64 px of overlap, 20 percent
 
 
 def parse_source(path: Path) -> dict:
-    """Everything the new file should inherit, read off the source OME-XML.
-
-    Read rather than hardcoded so that the mini fixture stays a faithful derivative:
-    if the source is ever replaced, the acquisition metadata follows it instead of
-    silently describing the old one.
-    """
+    """Read pixel arrays and the acquisition metadata to inherit from the source OME-TIFF."""
     import tifffile
 
     with tifffile.TiffFile(path) as tif:
@@ -108,9 +54,7 @@ def parse_source(path: Path) -> dict:
         "physical_size_z_unit": attr(pixels0, "PhysicalSizeZUnit"),
         "significant_bits": attr(pixels0, "SignificantBits"),
         "dtype": attr(pixels0, "Type"),
-        # One list entry per source tile. The new grid has the same number of tiles,
-        # so tile i inherits tile i's timing and focus rather than a single value
-        # copied four times, which would flatten a real per-tile spread.
+        # New tile i inherits source tile i's timing and focus.
         "tiles": [
             {
                 "name": attr(img, "Name"),
@@ -136,12 +80,7 @@ def parse_source(path: Path) -> dict:
 
 
 def densest_window(plane, span: int, step: int = 16) -> tuple[int, int]:
-    """Top-left of the `span` square holding the most bright pixels.
-
-    Chosen on signal rather than at random because a fixture cut from empty slide
-    segments nothing, and a cell count of zero is a baseline that cannot regress.
-    A summed-area table keeps this exhaustive rather than sampled.
-    """
+    """Return (y, x) of the `span` square with the most pixels above the 90th percentile."""
     import numpy as np
 
     thr = np.percentile(plane, 90)
@@ -162,21 +101,9 @@ def densest_window(plane, span: int, step: int = 16) -> tuple[int, int]:
 
 
 def cycle_shift(reference, moving) -> tuple[int, int]:
-    """Whole-pixel (dy, dx) putting `moving` onto `reference`, by phase correlation.
+    """Return whole-pixel (dy, dx) putting `moving` onto `reference`, by phase correlation.
 
-    The stage nominally returns to the same coordinates each cycle and does not
-    quite: on this source the second cycle sits 45 px away in x. Over a 1280 px tile
-    that is 3.5 percent and Ashlar absorbs it. Over a 320 px tile it is 14 percent,
-    so cropping both cycles at the same coordinates would hand the mini fixture a
-    relatively four times worse misregistration than the full one has, and a fixture
-    that might fail to stitch is a red test about the fixture rather than about the
-    pipeline.
-
-    So the crop follows the tissue instead of the coordinates, and the residual
-    cross-cycle shift is close to zero by construction. That is a real property of
-    the source being removed, and it is removed deliberately: this fixture exists to
-    check that inputs, outputs and wiring stay consistent, not to prove Ashlar can
-    recover a bad mosaic. The full-size fixture keeps the shift and still tests it.
+    Cycle 2 sits 45 px off in x: 14 percent of a 320 px tile, enough to break stitching.
     """
     import numpy as np
 
@@ -194,13 +121,7 @@ def cycle_shift(reference, moving) -> tuple[int, int]:
 
 
 def build_xml(src: dict, size_x: int, size_y: int, n_channels: int, uuid: str) -> str:
-    """OME-XML for the new grid, structured exactly like the source.
-
-    Written out rather than delegated to tifffile's metadata= argument, which emits
-    a single Image with a Q axis for a stacked array. Ashlar reads one tile per
-    Image, so that shape would present a four-tile mosaic as one four-plane image
-    and stitch nothing.
-    """
+    """Build OME-XML with one Image per tile, since Ashlar reads one tile per Image."""
     px, py = src["tiles"][0]["origin"]
     scale = float(src["physical_size"])
     images = []
@@ -268,10 +189,7 @@ def write_mini(source: Path, out: Path, y0: int, x0: int, uuid: str) -> dict:
             for c in range(n_channels):
                 tif.write(
                     np.ascontiguousarray(sub[c]),
-                    # Encoded rather than passed as str: the unit is "\u00b5m" and
-                    # tifffile refuses non-ASCII in a TIFF string, while Bio-Formats
-                    # writes it as raw UTF-8 in the source. Bytes reproduce that
-                    # exactly, which an XML entity would not.
+                    # Bytes: tifffile rejects the non-ASCII "\u00b5m" in a str description.
                     description=xml.encode("utf-8") if (i == 0 and c == 0) else None,
                     compression="deflate",
                     metadata=None,
@@ -299,16 +217,12 @@ def main() -> int:
 
     args.out_dir.mkdir(parents=True, exist_ok=True)
 
-    # The crop origin is chosen once, on the first cycle, and reused for the second.
-    # Both cycles image the same stage positions, so the same origin is the same
-    # tissue -- which is what makes the cross-cycle nuclear comparison meaningful
-    # rather than a comparison of two unrelated fields.
+    # Crop origin is chosen on the first cycle; later cycles follow the tissue.
     with tifffile.TiffFile(args.source_dir / cycles[0][0]) as tif:
         nuclear = tif.series[0].asarray()[0]
     y0, x0 = densest_window(nuclear, PITCH + TILE)
     print(f"crop origin y={y0} x={x0}, chosen for nuclear signal density")
 
-    # Each later cycle is cropped where its tissue is, not where its coordinates say.
     origins = [(y0, x0)]
     for src_name, _ in cycles[1:]:
         with tifffile.TiffFile(args.source_dir / src_name) as tif:
@@ -329,8 +243,7 @@ def main() -> int:
     for i, (src_name, out_name) in enumerate(cycles):
         out = args.out_dir / out_name
         y0, x0 = origins[i]
-        # Fixed UUIDs: the output must be byte-identical across runs, or committing
-        # it means committing a new blob every time anyone re-derives it.
+        # Fixed UUIDs keep the output byte-identical across runs.
         info = write_mini(
             args.source_dir / src_name, out, y0, x0, f"00000000-0000-4000-8000-00000000000{i + 1}"
         )

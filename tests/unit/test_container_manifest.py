@@ -1,20 +1,11 @@
-"""Cache filename derivation.
-
-This is the function whose earlier, looser version reported Coreograph 2.4.6 as
-present when the cache held it under a different URI's name, and Nextflow went to
-the network mid-run. The exact strings below are taken from real cache entries and
-from a real Nextflow pull message.
-"""
+"""Tests for container_manifest.cache_filename; expected strings come from real cache entries."""
 
 from container_manifest import cache_filename
 
 
 class TestCacheFilename:
     def test_docker_uri_keeps_registry_prefix(self):
-        """The bug: mcmicro declares this without `docker.io/`, we declare it with.
-
-        Same image, different cache filename, and Nextflow only looks for one.
-        """
+        """The `docker.io/` prefix changes the cache filename Nextflow looks for."""
         assert (
             cache_filename("docker.io/labsyspharm/unetcoreograph:2.4.6")
             == "docker.io-labsyspharm-unetcoreograph-2.4.6.img"

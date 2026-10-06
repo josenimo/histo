@@ -1,8 +1,4 @@
-"""Core identity and table relinking in the TMA merge.
-
-The naming rules here decide whether a merged slide's elements can be traced back
-to the core they came from, which was an explicit requirement.
-"""
+"""Tests for core IDs, element naming and table relinking in merge_spatialdata.py."""
 
 import pytest
 from merge_spatialdata import SEP, core_id_from_path, retarget_table
@@ -56,11 +52,7 @@ class TestRetargetTable:
         assert t.uns["spatialdata_attrs"]["region"] == [f"{core}{SEP}b1", f"{core}{SEP}b2"]
 
     def test_unknown_region_refused(self):
-        """A table pointing at an element this core does not have is a real error.
-
-        Silently leaving it would produce a merged object whose tables annotate
-        nothing, which SpatialData would not necessarily complain about.
-        """
+        """A table annotating an element the core lacks must raise."""
         with pytest.raises(ValueError, match="not found"):
             retarget_table(FakeTable("some_other_element"), {"b": "c1__b"}, "c1")
 

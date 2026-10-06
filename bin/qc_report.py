@@ -1,32 +1,8 @@
 #!/usr/bin/env python3
-"""Render a QC metrics JSON as a single self-contained HTML page.
+"""Render a qc_metrics.py JSON (plus optional crop PNGs) as one self-contained HTML page.
 
-Takes the JSON from qc_metrics.py and nothing else. It never opens the store, so
-it cannot disagree with the numbers that were measured, and it needs no
-dependencies at all -- standard library only, no numpy, no plotting library. That
-means it can run anywhere, and that a rendering change can never alter a
-measurement.
-
-Charts are inline SVG built here rather than by a plotting library. The report has
-to survive being emailed, copied off a cluster and opened with no network, so
-every byte is in the file: no CDN, no external font, no script tag pointing
-anywhere. A plotting library would either add a container dependency or a remote
-script, and both fail that test.
-
-Design rules this follows, which are not arbitrary:
-
-- Fifteen channels is past the point where colour can carry identity, so
-  per-channel data is a table with a supporting sparkline rather than fifteen
-  coloured series. Colour is used for magnitude and for status, never to tell
-  channels apart.
-- Single-hue bars. Colouring each bar darker-where-longer would encode the same
-  number twice and waste the only free channel.
-- Every chart has a table underneath it. Nothing in this report is readable only
-  by looking at a colour.
-- The palette, both modes, is validated rather than chosen by eye: the categorical
-  slot passes the lightness, chroma and contrast checks on both surfaces, and the
-  five heatmap steps pass monotonic lightness, adjacent lightness separation,
-  light-end contrast and single-hue.
+Standard library only, inline SVG, no network resources. Colour never identifies a
+channel; every chart has a table twin.
 """
 
 from __future__ import annotations
@@ -39,10 +15,7 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# --------------------------------------------------------------------------------
-# Palette. Light and dark are both deliberate: the dark column is the same hues
-# re-stepped for the dark surface, not an automatic inversion of the light one.
-# --------------------------------------------------------------------------------
+# Palette: dark mode re-steps the same hues, not an inversion of light.
 
 LIGHT = {
     "surface": "#fcfcfb",
@@ -78,15 +51,10 @@ DARK = {
     "div_ink": ["#0b0b0b", "#0b0b0b", "#ffffff", "#ffffff", "#ffffff", "#ffffff", "#0b0b0b"],
 }
 
-# Fixed in both modes, and never reused for a series. Each one always ships with a
-# glyph and a word, because two of them are below 3:1 on the light surface by
-# design and colour must not be carrying the meaning on its own.
-# Edges carrying less than this share of their source cluster are not drawn. A few
-# cells out of thousands is noise, and at high resolution there are hundreds of such
-# edges -- drawing them all buries the branching the tree exists to show. The count
-# dropped is stated under the figure.
+# Clustree edges below this share of their source cluster are hidden (count stated in figure).
 MIN_TREE_FLOW = 0.05
 
+# Always paired with a glyph and word: two are below 3:1 contrast on the light surface.
 STATUS = {"good": "#0ca30c", "warning": "#fab219", "critical": "#d03b3b"}
 GLYPH = {"good": "&#10003;", "warning": "&#9888;", "critical": "&#10007;"}
 
@@ -96,7 +64,7 @@ def esc(text: Any) -> str:
 
 
 def compact(n: float) -> str:
-    """1284 -> 1,284 and 142493 -> 142.5K. For stat tiles, which have no room."""
+    """Format a count for a stat tile: 1284 -> 1,284, 142493 -> 142.5K."""
     n = float(n)
     if abs(n) >= 1_000_000:
         return f"{n / 1_000_000:.1f}M"
@@ -112,16 +80,9 @@ def thousands(n: float) -> str:
 
 
 def nice_ticks(upper: float, count: int = 4) -> list[float]:
-    """Round axis ticks from 0 to at least `upper`: 0, 1000, 2000, not 0, 1137, 2274.
+    """Return round axis ticks from 0 whose last tick is >= `upper`.
 
-    Axis ticks carry every value that is not directly labelled, so they have to be
-    readable numbers.
-
-    The last tick is always greater than or equal to `upper`, and that is load
-    bearing rather than tidy. Callers scale marks by `ticks[-1]`, so a final tick
-    below the data makes a mark longer than the plot: with a peak of 5400 an earlier
-    version returned 0/2500/5000, and the tallest column came out 202px tall in a
-    150px plot, escaping the SVG and drawing over the paragraph above it.
+    Callers scale marks by `ticks[-1]`, so a last tick below the data overflows the plot.
     """
     if upper <= 0:
         return [0.0]
@@ -140,11 +101,7 @@ def nice_ticks(upper: float, count: int = 4) -> list[float]:
 
 
 def bar_path(x: float, y: float, width: float, height: float, radius: float = 4.0) -> str:
-    """A horizontal bar: square where it meets the baseline, rounded at the value end.
-
-    The rounding marks which end is the data end. A fully rounded bar reads as a
-    pill and loses that, and a fully square one reads as a table cell.
-    """
+    """Return an SVG path for a horizontal bar, square at the baseline, rounded at the value end."""
     r = max(0.0, min(radius, width, height / 2))
     if width <= 0:
         return ""
@@ -158,7 +115,7 @@ def bar_path(x: float, y: float, width: float, height: float, radius: float = 4.
 
 
 def column_path(x: float, y: float, width: float, height: float, radius: float = 4.0) -> str:
-    """A vertical column: square at the baseline, rounded on the cap."""
+    """Return an SVG path for a vertical column, square at the baseline, rounded on the cap."""
     r = max(0.0, min(radius, width / 2, height))
     if height <= 0:
         return ""
@@ -172,13 +129,9 @@ def column_path(x: float, y: float, width: float, height: float, radius: float =
 
 
 def sparkline(counts: list[int], width: float = 108.0, height: float = 24.0) -> str:
-    """A filled shape of one channel's intensity distribution.
+    """Draw one channel's histogram as a square-rooted filled sparkline.
 
-    Square-rooted, and the column header says so. Pixel-intensity histograms are
-    dominated by the near-zero bin -- on real data the first bin holds 80% of the
-    pixels -- so a linear sparkline is a single spike and every channel looks
-    identical. The x range is 0 to p99.9 for the same reason, which the header also
-    says. This is shape only; every number it hints at is a column in the same row.
+    Square root because the first bin holds about 80% of pixels on real data.
     """
     if not counts or max(counts) == 0:
         return f'<svg class="spark" width="{width}" height="{height}" aria-hidden="true"></svg>'
@@ -203,12 +156,7 @@ def hbar_chart(
     fmt,
     label_extreme: bool = True,
 ) -> str:
-    """Horizontal single-hue bars, one row per channel.
-
-    One hue for every bar: the length is the magnitude, so tinting by size would
-    say it twice. Only the largest bar is directly labelled -- a number on all
-    fifteen is noise, and the axis plus the table carry the rest.
-    """
+    """Draw single-hue horizontal bars, one per row, labelling only the largest."""
     if not rows:
         return ""
     label_w, right_pad, row_h, bar_h = 96.0, 44.0, 22.0, 13.0
@@ -266,12 +214,9 @@ def column_chart(
     fmt=None,
     x_ticks: list[float] | None = None,
 ) -> str:
-    """A distribution as columns, linear on both axes.
+    """Draw a histogram as columns, linear on both axes.
 
-    `x_min` exists for the log-ratio histogram, whose axis is centred on zero rather
-    than starting there. `ref_x` draws one labelled reference line -- the median of a
-    ratio, or the no-change point -- because on a signed axis "where is zero" is the
-    first thing a reader needs and a gridline cannot say it.
+    `x_min` allows an axis centred on zero; `ref_x` adds one labelled reference line.
     """
     if not counts:
         return ""
@@ -329,8 +274,7 @@ def column_chart(
         f'y2="{top + plot_h:.1f}" stroke="var(--axis)" stroke-width="1"/>'
     )
     if x_ticks:
-        # Explicit ticks, for an axis whose ends are not enough: on a signed log
-        # ratio a reader needs every integer, because each one is a doubling.
+        # On a log2 axis every integer tick is a doubling.
         for t in x_ticks:
             if not x_min <= t <= x_max:
                 continue
@@ -359,17 +303,7 @@ def column_chart(
 
 
 def dumbbell_chart(rows: list[tuple[str, float, float]], unit: str, fmt) -> str:
-    """Before and after per channel, as a connected pair of dots.
-
-    The form for before-and-after on the same measure: the line carries the change
-    and its direction, which paired bars make you compute by comparing two lengths.
-    One hue in two shades rather than two hues, because these are two states of one
-    quantity and not two categories.
-
-    Both dots carry a 2px ring in the surface colour so they stay legible where they
-    overlap -- which is exactly what happens on the background channels, whose value
-    does not change because they were never subtracted.
-    """
+    """Draw before and after per channel as connected dot pairs, one hue in two shades."""
     if not rows:
         return ""
     label_w, right_pad, row_h = 96.0, 56.0, 22.0
@@ -418,7 +352,7 @@ def dumbbell_chart(rows: list[tuple[str, float, float]], unit: str, fmt) -> str:
 
 
 def two_key_legend(before_label: str, after_label: str) -> str:
-    """Two series means a legend is present, always."""
+    """Render the legend for a two-series chart."""
     return (
         f'<div class="legend">'
         f'<span class="key"><span class="dot" style="background:var(--wash)"></span>'
@@ -429,24 +363,14 @@ def two_key_legend(before_label: str, after_label: str) -> str:
 
 
 def heat_class(value: int, upper: int, n: int = 5) -> int:
-    """Which of the five sequential steps a count falls in."""
+    """Return the index (0-4) of the sequential heat step for a count."""
     if upper <= 0:
         return 0
     return min(n - 1, int(value / upper * n)) if value < upper else n - 1
 
 
 def patch_heatmap(counts: list[int], ilocs: list[list[int]] | None) -> str:
-    """Cells per patch, laid out as the tiling grid.
-
-    Laid out spatially rather than as a bar per patch, because position is the
-    whole point: a patch with no cells at the slide's edge is background, and the
-    same patch in the middle of tissue is a failure. A list of 72 numbers cannot
-    show the difference.
-
-    An empty patch is not the bottom of the magnitude ramp -- it is a finding, so
-    it gets the surface, a ring in the critical colour and a visible zero, and it
-    is called out in the legend by name.
-    """
+    """Draw cells per patch on the tiling grid, with empty patches ringed in the critical colour."""
     if not counts:
         return ""
     if ilocs and len(ilocs) == len(counts):
@@ -480,10 +404,7 @@ def patch_heatmap(counts: list[int], ilocs: list[list[int]] | None) -> str:
             )
             continue
         step = heat_class(value, upper)
-        # An inline style, not a fill attribute: the stylesheet's `text { fill: ... }`
-        # rule beats a presentation attribute, which made every in-cell number render
-        # in the muted axis grey on a saturated blue. The per-step ink is a variable
-        # because which end of the ramp is dark differs between the two modes.
+        # Inline style: the stylesheet's `text { fill }` rule beats a fill attribute.
         out.append(
             f'<rect x="{x:.1f}" y="{y:.1f}" width="{cell:.1f}" height="{cell:.1f}" rx="3" '
             f'fill="var(--heat-{step})" tabindex="0" data-tip="{esc(tip)}"/>'
@@ -496,7 +417,7 @@ def patch_heatmap(counts: list[int], ilocs: list[list[int]] | None) -> str:
 
 
 def heat_legend(upper: int) -> str:
-    """The scale legend the heatmap needs to be readable at all."""
+    """Render the patch heatmap's scale legend."""
     edges = [round(upper * i / 5) for i in range(6)]
     swatches = "".join(
         f'<span class="key"><span class="sw" style="background:var(--heat-{i})"></span>'
@@ -536,7 +457,7 @@ def table(headers: list[str], rows: list[list[str]], caption: str = "") -> str:
 
 
 def details(summary: str, content: str) -> str:
-    """A chart's table twin, collapsed. Present for every chart, never omitted."""
+    """Wrap a chart's table twin in a collapsed <details> element."""
     return f"<details><summary>{esc(summary)}</summary>{content}</details>"
 
 
@@ -725,9 +646,7 @@ def channel_section(channels: dict[str, Any]) -> str:
 
     ceiling = next(iter(per.values()))["dtype_ceiling"]
     shared_upper = channels.get("histogram_upper", ceiling)
-    # Only shown when the marker sheet supplied them. A column of em dashes would
-    # suggest the sheet was read and had nothing to say, which is a different fault
-    # from a sheet that predates the column.
+    # Only when the marker sheet supplied them.
     has_roles = any("role" in per[n] for n in names)
     has_compartments = any("compartment" in per[n] for n in names)
     headers = [
@@ -744,8 +663,7 @@ def channel_section(channels: dict[str, Any]) -> str:
     rows = []
     for name in names:
         m = per[name]
-        # Every sparkline spans the same absolute range, so the drawings are directly
-        # comparable between rows and the axis can be stated once, in the header.
+        # Shared absolute range so rows are comparable.
         rows.append(
             [
                 esc(name),
@@ -767,9 +685,7 @@ def channel_section(channels: dict[str, Any]) -> str:
         + "</tr>"
         for r in rows
     )
-    # The before-and-after comparison only exists if the pre-subtraction image was
-    # given. Without it this stays a single-series chart rather than pretending to a
-    # baseline it does not have.
+    # Before/after only when the pre-subtraction image was given.
     has_before = all("before" in per[n] for n in names)
     if has_before:
         zero_chart = two_key_legend("before subtraction", "after subtraction") + dumbbell_chart(
@@ -837,12 +753,7 @@ def channel_section(channels: dict[str, Any]) -> str:
 
 
 def cycle_ratio_section(ratio: dict[str, Any]) -> str:
-    """The cross-cycle nuclear comparison, or why it could not be made.
-
-    Reports the absence explicitly rather than omitting the section. A missing
-    section reads as "nothing wrong here", and a single-cycle run or an unmatched
-    nuclear pattern is a gap in the QC rather than a clean result.
-    """
+    """Render the cross-cycle nuclear comparison, or state why it was unavailable."""
     if not ratio.get("available"):
         return f"""
 <section>
@@ -850,9 +761,7 @@ def cycle_ratio_section(ratio: dict[str, Any]) -> str:
   <p class="note">Not computed: {esc(ratio.get("reason", "unavailable"))}.</p>
 </section>
 """
-    # How the stain was identified belongs next to the result. A ratio computed from
-    # a channel picked by a name fallback is weaker evidence than one computed from a
-    # channel the sheet declared, and the number alone does not show the difference.
+    # Show how the stain was identified: a name fallback is weaker evidence.
     chosen = (
         f'<p class="note">Nuclear channel identified by {esc(ratio["nuclear_selected_by"])}.</p>'
         if ratio.get("nuclear_selected_by")
@@ -922,13 +831,7 @@ def cycle_ratio_section(ratio: dict[str, Any]) -> str:
 
 
 def inline_png(path: Path) -> str:
-    """A PNG as a data URI.
-
-    The one place this script touches a file other than its JSON, and it does not
-    interpret it: bytes in, base64 out. That keeps the rule that rendering cannot
-    change a measurement, while still producing one file that opens with no network
-    and no sidecar directory to lose.
-    """
+    """Return a PNG file as a base64 data URI."""
     import base64
 
     return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode("ascii")
@@ -943,7 +846,7 @@ def figure(src: str, caption: str, sub: str = "") -> str:
 
 
 def crops_section(images: dict[str, Any], asset_dir: Path) -> str:
-    """The segmentation crops, ordered densest first."""
+    """Render the segmentation crops, densest first."""
     crops = images.get("crops") or []
     if not crops:
         return ""
@@ -986,13 +889,7 @@ def crops_section(images: dict[str, Any], asset_dir: Path) -> str:
 
 
 def cluster_heatmap(clustering: dict[str, Any]) -> str:
-    """Clusters against markers, z-scored, on a diverging ramp.
-
-    Diverging rather than sequential because the value is a signed deviation from the
-    slide's mean for that marker: above and below are opposite things, and the
-    midpoint has to read as "average", which only a neutral grey does. A sequential
-    ramp would make "average" look like "somewhat high".
-    """
+    """Draw clusters against markers as z-scores on a diverging ramp."""
     matrix = clustering.get("matrix") or []
     markers = clustering.get("channels_used") or []
     clusters = clustering.get("clusters") or []
@@ -1001,9 +898,7 @@ def cluster_heatmap(clustering: dict[str, Any]) -> str:
 
     peak = max((abs(v) for row in matrix for v in row), default=1.0) or 1.0
     cell_w, cell_h, gap = 66.0, 26.0, 2.0
-    # Horizontal marker labels, not rotated. Rotated ones were clipped to their last
-    # few characters -- "Vimentin" read as "tin" -- and at eight markers the names fit
-    # a 66px column outright, so the rotation bought nothing and cost legibility.
+    # Horizontal labels: rotated ones were clipped.
     label_w, top_band = 112.0, 26.0
     width = label_w + len(markers) * (cell_w + gap)
     height = top_band + len(clusters) * (cell_h + gap)
@@ -1041,7 +936,7 @@ def cluster_heatmap(clustering: dict[str, Any]) -> str:
 
 
 def diverging_step(value: float, peak: float) -> int:
-    """Which of seven diverging steps a signed value falls in, 3 being the midpoint."""
+    """Return the index (0-6) of the diverging step for a signed value; 3 is the midpoint."""
     if peak <= 0:
         return 3
     fraction = max(-1.0, min(1.0, value / peak))
@@ -1059,17 +954,9 @@ def diverging_legend() -> str:
 
 
 def cluster_tree_svg(tree: dict[str, Any], chosen: float) -> str:
-    """The clustree: one row per resolution, edges where cells flow between clusters.
+    """Draw a clustree: one row per resolution, edges where cells move between clusters.
 
-    What it answers is whether the extra clusters at a higher resolution are refining
-    the ones below or reshuffling them. Clean branching means each split takes a group
-    and divides it; edges that cross and re-merge mean membership is being rearranged,
-    which is the signal that resolution has gone past what the data supports.
-
-    Nodes are ordered within a row by their dominant parent's position, so a tree that
-    really is a tree draws without crossings. Node area is proportional to cell count
-    and edge width to the number of cells moving, both square-rooted -- these are counts
-    on a plane, and mapping a count to a radius directly would exaggerate it.
+    Node area and edge width scale with the square root of cell counts.
     """
     levels = tree.get("levels") or []
     edges = [e for e in (tree.get("edges") or []) if e["fraction_of_source"] >= MIN_TREE_FLOW]
@@ -1130,8 +1017,7 @@ def cluster_tree_svg(tree: dict[str, Any], chosen: float) -> str:
         y = top_pad + row_h * i
         is_chosen = abs(level["resolution"] - chosen) < 1e-9
         label = f"{level['resolution']:g}"
-        # Built outside the f-string: nesting the same quote character inside one is a
-        # syntax error before Python 3.12, and requires-python allows 3.11.
+        # Outside the f-string: nested same-type quotes need Python 3.12; we support 3.11.
         weight = ' font-weight="600"' if is_chosen else ""
         marker = " &#9666;" if is_chosen else ""
         out.append(
@@ -1172,10 +1058,7 @@ def clustering_section(images: dict[str, Any], asset_dir: Path) -> str:
     if not clustering:
         return ""
     excluded = clustering.get("excluded_channels") or []
-    # Why each channel was held back, when qc_images recorded it. The older form
-    # listed only the names under a blanket sentence about background and nuclear
-    # channels, which stopped being the whole truth once channel_role started
-    # excluding autofluorescence and blank channels by declaration too.
+    # Per-channel exclusion reasons, when qc_images recorded them.
     excluded_why = clustering.get("excluded_channels_why") or {}
     if excluded_why:
         excluded_note = (
@@ -1376,9 +1259,7 @@ def build(
                 else f"sheet says {', '.join(channels['marker_sheet_names'][:4])}…",
             )
         )
-    # Only asserted when the sheet carries roles at all. A sheet predating the column
-    # is not failing this check, it is not taking it, and reporting a pass would claim
-    # a guarantee that nothing verified.
+    # Skipped, not passed, when the sheet has no roles.
     if "roles" in channels:
         unroled = channels.get("channels_without_role") or []
         integrity.append(
