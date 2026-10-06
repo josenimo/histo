@@ -1,33 +1,12 @@
 // Pre-release check 2 of 2: the TMA path with background subtraction, on real pixels.
-//
-// CLUSTER ONLY, and more so than its counterpart: Coreograph's image alone is 5.9 GB
-// on disk. Tagged `exemplar` and excluded from the CI tags.
-//
+// Cluster only, as for exemplar001.nf.test.
 //     export HISTO_EXEMPLARS=/fast/AG_Coscia/$USER/HISTO/exemplars
 //     bash tools/fetch_exemplars.sh
 //     nf-test test tests/exemplar002.nf.test \
 //         --profile test_exemplar002,singularity,size_small,slurm
-//
-// `test_exemplar002` must be repeated on the command line even though it is declared
-// below; nf-test's --profile replaces the directive rather than adding to it.
-//
-// Covers everything exemplar001.nf.test cannot: Coreograph splitting a slide into
-// cores, each core carried through independently, subtraction per core, the merge
-// back into one store, and the slide-level report.
-//
-// Three cycles, subtracted the way the dataset intends. Cycle 1 is a pre-stain
-// autofluorescence round and cycles 2 and 3 subtract it, following mcmicro's own
-// marker sheet for this data; the three AF channels are then dropped by the sheet's
-// remove column, so twelve acquired channels become nine in the store. That last
-// part is why three cycles and not two: two would have subtracted one background
-// cycle from another, and nothing would have exercised remove -- the column that
-// makes backsub change the channel count and renumber what survives, which nothing
-// else in the test suite touches.
-//
-// BASELINE NOT YET RECORDED. Core count is asserted because it is a property of the
-// array rather than of the segmenter, but cell counts are left open until a real run
-// supplies them. A baseline invented in advance is a guess the first run gets judged
-// against.
+// Repeat test_exemplar002 in --profile: nf-test's --profile replaces the directive.
+// Cycle 1 (autofluorescence) is subtracted from cycles 2 and 3, then dropped by remove: 12 channels become 9.
+// TODO: record per-core cell-count baselines from the first green run.
 
 nextflow_pipeline {
 
@@ -58,9 +37,7 @@ nextflow_pipeline {
             assertAll(
                 { assert workflow.success },
 
-                // Four cores, which is a property of the array rather than of any
-                // model, so it is safe to assert exactly. A different number means
-                // Coreograph's detection changed, which is worth stopping for.
+                // Core count is a property of the array, so it is asserted exactly.
                 { assert names("COREOGRAPH").size() == 1 },
                 { assert cores.size() == 4 },
                 { assert cores == [
@@ -68,10 +45,7 @@ nextflow_pipeline {
                     'exemplar-002_core003', 'exemplar-002_core004',
                 ] },
 
-                // Everything after dearray runs once per core, subtraction included.
-                // BACKSUB running four times rather than once is the whole point of
-                // COREOGRAPH preceding it: one run would mean it happened on the slide
-                // and no core has an unsubtracted twin to be compared against.
+                // Everything after dearray, BACKSUB included, runs once per core.
                 { assert names("BACKSUB").size() == 4 },
                 { assert names("TO_SPATIALDATA").size() == 4 },
                 { assert names("AGGREGATE").size() == 4 },
@@ -81,10 +55,7 @@ nextflow_pipeline {
                 { assert names("MERGE_SPATIALDATA").size() == 1 },
                 { assert names("MERGE_REPORT").size() == 1 },
 
-                // Twelve channels were acquired; the marker sheet marks the three
-                // autofluorescence channels remove, so nine reach the store, renumbered
-                // in the order the survivors had. If AF488/AF555/AF647 appear here,
-                // backsub ignored remove and every downstream channel index is shifted.
+                // remove drops the three AF channels; if they appear, every downstream index is shifted.
                 { assert coreMetrics.every { it.channels.table_names == [
                     'DNA_1', 'DNA_2',
                     'A488_background', 'A555_background', 'A647_background',
@@ -95,37 +66,23 @@ nextflow_pipeline {
                     !m.channels.table_names.any { it in ['AF488', 'AF555', 'AF647'] }
                 } },
 
-                // The sheet decided which channel is nuclear, on every core. None of
-                // DNA_1/2/3 contains "DAPI", so a name-pattern route here is a regression.
+                // DNA_1/2/3 contain no "DAPI", so these prove QC read roles from the sheet, not names.
                 { assert coreMetrics.every { it.channels.roles.dna == ['DNA_1', 'DNA_2', 'DNA_3'] } },
                 { assert coreMetrics.every { it.cycle_ratio.nuclear_selected_by == "channel_role 'dna'" } },
                 { assert coreMetrics.every { it.cycle_ratio.first_channel == 'DNA_1' } },
                 { assert coreMetrics.every { it.cycle_ratio.last_channel == 'DNA_3' } },
 
-                // The autofluorescence channels are gone from the store, so the role
-                // must be gone from the post-backsub sheet QC reads too. Present here
-                // would mean the sheet and the pixels disagree about what exists.
+                // The post-backsub sheet must agree with the store: no autofluorescence role left.
                 { assert coreMetrics.every { !(it.channels.roles.containsKey('autofluorescence')) } },
 
-                // The before-and-after comparison, which is the reason dearray runs
-                // ahead of subtraction. Absent on every core before that change.
+                // Before-and-after comparison; the reason dearray runs ahead of subtraction.
                 { assert coreMetrics.every { it.containsKey('before') } },
 
-                // The before-image is Ashlar's output, so it still has all twelve
-                // channels while the store has nine. QC refuses to pair them by
-                // position when the counts differ and says so, rather than comparing
-                // channels that are not the same channel.
+                // The before-image has 12 channels against 9, so QC must refuse to pair them by position.
                 { assert coreMetrics.every { it.before.n_channels == 12 } },
                 { assert coreMetrics.every { it.before.containsKey('error') } },
 
-                // And it refused rather than guessing: no channel carries a `before`
-                // block, because pairing 12 against 9 by position would compare
-                // A488_background with AF555 and report the difference as subtraction.
-                // This is the cost of the realistic arrangement, and it is worth being
-                // explicit about: using `remove` buys the channel-dropping path its
-                // only coverage and gives up the per-channel before-and-after numbers.
-                // A TMA run without `remove` still gets them, which is what the
-                // COREOGRAPH-before-BACKSUB ordering made possible.
+                // So no channel carries a `before` block. Runs without remove do get per-channel numbers.
                 { assert coreMetrics.every { m ->
                     m.channels.per_channel.values().every { !it.containsKey('before') }
                 } },
@@ -134,21 +91,20 @@ nextflow_pipeline {
                 { assert cores.every { file("$outputDir/qc/${it}_qc_report.html").exists() } },
                 { assert file("$outputDir/qc/exemplar-002_slide_report.html").exists() },
 
-                // The merged store holds one table per core, and only the merged store
-                // is published -- the per-core stores are not.
+                // One table per core in the merged store; per-core stores are not published.
                 { assert file("$outputDir/exemplar-002_merged.zarr").exists() },
                 { assert cores.every {
                     file("$outputDir/exemplar-002_merged.zarr/tables/${it}__table").exists()
                 } },
                 { assert !file("$outputDir/exemplar-002_core001.zarr").exists() },
 
-                // Provenance, including the two processes only this path exercises.
+                // Provenance for the processes only this path exercises.
                 { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('COREOGRAPH') },
                 { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('BACKSUB') },
                 { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('MERGE_SPATIALDATA') },
                 { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('MERGE_REPORT') },
 
-                // Sanity only, until a baseline exists: every core produced cells.
+                // Sanity check until a baseline exists.
                 { assert coreMetrics.every { it.cells.n_cells > 0 } },
             )
         }

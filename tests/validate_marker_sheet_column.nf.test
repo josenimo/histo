@@ -1,10 +1,5 @@
-// The marker sheet is per sample, but the samplesheet has one row per cycle, so the
-// column repeats and every copy has to agree.
-//
-// Rows arrive as [meta, image_tiles, dfp, ffp, marker_sheet], which is schema property
-// order, so the sheet is it[4]. That positional coupling is the reason the column was
-// appended to schema_input_cycle.json rather than inserted: dfp and ffp are read
-// positionally elsewhere.
+// The marker sheet column repeats on every cycle row of a sample, and every copy must agree.
+// Rows follow schema property order, so the sheet is it[4]; keep new schema columns appended.
 
 nextflow_function {
 

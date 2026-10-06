@@ -1,17 +1,7 @@
 name: Unit tests
 
-# The cheapest tests in the repository: pure Python, no containers, no imaging
-# data, a few seconds. They cover the logic in bin/ and tools/ -- marker sheet
-# parsing, core naming, table relinking, container cache filenames -- which is
-# where several real bugs have lived.
-#
-# Separate from nf-test on purpose. These need nothing but Python, so they should
-# stay fast and always green; a failure here is a genuine logic error rather than
-# an environment problem.
-#
-# Dependencies come from pyproject.toml's dev group and uv.lock, not from a pip
-# install line here. The line drifted from what the tests import the moment a test
-# needed zarr, and a lockfile is the only version of this that is reproducible.
+# Pure-Python tests of bin/ and tools/; no containers or imaging data.
+# Dependencies come from uv.lock (pyproject.toml dev group), not a pip line here.
 
 on:
   push:
@@ -30,15 +20,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # No setup-python step. uv reads .python-version and fetches that interpreter
-      # itself, so the version is pinned in one place that local runs also honour
-      # rather than in a workflow input that only CI sees.
+      # No setup-python: uv reads .python-version, shared with local runs.
       - uses: astral-sh/setup-uv@v6
         with:
           enable-cache: true
 
-      # --frozen fails rather than silently re-resolving if uv.lock does not match
-      # pyproject.toml. Without it a stale lockfile would be quietly updated in CI
-      # and the run would pass against dependencies nobody chose.
+      # --frozen fails if uv.lock is out of step with pyproject.toml instead of re-resolving.
       - name: Run
         run: uv run --frozen --group dev pytest tests/unit -v

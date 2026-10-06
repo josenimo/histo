@@ -1,11 +1,5 @@
-// Marker sheet checks that JSON Schema cannot express.
-//
-// These exist because the checks themselves are the only thing standing between a
-// mislabelled sheet and a feature table that carries the wrong marker names. Every
-// case below is watched to fail, not merely watched to pass: a check that has never
-// been seen rejecting anything is not known to work. That lesson is recorded in
-// docs/decisions.md, and it is why the message text is asserted too. An assertion
-// that fires with an unreadable message is only half a check.
+// Marker sheet checks that JSON Schema cannot express. Each case must be seen to fail,
+// and the message text is asserted too (docs/decisions.md).
 
 nextflow_function {
 
@@ -119,11 +113,8 @@ nextflow_function {
     }
 
     test("a repeated marker_name is rejected before anything expensive runs") {
-        // set_channel_names.py rejects duplicates too, but not until after Ashlar and
-        // backsub have run. The role lookup is the nearer problem: it keeps the last
-        // value for a repeated key, so AF appearing twice with different roles would
-        // resolve to one of them and the background check would pass or fail for an
-        // invisible reason.
+        // Caught here, before Ashlar: the role lookup keeps the last value for a repeated key,
+        // so the background check would pass or fail for an invisible reason.
         when {
             params {
                 use_backsub = false
