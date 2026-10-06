@@ -6,7 +6,7 @@
 //         --profile test_exemplar001,singularity,size_small,slurm
 // nf-test's --profile replaces the profile directive, so repeat test_exemplar001 (or use --profile=+...).
 // Property assertions, not snapshots: Cellpose output drifts with version and hardware.
-// TODO: record the cell-count baseline from the first green run and uncomment its assertion.
+// Baseline 9,877 cells: cluster run of 3717ea0, 2026-10-06, at patch_width_pixel 2000 (tiling moves it <0.5%).
 
 nextflow_pipeline {
 
@@ -87,9 +87,7 @@ nextflow_pipeline {
                 { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('SET_CHANNEL_NAMES') },
                 { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('AGGREGATE') },
 
-                // Sanity check until a baseline exists.
-                { assert cells > 0 },
-                // { assert cells > BASELINE * 0.98 && cells < BASELINE * 1.02 },
+                { assert cells > 9877 * 0.98 && cells < 9877 * 1.02 },
             )
         }
     }

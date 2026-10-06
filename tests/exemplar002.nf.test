@@ -6,7 +6,7 @@
 //         --profile test_exemplar002,singularity,size_small,slurm
 // Repeat test_exemplar002 in --profile: nf-test's --profile replaces the directive.
 // Cycle 1 (autofluorescence) is subtracted from cycles 2 and 3, then dropped by remove: 12 channels become 9.
-// TODO: record per-core cell-count baselines from the first green run.
+// Baselines: cluster run of 3717ea0, 2026-10-06. Identical with 2 and 10 cycles: segmentation reads DNA_1 only.
 
 nextflow_pipeline {
 
@@ -33,6 +33,11 @@ nextflow_pipeline {
             def coreMetrics = cores.collect {
                 slurp.parse(file("$outputDir/qc/${it}_qc.json"))
             }
+            def baseline = [
+                'exemplar-002_core001': 7472, 'exemplar-002_core002': 4779,
+                'exemplar-002_core003': 7604, 'exemplar-002_core004': 9678,
+            ]
+            def counts = cores.indices.collectEntries { i -> [(cores[i]): coreMetrics[i].cells.n_cells] }
 
             assertAll(
                 { assert workflow.success },
@@ -104,8 +109,7 @@ nextflow_pipeline {
                 { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('MERGE_SPATIALDATA') },
                 { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('MERGE_REPORT') },
 
-                // Sanity check until a baseline exists.
-                { assert coreMetrics.every { it.cells.n_cells > 0 } },
+                { assert counts.every { core, n -> n > baseline[core] * 0.98 && n < baseline[core] * 1.02 } },
             )
         }
     }
