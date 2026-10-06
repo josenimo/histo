@@ -1,199 +1,234 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
-     width="2705" height="691" viewBox="0 0 2705 691">
-<defs>
-</defs>
-<metadata id="diagram-manifest" data-schema-version="1.0"><![CDATA[{"groups":[{"color":"#2a78d6","id":"mif","label":"mIF slide"},{"color":"#eb6834","id":"backsub","label":"WSI, background subtracted"},{"color":"#1baf7a","id":"tma","label":"TMA, dearrayed"}],"height":691,"match":{"flags":"i","target":"fqProcessName","type":"regex"},"nodes":[{"groups":["backsub","mif","tma"],"h":20.0,"id":"BASICPY","label":"BASICPY","patterns":[],"r":6.0,"region":"preprocessing","rx":6.0,"w":12.0,"x":80.0,"y":167.0},{"groups":["backsub","mif","tma"],"h":20.0,"id":"ASHLAR","label":"ASHLAR","patterns":[],"r":6.0,"region":"preprocessing","rx":6.0,"w":12.0,"x":277.5,"y":167.0},{"groups":["backsub"],"h":12.0,"id":"BACKSUB","label":"BACKSUB","patterns":[],"r":6.0,"region":"preprocessing","rx":6.0,"w":12.0,"x":525.8,"y":210.0},{"groups":["tma"],"h":12.0,"id":"COREOGRAPH","label":"COREOGRAPH","patterns":[],"r":6.0,"region":"preprocessing","rx":6.0,"w":12.0,"x":525.8,"y":257.0},{"groups":["backsub","mif","tma"],"h":20.0,"id":"TO_SPATIALDATA","label":"TO_SPATIALDATA","patterns":[],"r":6.0,"region":"store","rx":6.0,"w":12.0,"x":879.0,"y":124.0},{"groups":["backsub","mif","tma"],"h":20.0,"id":"SET_CHANNEL_NAMES","label":"SET_CHANNEL_NAMES","patterns":[],"r":6.0,"region":"store","rx":6.0,"w":12.0,"x":1076.5,"y":124.0},{"groups":["backsub","mif","tma"],"h":20.0,"id":"MAKE_IMAGE_PATCHES","label":"MAKE_IMAGE_PATCHES","patterns":[],"r":6.0,"region":"segmentation","rx":6.0,"w":12.0,"x":1292.0,"y":124.0},{"groups":["backsub","mif","tma"],"h":20.0,"id":"PATCH_SEGMENTATION_CELLPOSE","label":"PATCH_SEGMENTATION_CELLPOSE","patterns":[],"r":6.0,"region":"segmentation","rx":6.0,"w":12.0,"x":1489.5,"y":124.0},{"groups":["backsub","mif","tma"],"h":20.0,"id":"RESOLVE_CELLPOSE","label":"RESOLVE_CELLPOSE","patterns":[],"r":6.0,"region":"segmentation","rx":6.0,"w":12.0,"x":1687.0,"y":124.0},{"groups":["backsub","mif","tma"],"h":20.0,"id":"AGGREGATE","label":"AGGREGATE","patterns":[],"r":6.0,"region":"segmentation","rx":6.0,"w":12.0,"x":1884.5,"y":124.0},{"groups":["tma"],"h":12.0,"id":"MERGE_SPATIALDATA","label":"MERGE_SPATIALDATA","patterns":[],"r":6.0,"region":"output","rx":6.0,"w":12.0,"x":2153.0,"y":214.0},{"groups":["backsub","mif","tma"],"h":20.0,"id":"PUBLISH_SPATIALDATA","label":"PUBLISH_SPATIALDATA","patterns":[],"r":6.0,"region":"output","rx":6.0,"w":12.0,"x":2469.0,"y":124.0},{"groups":["backsub","mif","tma"],"h":20.0,"id":"QC_METRICS","label":"QC_METRICS","patterns":[],"r":6.0,"region":"qc","rx":6.0,"w":12.0,"x":2153.0,"y":415.2},{"groups":["backsub","mif","tma"],"h":20.0,"id":"QC_IMAGES","label":"QC_IMAGES","patterns":[],"r":6.0,"region":"qc","rx":6.0,"w":12.0,"x":2153.0,"y":455.2},{"groups":["backsub","mif","tma"],"h":20.0,"id":"QC_REPORT","label":"QC_REPORT","patterns":[],"r":6.0,"region":"qc","rx":6.0,"w":12.0,"x":2587.5,"y":435.2},{"groups":["tma"],"h":12.0,"id":"MERGE_REPORT","label":"MERGE_REPORT","patterns":[],"r":6.0,"region":"qc","rx":6.0,"w":12.0,"x":2587.5,"y":499.2}],"regions":[{"id":"preprocessing","label":"Preprocessing"},{"id":"store","label":"SpatialData store"},{"id":"segmentation","label":"Segmentation"},{"id":"output","label":"Output"},{"id":"qc","label":"Quality control"}],"title":"josenimo/histo: three paths through the pipeline","version":"1.0","width":2705}]]></metadata>
-<style>.nf-metro-title { fill: var(--nfm-map-title-color, #111111); }
-.nf-metro-station-label { fill: var(--nfm-map-label-color, #333333); }
-.nf-metro-section-box { fill: var(--nfm-map-section-fill, #ededed); stroke: var(--nfm-map-section-stroke, #e6e6e6); }
-.nf-metro-section-label { fill: var(--nfm-map-section-label-color, #666666); }
-.nf-metro-group-label { fill: var(--nfm-map-section-label-color, #666666); }
-.nf-metro-group-underline { stroke: var(--nfm-map-section-label-color, #666666); }
-.nf-metro-legend-bg { fill: var(--nfm-map-legend-bg, rgba(255, 255, 255, 0.8)); }
-.nf-metro-legend-text { fill: var(--nfm-map-legend-text-color, #333333); }
-.nf-metro-marker-stroke { stroke: var(--nfm-map-marker-stroke, #333333); }
-.nf-metro-label-halo { fill: var(--nfm-map-bg, #ffffff); stroke: var(--nfm-map-bg, #ffffff); }</style>
-<style>@media (prefers-color-scheme: dark) {
-    .nf-metro-section-label { fill: #d0d0d0; }
-    .nf-metro-section-num-circle { fill: #777777; }
-    .nf-metro-title { fill: #ffffff; }
-}
-</style>
-<text x="60.0" y="30.0" font-size="26.0" fill="#111111" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" class="nf-metro-title">josenimo/histo: three paths through the pipeline</text>
-<rect x="30.0" y="70.0" width="732.0" height="229.0" rx="8" ry="8" fill="#ededed" stroke="#e6e6e6" stroke-width="1.0" class="nf-metro-section-box" data-section-id="preprocessing" data-section-lines="backsub,mif,tma" />
-<circle cx="41.0" cy="55.0" r="11" fill="#333333" class="nf-metro-section-num-circle" data-section-id="preprocessing" />
-<text x="41.0" y="55.0" font-size="12" fill="#ffffff" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dy="0.3em" data-section-id="preprocessing">1</text>
-<text x="57.0" y="55.0" font-size="17.0" fill="#666666" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" dy="0.3em" class="nf-metro-section-label" data-section-id="preprocessing">Preprocessing</text>
-<rect x="812.0" y="70.0" width="345.0" height="100.0" rx="8" ry="8" fill="#ededed" stroke="#e6e6e6" stroke-width="1.0" class="nf-metro-section-box" data-section-id="store" data-section-lines="backsub,mif,tma" />
-<circle cx="823.0" cy="55.0" r="11" fill="#333333" class="nf-metro-section-num-circle" data-section-id="store" />
-<text x="823.0" y="55.0" font-size="12" fill="#ffffff" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dy="0.3em" data-section-id="store">2</text>
-<text x="839.0" y="55.0" font-size="17.0" fill="#666666" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" dy="0.3em" class="nf-metro-section-label" data-section-id="store">SpatialData store</text>
-<rect x="1207.0" y="70.0" width="727.5" height="100.0" rx="8" ry="8" fill="#ededed" stroke="#e6e6e6" stroke-width="1.0" class="nf-metro-section-box" data-section-id="segmentation" data-section-lines="backsub,mif,tma" />
-<circle cx="1218.0" cy="55.0" r="11" fill="#333333" class="nf-metro-section-num-circle" data-section-id="segmentation" />
-<text x="1218.0" y="55.0" font-size="12" fill="#ffffff" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dy="0.3em" data-section-id="segmentation">3</text>
-<text x="1234.0" y="55.0" font-size="17.0" fill="#666666" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" dy="0.3em" class="nf-metro-section-label" data-section-id="segmentation">Segmentation</text>
-<rect x="1984.5" y="70.0" width="574.0" height="186.0" rx="8" ry="8" fill="#ededed" stroke="#e6e6e6" stroke-width="1.0" class="nf-metro-section-box" data-section-id="output" data-section-lines="backsub,mif,tma" />
-<circle cx="1995.5" cy="55.0" r="11" fill="#333333" class="nf-metro-section-num-circle" data-section-id="output" />
-<text x="1995.5" y="55.0" font-size="12" fill="#ffffff" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dy="0.3em" data-section-id="output">4</text>
-<text x="2011.5" y="55.0" font-size="17.0" fill="#666666" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" dy="0.3em" class="nf-metro-section-label" data-section-id="output">Output</text>
-<rect x="1984.5" y="361.233" width="661.0" height="180.00003379776746" rx="8" ry="8" fill="#ededed" stroke="#e6e6e6" stroke-width="1.0" class="nf-metro-section-box" data-section-id="qc" data-section-lines="backsub,mif,tma" />
-<circle cx="1995.5" cy="346.233" r="11" fill="#333333" class="nf-metro-section-num-circle" data-section-id="qc" />
-<text x="1995.5" y="346.233" font-size="12" fill="#ffffff" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dy="0.3em" data-section-id="qc">5</text>
-<text x="2011.5" y="346.233" font-size="17.0" fill="#666666" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" dy="0.3em" class="nf-metro-section-label" data-section-id="qc">Quality control</text>
-<path d="M80.0,171.0 L277.5,171.0" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M277.5,171.0 L293.45670200392215,171.0 Q303.45670200392215,171.0,306.7504235671051,180.44200181445777 L330.1629804407392,247.55799818554223 Q333.45670200392215,257.0,343.45670200392215,257.0 L525.75,257.0" stroke="#1baf7a" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M879.0,128.0 L1076.5,128.0" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M1292.0,128.0 L1489.5,128.0" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M1489.5,128.0 L1687.0,128.0" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M1687.0,128.0 L1884.5,128.0" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M2153.0,214.0 L2305.0,214.0 Q2315.0,214.0,2318.2937215631828,204.55799818554223 L2341.7062784368172,137.44200181445777 Q2345.0,128.0,2355.0,128.0 L2469.0,128.0" stroke="#1baf7a" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M2153.0,419.233 L2187.091673086804,419.233 Q2197.091673086804,419.233,2205.4121760301823,424.7800019622523 L2218.7711701434255,433.6859980377477 Q2227.091673086804,439.233,2237.091673086804,439.233 L2587.5,439.233" stroke="#1baf7a" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M2153.0,459.233 L2203.091673086804,459.233 M2218.091673086804,459.233 L2508.211102550928,459.233 Q2518.211102550928,459.233,2526.5316054943064,453.6859980377477 L2539.8905996075496,444.7800019622523 Q2548.211102550928,439.233,2558.211102550928,439.233 L2587.5,439.233" stroke="#1baf7a" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M2153.0,419.233 L2187.091673086804,419.233 Q2197.091673086804,419.233,2200.6029075026877,428.5962917756905 L2223.58043867092,489.86970822430953 Q2227.091673086804,499.233,2237.091673086804,499.233 L2587.5,499.233" stroke="#1baf7a" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M525.75,257.0 L709.8410409439017,257.0 Q719.8410409439017,257.0,722.1061758905045,247.25991972960804 L747.575905997299,137.74008027039196 Q749.8410409439017,128.0,759.8410409439017,128.0 L762.0,128.0" stroke="#1baf7a" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M812.0,128.0 L879.0,128.0" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M1076.5,128.0 L1157.0,128.0" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M1207.0,128.0 L1292.0,128.0" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M1884.5,128.0 L1934.5,128.0" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M1984.5,128.0 L1971.0,128.0 Q1961.0,128.0,1964.293721563183,137.44200181445777 L1987.706278436817,204.55799818554223 Q1991.0,214.0,2001.0,214.0 L2153.0,214.0" stroke="#1baf7a" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M1984.5,419.233 L2153.0,419.233" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M1984.5,419.233 L1987.5,419.233 Q1997.5,419.233,2003.5,427.233 L2021.5,451.233 Q2027.5,459.233,2037.5,459.233 L2153.0,459.233" stroke="#1baf7a" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M762.0,128.0 L812.0,128.0" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M1157.0,128.0 L1207.0,128.0" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M1934.5,128.0 L1944.5,128.0" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M1944.5,128.0 L1984.5,128.0" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M1944.5,128.0 L1945.5,128.0 Q1955.5,128.0,1955.5,138.0 L1955.5,401.233 Q1955.5,419.233,1973.5,419.233 L1984.5,419.233" stroke="#1baf7a" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-tma" data-line-id="tma" />
-<path d="M80.0,167.0 L277.5,167.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M277.5,167.0 L295.54329799607785,167.0 Q305.54329799607785,167.0,311.26511395631866,175.20126954301185 L329.82148203583705,201.79873045698815 Q335.54329799607785,210.0,345.54329799607785,210.0 L525.75,210.0" stroke="#eb6834" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M879.0,124.0 L1076.5,124.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M1292.0,124.0 L1489.5,124.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M1489.5,124.0 L1687.0,124.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M1687.0,124.0 L1884.5,124.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M2153.0,415.233 L2188.302775637732,415.233 Q2198.302775637732,415.233,2206.6232785811103,420.7800019622523 L2219.9822726943535,429.6859980377477 Q2228.302775637732,435.233,2238.302775637732,435.233 L2587.5,435.233" stroke="#eb6834" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M2153.0,455.233 L2203.091673086804,455.233 M2218.091673086804,455.233 L2507.0,455.233 Q2517.0,455.233,2525.3205029433784,449.6859980377477 L2538.6794970566216,440.7800019622523 Q2547.0,435.233,2557.0,435.233 L2587.5,435.233" stroke="#eb6834" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M525.75,210.0 L707.0,210.0 Q717.0,210.0,720.2937215631829,200.55799818554223 L743.7062784368171,133.44200181445777 Q747.0,124.0,757.0,124.0 L762.0,124.0" stroke="#eb6834" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M812.0,124.0 L879.0,124.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M1076.5,124.0 L1157.0,124.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M1207.0,124.0 L1292.0,124.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M1884.5,124.0 L1934.5,124.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M1984.5,124.0 L2469.0,124.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M1984.5,415.233 L2153.0,415.233" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M1984.5,415.233 L1989.5,415.233 Q1999.5,415.233,2005.5,423.233 L2023.5,447.233 Q2029.5,455.233,2039.5,455.233 L2153.0,455.233" stroke="#eb6834" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M762.0,124.0 L812.0,124.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M1157.0,124.0 L1207.0,124.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M1934.5,124.0 L1944.5,124.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M1944.5,124.0 L1984.5,124.0" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M1944.5,124.0 L1945.5,124.0 Q1959.5,124.0,1959.5,138.0 L1959.5,401.233 Q1959.5,415.233,1973.5,415.233 L1984.5,415.233" stroke="#eb6834" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-backsub" data-line-id="backsub" />
-<path d="M80.0,163.0 L277.5,163.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M879.0,120.0 L1076.5,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M1292.0,120.0 L1489.5,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M1489.5,120.0 L1687.0,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M1687.0,120.0 L1884.5,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M2153.0,411.233 L2189.51387818866,411.233 Q2199.51387818866,411.233,2207.8343811320383,416.7800019622523 L2221.1933752452815,425.6859980377477 Q2229.51387818866,431.233,2239.51387818866,431.233 L2587.5,431.233" stroke="#2a78d6" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M2153.0,451.233 L2203.091673086804,451.233 M2218.091673086804,451.233 L2505.788897449072,451.233 Q2515.788897449072,451.233,2524.1094003924504,445.6859980377477 L2537.4683945056936,436.7800019622523 Q2545.788897449072,431.233,2555.788897449072,431.233 L2587.5,431.233" stroke="#2a78d6" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M812.0,120.0 L879.0,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M1076.5,120.0 L1157.0,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M1207.0,120.0 L1292.0,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M1884.5,120.0 L1934.5,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M1984.5,120.0 L2469.0,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M1984.5,411.233 L2153.0,411.233" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M1984.5,411.233 L1991.5,411.233 Q2001.5,411.233,2007.5,419.233 L2025.5,443.233 Q2031.5,451.233,2041.5,451.233 L2153.0,451.233" stroke="#2a78d6" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M762.0,120.0 L812.0,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M1157.0,120.0 L1207.0,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M1934.5,120.0 L1944.5,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M1944.5,120.0 L1984.5,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M1944.5,120.0 L1945.5,120.0 Q1963.5,120.0,1963.5,138.0 L1963.5,401.233 Q1963.5,411.233,1973.5,411.233 L1984.5,411.233" stroke="#2a78d6" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M277.5,163.0 L533.5,163.0 Q543.5,163.0,549.2218159602409,154.79873045698815 L567.7781840397591,128.20126954301185 Q573.5,120.0,583.5,120.0 L667.75,120.0" stroke="#2a78d6" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M667.75,120.0 L762.0,120.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M277.5,163.0 L445.5,163.0" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" class="metro-line-mif" data-line-id="mif" />
-<path d="M445.5,163.0 L600.6589590560983,163.0 Q610.6589590560983,163.0,616.3807750163392,154.79873045698815 L634.9371430958574,128.20126954301185 Q640.6589590560983,120.0,650.6589590560983,120.0 L762.0,120.0" stroke="#2a78d6" stroke-width="3.0" fill="none" stroke-linecap="round" stroke-linejoin="round" class="metro-line-mif" data-line-id="mif" />
-<g class="nf-metro-station-group" data-node-id="BASICPY" data-node-cx="80.0" data-node-cy="167.0" data-node-r="6.0" data-node-groups="backsub,mif,tma" data-node-region="preprocessing" data-node-w="12.0" data-node-h="20.0" data-node-rx="6.0">
-<rect x="74.0" y="157.0" width="12.0" height="20.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="BASICPY" data-station-lines="backsub,mif,tma" data-station-label="BASICPY" data-section-id="preprocessing" data-section-name="Preprocessing" />
-</g>
-<g class="nf-metro-station-group" data-node-id="ASHLAR" data-node-cx="277.5" data-node-cy="167.0" data-node-r="6.0" data-node-groups="backsub,mif,tma" data-node-region="preprocessing" data-node-w="12.0" data-node-h="20.0" data-node-rx="6.0">
-<rect x="271.5" y="157.0" width="12.0" height="20.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="ASHLAR" data-station-lines="backsub,mif,tma" data-station-label="ASHLAR" data-section-id="preprocessing" data-section-name="Preprocessing" />
-</g>
-<g class="nf-metro-station-group" data-node-id="BACKSUB" data-node-cx="525.8" data-node-cy="210.0" data-node-r="6.0" data-node-groups="backsub" data-node-region="preprocessing" data-node-w="12.0" data-node-h="12.0" data-node-rx="6.0">
-<rect x="519.75" y="204.0" width="12.0" height="12.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="BACKSUB" data-station-lines="backsub" data-station-label="BACKSUB" data-section-id="preprocessing" data-section-name="Preprocessing" />
-</g>
-<g class="nf-metro-station-group" data-node-id="COREOGRAPH" data-node-cx="525.8" data-node-cy="257.0" data-node-r="6.0" data-node-groups="tma" data-node-region="preprocessing" data-node-w="12.0" data-node-h="12.0" data-node-rx="6.0">
-<rect x="519.75" y="251.0" width="12.0" height="12.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="COREOGRAPH" data-station-lines="tma" data-station-label="COREOGRAPH" data-section-id="preprocessing" data-section-name="Preprocessing" />
-</g>
-<g class="nf-metro-station-group" data-node-id="TO_SPATIALDATA" data-node-cx="879.0" data-node-cy="124.0" data-node-r="6.0" data-node-groups="backsub,mif,tma" data-node-region="store" data-node-w="12.0" data-node-h="20.0" data-node-rx="6.0">
-<rect x="873.0" y="114.0" width="12.0" height="20.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="TO_SPATIALDATA" data-station-lines="backsub,mif,tma" data-station-label="TO_SPATIALDATA" data-section-id="store" data-section-name="SpatialData store" />
-</g>
-<g class="nf-metro-station-group" data-node-id="SET_CHANNEL_NAMES" data-node-cx="1076.5" data-node-cy="124.0" data-node-r="6.0" data-node-groups="backsub,mif,tma" data-node-region="store" data-node-w="12.0" data-node-h="20.0" data-node-rx="6.0">
-<rect x="1070.5" y="114.0" width="12.0" height="20.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="SET_CHANNEL_NAMES" data-station-lines="backsub,mif,tma" data-station-label="SET_CHANNEL_NAMES" data-section-id="store" data-section-name="SpatialData store" />
-</g>
-<g class="nf-metro-station-group" data-node-id="MAKE_IMAGE_PATCHES" data-node-cx="1292.0" data-node-cy="124.0" data-node-r="6.0" data-node-groups="backsub,mif,tma" data-node-region="segmentation" data-node-w="12.0" data-node-h="20.0" data-node-rx="6.0">
-<rect x="1286.0" y="114.0" width="12.0" height="20.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="MAKE_IMAGE_PATCHES" data-station-lines="backsub,mif,tma" data-station-label="MAKE_IMAGE_PATCHES" data-section-id="segmentation" data-section-name="Segmentation" />
-</g>
-<g class="nf-metro-station-group" data-node-id="PATCH_SEGMENTATION_CELLPOSE" data-node-cx="1489.5" data-node-cy="124.0" data-node-r="6.0" data-node-groups="backsub,mif,tma" data-node-region="segmentation" data-node-w="12.0" data-node-h="20.0" data-node-rx="6.0">
-<rect x="1483.5" y="114.0" width="12.0" height="20.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="PATCH_SEGMENTATION_CELLPOSE" data-station-lines="backsub,mif,tma" data-station-label="PATCH_SEGMENTATION_CELLPOSE" data-section-id="segmentation" data-section-name="Segmentation" />
-</g>
-<g class="nf-metro-station-group" data-node-id="RESOLVE_CELLPOSE" data-node-cx="1687.0" data-node-cy="124.0" data-node-r="6.0" data-node-groups="backsub,mif,tma" data-node-region="segmentation" data-node-w="12.0" data-node-h="20.0" data-node-rx="6.0">
-<rect x="1681.0" y="114.0" width="12.0" height="20.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="RESOLVE_CELLPOSE" data-station-lines="backsub,mif,tma" data-station-label="RESOLVE_CELLPOSE" data-section-id="segmentation" data-section-name="Segmentation" />
-</g>
-<g class="nf-metro-station-group" data-node-id="AGGREGATE" data-node-cx="1884.5" data-node-cy="124.0" data-node-r="6.0" data-node-groups="backsub,mif,tma" data-node-region="segmentation" data-node-w="12.0" data-node-h="20.0" data-node-rx="6.0">
-<rect x="1878.5" y="114.0" width="12.0" height="20.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="AGGREGATE" data-station-lines="backsub,mif,tma" data-station-label="AGGREGATE" data-section-id="segmentation" data-section-name="Segmentation" />
-</g>
-<g class="nf-metro-station-group" data-node-id="MERGE_SPATIALDATA" data-node-cx="2153.0" data-node-cy="214.0" data-node-r="6.0" data-node-groups="tma" data-node-region="output" data-node-w="12.0" data-node-h="12.0" data-node-rx="6.0">
-<rect x="2147.0" y="208.0" width="12.0" height="12.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="MERGE_SPATIALDATA" data-station-lines="tma" data-station-label="MERGE_SPATIALDATA" data-section-id="output" data-section-name="Output" />
-</g>
-<g class="nf-metro-station-group" data-node-id="PUBLISH_SPATIALDATA" data-node-cx="2469.0" data-node-cy="124.0" data-node-r="6.0" data-node-groups="backsub,mif,tma" data-node-region="output" data-node-w="12.0" data-node-h="20.0" data-node-rx="6.0">
-<rect x="2463.0" y="114.0" width="12.0" height="20.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="PUBLISH_SPATIALDATA" data-station-lines="backsub,mif,tma" data-station-label="PUBLISH_SPATIALDATA" data-section-id="output" data-section-name="Output" />
-</g>
-<g class="nf-metro-station-group" data-node-id="QC_METRICS" data-node-cx="2153.0" data-node-cy="415.2" data-node-r="6.0" data-node-groups="backsub,mif,tma" data-node-region="qc" data-node-w="12.0" data-node-h="20.0" data-node-rx="6.0">
-<rect x="2147.0" y="405.233" width="12.0" height="20.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="QC_METRICS" data-station-lines="backsub,mif,tma" data-station-label="QC_METRICS" data-section-id="qc" data-section-name="Quality control" />
-</g>
-<g class="nf-metro-station-group" data-node-id="QC_IMAGES" data-node-cx="2153.0" data-node-cy="455.2" data-node-r="6.0" data-node-groups="backsub,mif,tma" data-node-region="qc" data-node-w="12.0" data-node-h="20.0" data-node-rx="6.0">
-<rect x="2147.0" y="445.233" width="12.0" height="20.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="QC_IMAGES" data-station-lines="backsub,mif,tma" data-station-label="QC_IMAGES" data-section-id="qc" data-section-name="Quality control" />
-</g>
-<g class="nf-metro-station-group" data-node-id="QC_REPORT" data-node-cx="2587.5" data-node-cy="435.2" data-node-r="6.0" data-node-groups="backsub,mif,tma" data-node-region="qc" data-node-w="12.0" data-node-h="20.0" data-node-rx="6.0">
-<rect x="2581.5" y="425.233" width="12.0" height="20.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="QC_REPORT" data-station-lines="backsub,mif,tma" data-station-label="QC_REPORT" data-section-id="qc" data-section-name="Quality control" />
-</g>
-<g class="nf-metro-station-group" data-node-id="MERGE_REPORT" data-node-cx="2587.5" data-node-cy="499.2" data-node-r="6.0" data-node-groups="tma" data-node-region="qc" data-node-w="12.0" data-node-h="12.0" data-node-rx="6.0">
-<rect x="2581.5" y="493.233" width="12.0" height="12.0" rx="6.0" ry="6.0" fill="#ffffff" stroke="#333333" stroke-width="2.0" class="nf-metro-station" data-station-id="MERGE_REPORT" data-station-lines="tma" data-station-label="MERGE_REPORT" data-section-id="qc" data-section-name="Quality control" />
-</g>
-<text x="2153.0" y="397.233" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="auto">QC_METRICS</text>
-<text x="2153.0" y="397.233" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="auto" data-station-id="QC_METRICS" class="nf-metro-station-label">QC_METRICS</text>
-<text x="80.0" y="182.0" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="hanging">BASICPY</text>
-<text x="80.0" y="182.0" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="hanging" data-station-id="BASICPY" class="nf-metro-station-label">BASICPY</text>
-<text x="879.0" y="139.0" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="hanging">TO_SPATIALDATA</text>
-<text x="879.0" y="139.0" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="hanging" data-station-id="TO_SPATIALDATA" class="nf-metro-station-label">TO_SPATIALDATA</text>
-<text x="1292.0" y="139.0" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="hanging">MAKE_IMAGE_PATCHES</text>
-<text x="1292.0" y="139.0" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="hanging" data-station-id="MAKE_IMAGE_PATCHES" class="nf-metro-station-label">MAKE_IMAGE_PATCHES</text>
-<text x="2153.0" y="470.233" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="hanging">QC_IMAGES</text>
-<text x="2153.0" y="470.233" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="hanging" data-station-id="QC_IMAGES" class="nf-metro-station-label">QC_IMAGES</text>
-<text x="2153.0" y="225.0" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="hanging">MERGE_SPATIALDATA</text>
-<text x="2153.0" y="225.0" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="hanging" data-station-id="MERGE_SPATIALDATA" class="nf-metro-station-label">MERGE_SPATIALDATA</text>
-<text x="277.5" y="149.0" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="auto">ASHLAR</text>
-<text x="277.5" y="149.0" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="auto" data-station-id="ASHLAR" class="nf-metro-station-label">ASHLAR</text>
-<text x="1076.5" y="106.0" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="auto">SET_CHANNEL_NAMES</text>
-<text x="1076.5" y="106.0" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="auto" data-station-id="SET_CHANNEL_NAMES" class="nf-metro-station-label">SET_CHANNEL_NAMES</text>
-<text x="1489.5" y="106.0" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="auto">PATCH_SEGMENTATION_CELLPOSE</text>
-<text x="1489.5" y="106.0" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="auto" data-station-id="PATCH_SEGMENTATION_CELLPOSE" class="nf-metro-station-label">PATCH_SEGMENTATION_CELLPOSE</text>
-<text x="2469.0" y="106.0" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="auto">PUBLISH_SPATIALDATA</text>
-<text x="2469.0" y="106.0" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="auto" data-station-id="PUBLISH_SPATIALDATA" class="nf-metro-station-label">PUBLISH_SPATIALDATA</text>
-<text x="2587.5" y="417.233" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="auto">QC_REPORT</text>
-<text x="2587.5" y="417.233" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="auto" data-station-id="QC_REPORT" class="nf-metro-station-label">QC_REPORT</text>
-<text x="2587.5" y="510.233" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="hanging">MERGE_REPORT</text>
-<text x="2587.5" y="510.233" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="hanging" data-station-id="MERGE_REPORT" class="nf-metro-station-label">MERGE_REPORT</text>
-<text x="1687.0" y="139.0" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="hanging">RESOLVE_CELLPOSE</text>
-<text x="1687.0" y="139.0" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="hanging" data-station-id="RESOLVE_CELLPOSE" class="nf-metro-station-label">RESOLVE_CELLPOSE</text>
-<text x="525.75" y="221.0" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="hanging">BACKSUB</text>
-<text x="525.75" y="221.0" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="hanging" data-station-id="BACKSUB" class="nf-metro-station-label">BACKSUB</text>
-<text x="525.75" y="268.0" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="hanging">COREOGRAPH</text>
-<text x="525.75" y="268.0" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="hanging" data-station-id="COREOGRAPH" class="nf-metro-station-label">COREOGRAPH</text>
-<text x="1884.5" y="106.0" font-size="14.0" fill="#ffffff" stroke="#ffffff" stroke-width="3.0" stroke-linejoin="round" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" aria-hidden="true" class="nf-metro-label-halo" text-anchor="middle" dominant-baseline="auto">AGGREGATE</text>
-<text x="1884.5" y="106.0" font-size="14.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" font-weight="bold" text-anchor="middle" dominant-baseline="auto" data-station-id="AGGREGATE" class="nf-metro-station-label">AGGREGATE</text>
-<rect x="30.0" y="571.2330337977675" width="288.8" height="96.0" rx="6" ry="6" fill="rgba(255, 255, 255, 0.8)" class="nf-metro-legend-bg" />
-<path d="M42.0,595.2330337977675 L66.0,595.2330337977675" stroke="#2a78d6" stroke-width="3.0" stroke-linecap="round" />
-<text x="78.0" y="595.2330337977675" font-size="16.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" dy="0.3em" class="nf-metro-legend-text">mIF slide</text>
-<path d="M42.0,619.2330337977675 L66.0,619.2330337977675" stroke="#eb6834" stroke-width="3.0" stroke-linecap="round" />
-<text x="78.0" y="619.2330337977675" font-size="16.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" dy="0.3em" class="nf-metro-legend-text">WSI, background subtracted</text>
-<path d="M42.0,643.2330337977675 L66.0,643.2330337977675" stroke="#1baf7a" stroke-width="3.0" stroke-linecap="round" />
-<text x="78.0" y="643.2330337977675" font-size="16.0" fill="#333333" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" dy="0.3em" class="nf-metro-legend-text">TMA, dearrayed</text>
-<text x="2675.0" y="683.0" font-size="8" fill="rgba(150, 150, 150, 0.6)" font-family="'Helvetica Neue', Helvetica, Arial, sans-serif" text-anchor="end">created with nf-metro v1.1.0</text>
+<svg id="Layer_1" xmlns="http://www.w3.org/2000/svg" version="1.1" viewBox="0 0 2801.9 674.88">
+  <!-- Generator: Adobe Illustrator 30.6.0, SVG Export Plug-In . SVG Version: 2.1.4 Build 109)  -->
+  <defs>
+    <style>
+      .st0, .st1, .st2, .st3 {
+        fill: none;
+      }
+
+      .st4, .st5, .st6 {
+        font-size: 20px;
+        isolation: isolate;
+      }
+
+      .st4, .st6 {
+        font-family: IBMPlexSans-Bold, 'IBM Plex Sans';
+        font-weight: 700;
+      }
+
+      .st5 {
+        font-family: IBMPlexSans, 'IBM Plex Sans';
+      }
+
+      .st7, .st1 {
+        stroke: #2a78d6;
+      }
+
+      .st7, .st1, .st2, .st3, .st8, .st9 {
+        stroke-linecap: round;
+        stroke-width: 3px;
+      }
+
+      .st1, .st2, .st3 {
+        stroke-linejoin: round;
+      }
+
+      .st2, .st8 {
+        stroke: #eb6834;
+      }
+
+      .st6, .st10 {
+        fill: #fff;
+      }
+
+      .st10 {
+        stroke: #333;
+        stroke-width: 2px;
+      }
+
+      .st3, .st9 {
+        stroke: #1baf7a;
+      }
+
+      .st11 {
+        fill: #333;
+      }
+    </style>
+  </defs>
+  <text class="st4" transform="translate(30 16.98)"><tspan x="0" y="0">josenimo/histo: three paths through the pipeline</tspan></text>
+  <rect class="st0" y="56.98" width="732" height="229" rx="8" ry="8" data-section-id="preprocessing" data-section-lines="backsub,mif,tma"/>
+  <circle class="st11" cx="11" cy="41.98" r="11" data-section-id="preprocessing"/>
+  <text class="st6" data-section-id="preprocessing" transform="translate(7.66 45.58)"><tspan x="0" y="0">1</tspan></text>
+  <text class="st4" data-section-id="preprocessing" transform="translate(27 47.08)"><tspan x="0" y="0">Preprocessing</tspan></text>
+  <rect class="st0" x="782" y="56.98" width="345" height="100" rx="8" ry="8" data-section-id="store" data-section-lines="backsub,mif,tma"/>
+  <circle class="st11" cx="793" cy="41.98" r="11" data-section-id="store"/>
+  <text class="st6" data-section-id="store" transform="translate(789.66 45.58)"><tspan x="0" y="0">2</tspan></text>
+  <text class="st4" data-section-id="store" transform="translate(809 47.08)"><tspan x="0" y="0">SpatialData store</tspan></text>
+  <rect class="st0" x="1177" y="56.98" width="727.5" height="100" rx="8" ry="8" data-section-id="segmentation" data-section-lines="backsub,mif,tma"/>
+  <circle class="st11" cx="1188" cy="41.98" r="11" data-section-id="segmentation"/>
+  <text class="st6" data-section-id="segmentation" transform="translate(1184.6641 45.5803)"><tspan x="0" y="0">3</tspan></text>
+  <text class="st4" data-section-id="segmentation" transform="translate(1204 47.0803)"><tspan x="0" y="0">Segmentation</tspan></text>
+  <rect class="st0" x="1954.5" y="56.98" width="574" height="186" rx="8" ry="8" data-section-id="output" data-section-lines="backsub,mif,tma"/>
+  <circle class="st11" cx="1965.5" cy="41.98" r="11" data-section-id="output"/>
+  <text class="st6" data-section-id="output" transform="translate(1962.1641 45.5803)"><tspan x="0" y="0">4</tspan></text>
+  <text class="st4" data-section-id="output" transform="translate(1981.5 47.0803)"><tspan x="0" y="0">Output</tspan></text>
+  <rect class="st0" x="1954.5" y="348.21" width="661" height="180" rx="8" ry="8" data-section-id="qc" data-section-lines="backsub,mif,tma"/>
+  <circle class="st11" cx="1965.5" cy="333.21" r="11" data-section-id="qc"/>
+  <text class="st6" data-section-id="qc" transform="translate(1962.1641 336.8133)"><tspan x="0" y="0">5</tspan></text>
+  <text class="st4" data-section-id="qc" transform="translate(1981.5 338.3133)"><tspan x="0" y="0">Quality control</tspan></text>
+  <path class="st9" d="M50,157.98h197.5" data-line-id="tma"/>
+  <path class="st3" d="M247.5,157.98h15.96c6.67,0,11.1,3.15,13.29,9.44l23.41,67.12c2.2,6.29,6.63,9.44,13.29,9.44h182.29" data-line-id="tma"/>
+  <path class="st9" d="M849,114.98h197.5" data-line-id="tma"/>
+  <path class="st9" d="M1262,114.98h197.5" data-line-id="tma"/>
+  <path class="st9" d="M1459.5,114.98h197.5" data-line-id="tma"/>
+  <path class="st9" d="M1657,114.98h197.5" data-line-id="tma"/>
+  <path class="st3" d="M2123,200.98h152c6.67,0,11.1-3.15,13.29-9.44l23.41-67.12c2.2-6.29,6.63-9.44,13.29-9.44h114" data-line-id="tma"/>
+  <path class="st3" d="M2123,406.21h34.09c6.67,0,12.77,1.85,18.32,5.55l13.36,8.91c5.55,3.7,11.65,5.55,18.32,5.55h350.41" data-line-id="tma"/>
+  <path class="st3" d="M2123,446.21h50.09M2188.09,446.21h290.12c6.67,0,12.77-1.85,18.32-5.55l13.36-8.91c5.55-3.7,11.65-5.55,18.32-5.55h29.29" data-line-id="tma"/>
+  <path class="st3" d="M2123,406.21h34.09c6.67,0,11.17,3.12,13.51,9.36l22.98,61.27c2.34,6.24,6.84,9.36,13.51,9.36h350.41" data-line-id="tma"/>
+  <path class="st3" d="M495.75,243.98h184.09c6.67,0,10.76-3.25,12.27-9.74l25.47-109.52c1.51-6.49,5.6-9.74,12.27-9.74h2.16" data-line-id="tma"/>
+  <path class="st9" d="M782,114.98h67" data-line-id="tma"/>
+  <path class="st9" d="M1046.5,114.98h80.5" data-line-id="tma"/>
+  <path class="st9" d="M1177,114.98h85" data-line-id="tma"/>
+  <path class="st9" d="M1854.5,114.98h50" data-line-id="tma"/>
+  <path class="st3" d="M1954.5,114.98h-13.5c-6.67,0-8.9,3.15-6.71,9.44l23.41,67.12c2.2,6.29,6.63,9.44,13.29,9.44h152" data-line-id="tma"/>
+  <path class="st9" d="M1954.5,406.21h168.5" data-line-id="tma"/>
+  <path class="st3" d="M1954.5,406.21h3c6.67,0,12,2.67,16,8l18,24c4,5.33,9.33,8,16,8h115.5" data-line-id="tma"/>
+  <path class="st9" d="M732,114.98h50" data-line-id="tma"/>
+  <path class="st9" d="M1127,114.98h50" data-line-id="tma"/>
+  <path class="st9" d="M1904.5,114.98h10" data-line-id="tma"/>
+  <path class="st9" d="M1914.5,114.98h40" data-line-id="tma"/>
+  <path class="st3" d="M1914.5,114.98h1c6.67,0,10,3.33,10,10v263.23c0,12,6,18,18,18h11" data-line-id="tma"/>
+  <path class="st8" d="M50,153.98h197.5" data-line-id="backsub"/>
+  <path class="st2" d="M247.5,153.98h18.04c6.67,0,11.91,2.73,15.72,8.2l18.56,26.6c3.81,5.47,9.06,8.2,15.72,8.2h180.21" data-line-id="backsub"/>
+  <path class="st8" d="M849,110.98h197.5" data-line-id="backsub"/>
+  <path class="st8" d="M1262,110.98h197.5" data-line-id="backsub"/>
+  <path class="st8" d="M1459.5,110.98h197.5" data-line-id="backsub"/>
+  <path class="st8" d="M1657,110.98h197.5" data-line-id="backsub"/>
+  <path class="st2" d="M2123,402.21h35.3c6.67,0,12.77,1.85,18.32,5.55l13.36,8.91c5.55,3.7,11.65,5.55,18.32,5.55h349.2" data-line-id="backsub"/>
+  <path class="st2" d="M2123,442.21h50.09M2188.09,442.21h288.91c6.67,0,12.77-1.85,18.32-5.55l13.36-8.91c5.55-3.7,11.65-5.55,18.32-5.55h30.5" data-line-id="backsub"/>
+  <path class="st2" d="M495.75,196.98h181.25c6.67,0,11.1-3.15,13.29-9.44l23.41-67.12c2.2-6.29,6.63-9.44,13.29-9.44h5" data-line-id="backsub"/>
+  <path class="st8" d="M782,110.98h67" data-line-id="backsub"/>
+  <path class="st8" d="M1046.5,110.98h80.5" data-line-id="backsub"/>
+  <path class="st8" d="M1177,110.98h85" data-line-id="backsub"/>
+  <path class="st8" d="M1854.5,110.98h50" data-line-id="backsub"/>
+  <path class="st8" d="M1954.5,110.98h484.5" data-line-id="backsub"/>
+  <path class="st8" d="M1954.5,402.21h168.5" data-line-id="backsub"/>
+  <path class="st2" d="M1954.5,402.21h5c6.67,0,12,2.67,16,8l18,24c4,5.33,9.33,8,16,8h113.5" data-line-id="backsub"/>
+  <path class="st8" d="M732,110.98h50" data-line-id="backsub"/>
+  <path class="st8" d="M1127,110.98h50" data-line-id="backsub"/>
+  <path class="st8" d="M1904.5,110.98h10" data-line-id="backsub"/>
+  <path class="st8" d="M1914.5,110.98h40" data-line-id="backsub"/>
+  <path class="st2" d="M1914.5,110.98h1c9.33,0,14,4.67,14,14v263.23c0,9.33,4.67,14,14,14h11" data-line-id="backsub"/>
+  <path class="st7" d="M50,149.98h197.5" data-line-id="mif"/>
+  <path class="st7" d="M849,106.98h197.5" data-line-id="mif"/>
+  <path class="st7" d="M1262,106.98h197.5" data-line-id="mif"/>
+  <path class="st7" d="M1459.5,106.98h197.5" data-line-id="mif"/>
+  <path class="st7" d="M1657,106.98h197.5" data-line-id="mif"/>
+  <path class="st1" d="M2123,398.21h36.51c6.67,0,12.77,1.85,18.32,5.55l13.36,8.91c5.55,3.7,11.65,5.55,18.32,5.55h347.99" data-line-id="mif"/>
+  <path class="st1" d="M2123,438.21h50.09M2188.09,438.21h287.7c6.67,0,12.77-1.85,18.32-5.55l13.36-8.91c5.55-3.7,11.65-5.55,18.32-5.55h31.71" data-line-id="mif"/>
+  <path class="st7" d="M782,106.98h67" data-line-id="mif"/>
+  <path class="st7" d="M1046.5,106.98h80.5" data-line-id="mif"/>
+  <path class="st7" d="M1177,106.98h85" data-line-id="mif"/>
+  <path class="st7" d="M1854.5,106.98h50" data-line-id="mif"/>
+  <path class="st7" d="M1954.5,106.98h484.5" data-line-id="mif"/>
+  <path class="st7" d="M1954.5,398.21h168.5" data-line-id="mif"/>
+  <path class="st1" d="M1954.5,398.21h7c6.67,0,12,2.67,16,8l18,24c4,5.33,9.33,8,16,8h111.5" data-line-id="mif"/>
+  <path class="st7" d="M732,106.98h50" data-line-id="mif"/>
+  <path class="st7" d="M1127,106.98h50" data-line-id="mif"/>
+  <path class="st7" d="M1904.5,106.98h10" data-line-id="mif"/>
+  <path class="st7" d="M1914.5,106.98h40" data-line-id="mif"/>
+  <path class="st1" d="M1914.5,106.98h1c12,0,18,6,18,18v263.23c0,6.67,3.33,10,10,10h11" data-line-id="mif"/>
+  <path class="st1" d="M247.5,149.98h256c6.67,0,11.91-2.73,15.72-8.2l18.56-26.6c3.81-5.47,9.06-8.2,15.72-8.2h84.25" data-line-id="mif"/>
+  <path class="st7" d="M637.75,106.98h94.25" data-line-id="mif"/>
+  <path class="st7" d="M247.5,149.98h168" data-line-id="mif"/>
+  <path class="st1" d="M415.5,149.98h155.16c6.67,0,11.91-2.73,15.72-8.2l18.56-26.6c3.81-5.47,9.06-8.2,15.72-8.2h111.34" data-line-id="mif"/>
+  <g data-node-cx="80.0" data-node-cy="167.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="BASICPY" data-node-r="6.0" data-node-region="preprocessing" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M50,143.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="preprocessing" data-section-name="Preprocessing" data-station-id="BASICPY" data-station-label="BASICPY" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="277.5" data-node-cy="167.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="ASHLAR" data-node-r="6.0" data-node-region="preprocessing" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M247.5,143.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="preprocessing" data-section-name="Preprocessing" data-station-id="ASHLAR" data-station-label="ASHLAR" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="525.8" data-node-cy="210.0" data-node-groups="backsub" data-node-h="12.0" data-node-id="BACKSUB" data-node-r="6.0" data-node-region="preprocessing" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M495.75,190.98h0c3.31,0,6,2.69,6,6h0c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6h0c0-3.31,2.69-6,6-6Z" data-section-id="preprocessing" data-section-name="Preprocessing" data-station-id="BACKSUB" data-station-label="BACKSUB" data-station-lines="backsub"/>
+  </g>
+  <g data-node-cx="525.8" data-node-cy="257.0" data-node-groups="tma" data-node-h="12.0" data-node-id="COREOGRAPH" data-node-r="6.0" data-node-region="preprocessing" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M495.75,237.98h0c3.31,0,6,2.69,6,6h0c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6h0c0-3.31,2.69-6,6-6Z" data-section-id="preprocessing" data-section-name="Preprocessing" data-station-id="COREOGRAPH" data-station-label="COREOGRAPH" data-station-lines="tma"/>
+  </g>
+  <g data-node-cx="879.0" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="TO_SPATIALDATA" data-node-r="6.0" data-node-region="store" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M849,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="store" data-section-name="SpatialData store" data-station-id="TO_SPATIALDATA" data-station-label="TO_SPATIALDATA" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="1076.5" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="SET_CHANNEL_NAMES" data-node-r="6.0" data-node-region="store" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M1046.5,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="store" data-section-name="SpatialData store" data-station-id="SET_CHANNEL_NAMES" data-station-label="SET_CHANNEL_NAMES" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="1292.0" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="MAKE_IMAGE_PATCHES" data-node-r="6.0" data-node-region="segmentation" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M1262,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="segmentation" data-section-name="Segmentation" data-station-id="MAKE_IMAGE_PATCHES" data-station-label="MAKE_IMAGE_PATCHES" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="1489.5" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="PATCH_SEGMENTATION_CELLPOSE" data-node-r="6.0" data-node-region="segmentation" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M1459.5,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="segmentation" data-section-name="Segmentation" data-station-id="PATCH_SEGMENTATION_CELLPOSE" data-station-label="PATCH_SEGMENTATION_CELLPOSE" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="1687.0" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="RESOLVE_CELLPOSE" data-node-r="6.0" data-node-region="segmentation" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M1657,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="segmentation" data-section-name="Segmentation" data-station-id="RESOLVE_CELLPOSE" data-station-label="RESOLVE_CELLPOSE" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="1884.5" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="AGGREGATE" data-node-r="6.0" data-node-region="segmentation" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M1854.5,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="segmentation" data-section-name="Segmentation" data-station-id="AGGREGATE" data-station-label="AGGREGATE" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="2153.0" data-node-cy="214.0" data-node-groups="tma" data-node-h="12.0" data-node-id="MERGE_SPATIALDATA" data-node-r="6.0" data-node-region="output" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M2123,194.98h0c3.31,0,6,2.69,6,6h0c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6h0c0-3.31,2.69-6,6-6Z" data-section-id="output" data-section-name="Output" data-station-id="MERGE_SPATIALDATA" data-station-label="MERGE_SPATIALDATA" data-station-lines="tma"/>
+  </g>
+  <g data-node-cx="2469.0" data-node-cy="124.0" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="PUBLISH_SPATIALDATA" data-node-r="6.0" data-node-region="output" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M2439,100.98h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="output" data-section-name="Output" data-station-id="PUBLISH_SPATIALDATA" data-station-label="PUBLISH_SPATIALDATA" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="2153.0" data-node-cy="415.2" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="QC_METRICS" data-node-r="6.0" data-node-region="qc" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M2123,392.21h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="qc" data-section-name="Quality control" data-station-id="QC_METRICS" data-station-label="QC_METRICS" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="2153.0" data-node-cy="455.2" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="QC_IMAGES" data-node-r="6.0" data-node-region="qc" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M2123,432.21h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="qc" data-section-name="Quality control" data-station-id="QC_IMAGES" data-station-label="QC_IMAGES" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="2587.5" data-node-cy="435.2" data-node-groups="backsub,mif,tma" data-node-h="20.0" data-node-id="QC_REPORT" data-node-r="6.0" data-node-region="qc" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M2557.5,412.21h0c3.31,0,6,2.69,6,6v8c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6v-8c0-3.31,2.69-6,6-6Z" data-section-id="qc" data-section-name="Quality control" data-station-id="QC_REPORT" data-station-label="QC_REPORT" data-station-lines="backsub,mif,tma"/>
+  </g>
+  <g data-node-cx="2587.5" data-node-cy="499.2" data-node-groups="tma" data-node-h="12.0" data-node-id="MERGE_REPORT" data-node-r="6.0" data-node-region="qc" data-node-rx="6.0" data-node-w="12.0">
+    <path class="st10" d="M2557.5,480.21h0c3.31,0,6,2.69,6,6h0c0,3.31-2.69,6-6,6h0c-3.31,0-6-2.69-6-6h0c0-3.31,2.69-6,6-6Z" data-section-id="qc" data-section-name="Quality control" data-station-id="MERGE_REPORT" data-station-label="MERGE_REPORT" data-station-lines="tma"/>
+  </g>
+  <text class="st4" transform="translate(2076.8564 384.2133)"><tspan x="0" y="0">QC_METRICS</tspan></text>
+  <text class="st4" data-station-id="QC_METRICS" transform="translate(2076.8564 384.2133)"><tspan x="0" y="0">QC_METRICS</tspan></text>
+  <text class="st4" transform="translate(19.14 180.98)"><tspan x="0" y="0">BASICPY</tspan></text>
+  <text class="st4" data-station-id="BASICPY" transform="translate(19.14 180.98)"><tspan x="0" y="0">BASICPY</tspan></text>
+  <text class="st4" transform="translate(789.88 137.98)"><tspan x="0" y="0">TO_SPATIALDATA</tspan></text>
+  <text class="st4" data-station-id="TO_SPATIALDATA" transform="translate(789.88 137.98)"><tspan x="0" y="0">TO_SPATIALDATA</tspan></text>
+  <text class="st4" transform="translate(1179.1765 137.9782)"><tspan x="0" y="0">MAKE_IMAGE_PATCHES</tspan></text>
+  <text class="st4" data-station-id="MAKE_IMAGE_PATCHES" transform="translate(1179.1765 137.9782)"><tspan x="0" y="0">MAKE_IMAGE_PATCHES</tspan></text>
+  <text class="st4" transform="translate(2081.2664 469.2112)"><tspan x="0" y="0">QC_IMAGES</tspan></text>
+  <text class="st4" data-station-id="QC_IMAGES" transform="translate(2081.2664 469.2112)"><tspan x="0" y="0">QC_IMAGES</tspan></text>
+  <text class="st4" transform="translate(2047.8135 223.9782)"><tspan x="0" y="0">MERGE_SPATIALDATA</tspan></text>
+  <text class="st4" data-station-id="MERGE_SPATIALDATA" transform="translate(2047.8135 223.9782)"><tspan x="0" y="0">MERGE_SPATIALDATA</tspan></text>
+  <text class="st4" transform="translate(218.98 135.98)"><tspan x="0" y="0">ASHLAR</tspan></text>
+  <text class="st4" data-station-id="ASHLAR" transform="translate(218.98 135.98)"><tspan x="0" y="0">ASHLAR</tspan></text>
+  <text class="st4" transform="translate(966.5 92.98)"><tspan x="0" y="0">SET_CHANNEL_NAMES</tspan></text>
+  <text class="st4" data-station-id="SET_CHANNEL_NAMES" transform="translate(966.5 92.98)"><tspan x="0" y="0">SET_CHANNEL_NAMES</tspan></text>
+  <text class="st4" transform="translate(1337.1058 92.9803)"><tspan x="0" y="0">PATCH_SEGMENTATION_CELLPOSE</tspan></text>
+  <text class="st4" transform="translate(2358.8716 92.9803)"><tspan x="0" y="0">PUBLISH_SPATIALDATA</tspan></text>
+  <text class="st4" data-station-id="PUBLISH_SPATIALDATA" transform="translate(2358.8716 92.9803)"><tspan x="0" y="0">PUBLISH_SPATIALDATA</tspan></text>
+  <text class="st4" transform="translate(2514.4573 404.2133)"><tspan x="0" y="0">QC_REPORT</tspan></text>
+  <text class="st4" data-station-id="QC_REPORT" transform="translate(2514.4573 404.2133)"><tspan x="0" y="0">QC_REPORT</tspan></text>
+  <text class="st4" transform="translate(2499.3025 509.2112)"><tspan x="0" y="0">MERGE_REPORT</tspan></text>
+  <text class="st4" data-station-id="MERGE_REPORT" transform="translate(2499.3025 509.2112)"><tspan x="0" y="0">MERGE_REPORT</tspan></text>
+  <text class="st4" transform="translate(1584.2498 137.9782)"><tspan x="0" y="0">RESOLVE_CELLPOSE</tspan></text>
+  <text class="st4" data-station-id="RESOLVE_CELLPOSE" transform="translate(1584.2498 137.9782)"><tspan x="0" y="0">RESOLVE_CELLPOSE</tspan></text>
+  <text class="st4" transform="translate(461.13 219.98)"><tspan x="0" y="0">BACKSUB</tspan></text>
+  <text class="st4" data-station-id="BACKSUB" transform="translate(461.13 219.98)"><tspan x="0" y="0">BACKSUB</tspan></text>
+  <text class="st4" transform="translate(445.06 266.98)"><tspan x="0" y="0">COREOGRAPH</tspan></text>
+  <text class="st4" data-station-id="COREOGRAPH" transform="translate(445.06 266.98)"><tspan x="0" y="0">COREOGRAPH</tspan></text>
+  <text class="st4" transform="translate(1811.2125 92.9803)"><tspan x="0" y="0">AGGREGATE</tspan></text>
+  <text class="st4" data-station-id="AGGREGATE" transform="translate(1811.2125 92.9803)"><tspan x="0" y="0">AGGREGATE</tspan></text>
+  <rect class="st0" y="558.21" width="288.8" height="96" rx="6" ry="6"/>
+  <path class="st7" d="M12,582.21h24"/>
+  <text class="st5" transform="translate(48 587.01)"><tspan x="0" y="0">mIF slide</tspan></text>
+  <path class="st8" d="M12,606.21h24"/>
+  <text class="st5" transform="translate(48 611.01)"><tspan x="0" y="0">WSI, background subtracted</tspan></text>
+  <path class="st9" d="M12,630.21h24"/>
+  <text class="st5" transform="translate(48 635.01)"><tspan x="0" y="0">TMA, dearrayed</tspan></text>
+  <text class="st5" transform="translate(2544.0813 669.9803)"><tspan x="0" y="0">created with nf-metro v1.1.0</tspan></text>
 </svg>
