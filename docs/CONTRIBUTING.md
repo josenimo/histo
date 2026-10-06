@@ -11,12 +11,12 @@ Slack channel, and no review rota. If you have found a bug or want to use this, 
 
 Deliberately not duplicated here, because duplicated guidance drifts:
 
-- **[`AGENT_CONTEXT.md`](../AGENT_CONTEXT.md)** — the authoritative project context. Priorities,
+- **[`CLAUDE.md`](../CLAUDE.md)** — the authoritative project context. Priorities,
   architectural decisions, module sourcing rules, container constraints, testing strategy, and the
   rules for agents operating on the HPC cluster. Where it conflicts with generic nf-core defaults,
   it wins.
 - **[`AGENTS.md`](../AGENTS.md)** — the nf-core community agent guidelines, vendored verbatim.
-  `AGENT_CONTEXT.md` layers on top and takes precedence where they conflict.
+  `CLAUDE.md` layers on top and takes precedence where they conflict.
 - **[`ROADMAP.md`](../ROADMAP.md)** — the phased plan, the reasoning behind it, and the tracker.
   Open work goes in this file. GitHub Issues is enabled but unused.
 

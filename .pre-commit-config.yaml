@@ -144,7 +144,7 @@ repos:
       # Revised 2026-08-06. Originally required a stub in every local module. That
       # encoded a rule that turned out to be wrong: five of sopa's eleven modules
       # mutate the SpatialData zarr in place and declare their input as their
-      # output, so an empty stub would be pure ceremony. See AGENT_CONTEXT.md §7.
+      # output, so an empty stub would be pure ceremony. See CLAUDE.md §6.
       #
       # Now requires a stub only where the module declares an output path that is
       # not also an input path, i.e. where it genuinely creates a file. Uses
