@@ -82,15 +82,15 @@ poor fit for it, so images stay in pixel units. Full reasoning and progress in
 Six layers, cheapest and fastest first. Each catches a different class of problem, and
 none of them substitutes for another.
 
-| Layer                    | What it checks                      | Data          | Where             | Time    |
-| ------------------------ | ----------------------------------- | ------------- | ----------------- | ------- |
-| Pre-commit hooks         | Style, and repo-specific rules      | none          | Local commit + CI | seconds |
-| `nf-core pipelines lint` | Template conformance                | none          | CI                | seconds |
-| Unit tests               | Logic inside `bin/` and `tools/`    | none          | CI + local        | seconds |
-| Validation tests         | That bad input is actually rejected | none          | CI + local        | seconds |
-| Stub tests               | Channel topology                    | placeholders  | CI + local        | seconds |
-| Pre-release, exemplar-001 | The WSI path, on real images       | 191 MB, fetched | Cluster, by hand | minutes |
-| Pre-release, exemplar-002 | The TMA path with subtraction      | 953 MB, fetched | Cluster, by hand | minutes |
+| Layer                     | What it checks                      | Data            | Where             | Time    |
+| ------------------------- | ----------------------------------- | --------------- | ----------------- | ------- |
+| Pre-commit hooks          | Style, and repo-specific rules      | none            | Local commit + CI | seconds |
+| `nf-core pipelines lint`  | Template conformance                | none            | CI                | seconds |
+| Unit tests                | Logic inside `bin/` and `tools/`    | none            | CI + local        | seconds |
+| Validation tests          | That bad input is actually rejected | none            | CI + local        | seconds |
+| Stub tests                | Channel topology                    | placeholders    | CI + local        | seconds |
+| Pre-release, exemplar-001 | The WSI path, on real images        | 191 MB, fetched | Cluster, by hand  | minutes |
+| Pre-release, exemplar-002 | The TMA path with subtraction       | 953 MB, fetched | Cluster, by hand  | minutes |
 
 ### Pre-commit hooks — `prek run --all-files`
 

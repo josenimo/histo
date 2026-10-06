@@ -65,13 +65,13 @@ with a cluster and a person.
 
 Between them the two cover every path the pipeline has.
 
-| | exemplar-001 | exemplar-002 |
-| --- | --- | --- |
-| covers | mIF slide, whole-slide | TMA, dearrayed |
-| cycles | 6, 7, 8 — 12 channels | 1, 2, 3 — 12 acquired, 9 after subtraction |
-| backsub | no | **yes**, real autofluorescence channels |
+|                | exemplar-001                        | exemplar-002                                                    |
+| -------------- | ----------------------------------- | --------------------------------------------------------------- |
+| covers         | mIF slide, whole-slide              | TMA, dearrayed                                                  |
+| cycles         | 6, 7, 8 — 12 channels               | 1, 2, 3 — 12 acquired, 9 after subtraction                      |
+| backsub        | no                                  | **yes**, real autofluorescence channels                         |
 | also exercises | BaSiCPy, Ashlar, tiled segmentation | Coreograph, per-core subtraction, `remove`, merge, slide report |
-| download | 191 MB | 953 MB |
+| download       | 191 MB                              | 953 MB                                                          |
 
 ```bash
 export HISTO_EXEMPLARS=/fast/AG_Coscia/$USER/HISTO/exemplars

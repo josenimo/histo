@@ -9,17 +9,17 @@ Priorities, in order: transparency, robustness, troubleshootability.
 
 ## Status
 
-| Phase                  | State                                                                     |
-| ---------------------- | ------------------------------------------------------------------------- |
-| 0. Freeze and diagnose | Done                                                                      |
-| 1. Scaffold            | Done — cloned from nf-core/sopa, rebranded, out-of-scope features removed |
-| 2. Preprocessing half  | Done — BaSiCPy, Ashlar, backsub, Coreograph                               |
-| 3. TMA path            | Done — per-core processing, merged per slide, one QC page for the slide   |
-| 4. Resource profiles   | Done — `size_tiny`/`small`/`medium`/`huge`, `slurm`                       |
-| 5. Containers          | Done — 7 images, manifest, pre-staging documented                         |
-| 6. Testing             | Done — unit, stub and fixture tiers, CI                                   |
+| Phase                  | State                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------- |
+| 0. Freeze and diagnose | Done                                                                                    |
+| 1. Scaffold            | Done — cloned from nf-core/sopa, rebranded, out-of-scope features removed               |
+| 2. Preprocessing half  | Done — BaSiCPy, Ashlar, backsub, Coreograph                                             |
+| 3. TMA path            | Done — per-core processing, merged per slide, one QC page for the slide                 |
+| 4. Resource profiles   | Done — `size_tiny`/`small`/`medium`/`huge`, `slurm`                                     |
+| 5. Containers          | Done — 7 images, manifest, pre-staging documented                                       |
+| 6. Testing             | Done — unit, stub and fixture tiers, CI                                                 |
 | 7. QC report           | Metrics, images, per-core and per-slide reports in; thresholds still need real datasets |
-| 8. Release 1.0.0       | Done — `nf-core pipelines lint --release` clean                           |
+| 8. Release 1.0.0       | Done — `nf-core pipelines lint --release` clean                                         |
 
 Version `1.0.0`. Lint: 262 passed, 42 ignored, 7 warnings, 0 failed, in `--release` mode.
 
@@ -104,11 +104,11 @@ nf-test test tests/exemplar002.nf.test --profile test_exemplar002,singularity,si
 uvx --from nf-core nf-core pipelines lint --release
 ```
 
-| | exemplar-001 | exemplar-002 |
-| --- | --- | --- |
-| path | mIF, whole slide | TMA, dearrayed |
-| cycles | 6, 7, 8 — 12 channels | 1, 2, 3 — 12 acquired, 9 after subtraction |
-| backsub | no | yes, on real autofluorescence channels |
+|                 | exemplar-001                        | exemplar-002                                                    |
+| --------------- | ----------------------------------- | --------------------------------------------------------------- |
+| path            | mIF, whole slide                    | TMA, dearrayed                                                  |
+| cycles          | 6, 7, 8 — 12 channels               | 1, 2, 3 — 12 acquired, 9 after subtraction                      |
+| backsub         | no                                  | yes, on real autofluorescence channels                          |
 | unique coverage | BaSiCPy, Ashlar, tiled segmentation | Coreograph, per-core subtraction, `remove`, merge, slide report |
 
 **Cell-count baselines are not recorded.** Both tests assert only that cells were produced; the
