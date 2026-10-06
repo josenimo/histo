@@ -140,13 +140,14 @@ repos:
           { echo "$f: no versions.yml and no versions topic" >&2; fail=1; }; done; exit $fail' --
 
       # A changed output: block with an unchanged stub: block (vs HEAD) means the stub has rotted.
-      # New files are skipped (module-has-stub covers them). cksum because macOS lacks md5sum.
+      # Comment lines are ignored. New files are skipped (module-has-stub covers them).
+      # cksum because macOS lacks md5sum.
       - id: stub-drift
         name: stub block must change when outputs change
         language: system
         files: '^modules/local/.*/main\.nf$'
         entry: >-
-          bash -c 'ob() { awk "/^[[:space:]]*output:/{f=1;next}
+          bash -c 'ob() { awk "/^[[:space:]]*\/\//{next} /^[[:space:]]*output:/{f=1;next}
           /^[[:space:]]*(script|shell|exec|stub|when):/{f=0} f"; };
           sb() { awk "/^[[:space:]]*stub:/{f=1;next} f"; }; fail=0;
           for f in "$@"; do old=$(git show "HEAD:$f" 2>/dev/null) || continue;
