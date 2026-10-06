@@ -669,8 +669,19 @@ def rejectUnknownParams(params) {
     def declared = schemaParams().keySet()
 
     // Set by the tooling rather than by a user, so absent from the schema by design.
+    //
+    // Getting this list wrong is not a small failure. Any nextflow_pipeline test
+    // loads tests/nextflow.config, so a tooling param missing from here aborts the
+    // run before a single process starts -- which is what happened to
+    // modules_testdata_base_path, and is one of the two independent reasons the
+    // fixture test in Phase 8's release checklist could not run.
     def injected = [
         'nf_test_output',  // nf-test, which is also in nf-schema's own default ignore list
+        // Set in tests/nextflow.config for the nf-core module tests, which address
+        // it directly (modules/nf-core/ashlar/tests/main.nf.test among others). Not
+        // a pipeline parameter and deliberately not in the schema, but present on
+        // every nf-test run of the pipeline itself.
+        'modules_testdata_base_path',
     ] as Set
 
     def unknown = (params.keySet() - declared - injected).sort()

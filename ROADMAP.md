@@ -9,19 +9,19 @@ Priorities, in order: transparency, robustness, troubleshootability.
 
 ## Status
 
-| Phase                  | State                                                                     |
-| ---------------------- | ------------------------------------------------------------------------- |
-| 0. Freeze and diagnose | Done                                                                      |
-| 1. Scaffold            | Done — cloned from nf-core/sopa, rebranded, out-of-scope features removed |
-| 2. Preprocessing half  | Done — BaSiCPy, Ashlar, backsub, Coreograph                               |
-| 3. TMA path            | Done — per-core processing, merged per slide                              |
-| 4. Resource profiles   | Done — `size_tiny`/`small`/`medium`/`huge`, `slurm`                       |
-| 5. Containers          | Done — 7 images, manifest, pre-staging documented                         |
-| 6. Testing             | Done — unit, stub and fixture tiers, CI                                   |
-| 7. QC report           | Metrics, images and report wired in; thresholds still need real datasets  |
-| 8. Release 1.0.0       | Not started                                                               |
+| Phase                  | State                                                                                   |
+| ---------------------- | --------------------------------------------------------------------------------------- |
+| 0. Freeze and diagnose | Done                                                                                    |
+| 1. Scaffold            | Done — cloned from nf-core/sopa, rebranded, out-of-scope features removed               |
+| 2. Preprocessing half  | Done — BaSiCPy, Ashlar, backsub, Coreograph                                             |
+| 3. TMA path            | Done — per-core processing, merged per slide, one QC page for the slide                 |
+| 4. Resource profiles   | Done — `size_tiny`/`small`/`medium`/`huge`, `slurm`                                     |
+| 5. Containers          | Done — 7 images, manifest, pre-staging documented                                       |
+| 6. Testing             | Done — unit, stub and fixture tiers, CI                                                 |
+| 7. QC report           | Metrics, images, per-core and per-slide reports in; thresholds still need real datasets |
+| 8. Release 1.0.0       | Done — `nf-core pipelines lint --release` clean                                         |
 
-Version `0.1.0dev`. Lint: 263 passed, 42 ignored, 6 warnings, 0 failed.
+Version `1.0.0`. Lint: 262 passed, 42 ignored, 7 warnings, 0 failed, in `--release` mode.
 
 ## Verified on real data
 
@@ -80,7 +80,44 @@ Ordered by how much harder each becomes if deferred.
    metrics originally listed here are still absent: Ashlar's registration residual, which exists
    only in its stderr (see Longer term), and run-level resource QC, which is structurally blocked
    (see Open).
-6. **Phase 8, release.** Tag off `main`, `nf-core pipelines lint --release` first.
+6. **Phase 8, release.** Preparation is done and `nf-core pipelines lint --release` is clean.
+   What remains is the checklist below, then merge to `main` and tag.
+
+## Before every release
+
+Two runs on the cluster, by hand. Between them they cover every path the pipeline has, and
+neither can run in CI: the container images come to about 8.8 GB on disk for the mIF path and
+14.7 GB with Coreograph, against roughly 14 GB free on a GitHub-hosted runner and a 10 GB cache
+quota, re-pulled each run. nf-core reaches the same conclusion and runs its full tests on AWS at
+release time; this does the same with a cluster and a person.
+
+```bash
+export HISTO_EXEMPLARS=/fast/AG_Coscia/$USER/HISTO/exemplars
+bash tools/fetch_exemplars.sh          # 1.1 GB, public mcmicro S3, no credentials
+
+export TMPDIR=/fast/AG_Coscia/$USER/tmp && mkdir -p "$TMPDIR"
+export NXF_TEMP="$TMPDIR" NXF_OPTS="-Djava.io.tmpdir=$TMPDIR" NXF_OFFLINE=true
+
+nf-test test tests/exemplar001.nf.test --profile test_exemplar001,singularity,size_small,slurm
+nf-test test tests/exemplar002.nf.test --profile test_exemplar002,singularity,size_small,slurm
+
+uvx --from nf-core nf-core pipelines lint --release
+```
+
+|                 | exemplar-001                        | exemplar-002                                                    |
+| --------------- | ----------------------------------- | --------------------------------------------------------------- |
+| path            | mIF, whole slide                    | TMA, dearrayed                                                  |
+| cycles          | 6, 7, 8 — 12 channels               | 1, 2, 3 — 12 acquired, 9 after subtraction                      |
+| backsub         | no                                  | yes, on real autofluorescence channels                          |
+| unique coverage | BaSiCPy, Ashlar, tiled segmentation | Coreograph, per-core subtraction, `remove`, merge, slide report |
+
+**Cell-count baselines are not recorded.** Both tests assert only that cells were produced; the
+±2% windows are commented out in the test files. Record them from the first green run and
+uncomment. A number guessed in advance is not a baseline, it is something for the first run to
+be unfairly judged against.
+
+Nothing checks H&E, `use_preprocessing = false` on real data, or StarDist. The first is
+unimplemented, the second has stub coverage in `tests/default.nf.test`, and the third has none.
 
 ## Longer term
 
@@ -187,22 +224,22 @@ blocks 1.0.0 on a decision.
   This pipeline only routes to the latter, so there is no unit mismatch today, but there would be
   if the parameter were ever wired to resolve.
 
+- **A marker sheet may still mark its only `dna` channel for removal, and nothing catches it at
+  startup.** `validateMarkerSheet` requires a `dna` channel in every cycle, but checks the sheet as
+  written; backsub then drops rows whose `remove` column is set, so the `markerout` the QC step
+  reads can have no `dna` channel left. Since the QC layer began trusting `channel_role`, this
+  fails loudly rather than silently falling back to a name match — but it fails in `QC_IMAGES`,
+  after stitching, subtraction and segmentation have already run. The check belongs in
+  `validateMarkerSheet`, where it costs nothing: reject a row that is both `channel_role = dna`
+  and `remove`, naming the cycle it would strip. Nobody has hit it; it is written down because the
+  entry that predicted it was deleted when the rest of that work was done.
+
 - **Resource profiles are estimates** apart from `size_tiny`. Rewrite from `peak_rss` and
   `realtime` in the trace once a genuinely large slide has run.
 
 - **H&E support** is planned; only `ome_tif` mIF input works today.
 
 ### Gaps in the tests
-
-- **The marker sheet now says which channel is a nuclear stain, but the QC scripts do not read it
-  yet.** `channel_role` is a required column and `dna` is one of its values, validated to appear in
-  every cycle. The cross-cycle photobleaching check and the cluster snapshots still find the
-  nuclear channel by matching the marker name against `--nuclear-pattern`, defaulting to `DAPI`,
-  which works on every dataset seen so far and goes quiet on a Hoechst-stained one. Replacing the
-  pattern with the column is the next branch, and touches `bin/qc_metrics.py`, `bin/qc_images.py`
-  and their tests. One wrinkle to handle there: backsub drops rows whose `remove` column is set, so
-  a sheet marking a `dna` channel for removal validates on the way in and has no `dna` channel left
-  in the `markerout` the QC step reads.
 
 - **`bin/set_channel_names.py` `main()` has no test for element selection.**
   `tests/unit/test_set_channel_names.py` covers marker sheet parsing and `channel_labels()`, but not
@@ -211,10 +248,16 @@ blocks 1.0.0 on a decision.
   part it relies on. Needs a real spatialdata store rather than the JSON fixture `make_store`
   builds, so it is slower than the tests beside it.
 
-- **Two inherited nf-test files** still snapshot nf-core/sopa's outputs. Rewrite as property
-  assertions rather than regenerating.
+- **The two pre-release checks have never run.** `tests/exemplar001.nf.test` and
+  `tests/exemplar002.nf.test` replace the old 43 MB fixture test, which could not run either --
+  it wanted a samplesheet that existed nowhere. These at least fetch their own data. Until one
+  goes green on the cluster, the TMA path, background subtraction and the whole real-pixel tier
+  are asserted by nothing.
 
-- **No real-data test** for the TMA path, background subtraction, or `use_preprocessing = false`.
+- **`MERGE_REPORT`'s guards have no automated test.** It must run on a TMA with QC on, and must
+  not run without a TMA or without QC. All three were verified by hand with `-stub` pipeline runs.
+  An automated version needs a samplesheet whose `image_tiles` paths are absolute, which cannot be
+  committed, so it wants a generated sheet in the same spirit as `tools/make_fixture_sheets.sh`.
 
 ### Findings in the tooling
 

@@ -2,7 +2,7 @@
     "$schema": "https://json-schema.org/draft/2020-12/schema",
     "$id": "https://raw.githubusercontent.com/josenimo/histo/main/nextflow_schema.json",
     "title": "josenimo/histo pipeline parameters",
-    "description": "Processing, segmentation and quantification of H&E and multiplex immunofluorescence images",
+    "description": "Processing, segmentation and quantification of multiplex immunofluorescence (mIF) images",
     "type": "object",
     "$defs": {
         "input_output_options": {

@@ -1,0 +1,123 @@
+// Pre-release check 1 of 2: the WSI path, on real pixels.
+//
+// CLUSTER ONLY. Needs the containers, so it does not run in CI. That is a decision
+// with numbers behind it rather than a gap: the images for this path come to about
+// 8.8 GB on disk against roughly 14 GB free on a GitHub runner and a 10 GB cache
+// quota, re-pulled every run. Tagged `exemplar` and excluded from the CI tags.
+//
+//     export HISTO_EXEMPLARS=/fast/AG_Coscia/$USER/HISTO/exemplars
+//     bash tools/fetch_exemplars.sh
+//     nf-test test tests/exemplar001.nf.test \
+//         --profile test_exemplar001,singularity,size_small,slurm
+//
+// `test_exemplar001` must be repeated on the command line even though it is declared
+// below. nf-test's --profile REPLACES the `profile` directive rather than adding to
+// it, so passing only the execution profiles silently drops this one and the run
+// fails with "Missing required parameter(s): input" -- an error that says nothing
+// about profiles. Prefixing with `+` appends instead: --profile=+singularity,...
+//
+// Assertions are on properties, not checksums. Cellpose output moves with version
+// and hardware, so a snapshot of segmentation results would fail for reasons that
+// have nothing to do with this pipeline. Everything below either cannot drift
+// (channel names, element names) or is given a tolerance.
+//
+// BASELINE NOT YET RECORDED. The cell-count assertion is commented out until a real
+// run supplies the number, because a baseline invented in advance is not a baseline
+// -- it is a guess that the first run will be judged against. Fill it in from the
+// first green run and uncomment.
+
+nextflow_pipeline {
+
+    name "Exemplar-001: the WSI path end to end"
+    script "../main.nf"
+    profile "test_exemplar001"
+    tag "exemplar"
+
+    test("three mIF cycles stitch, segment and reach a published store") {
+
+        when {
+            params {
+                outdir = "$outputDir"
+            }
+        }
+
+        then {
+            def zarr = "$outputDir/exemplar-001.zarr"
+            def slurp = new groovy.json.JsonSlurper()
+
+            def channels = slurp
+                .parse(file("${zarr}/images/exemplar-001/zarr.json"))
+                .attributes.ome.omero.channels
+                .collect { it.label }
+
+            def cells = slurp.parse(file("${zarr}/tables/table/X/zarr.json")).shape[0]
+            def imageShape = slurp.parse(file("${zarr}/images/exemplar-001/s0/zarr.json")).shape
+
+            def ran = workflow.trace.succeeded().collect { it.name }
+            def names = { proc -> ran.findAll { it.contains(proc) } }
+
+            def metrics = slurp.parse(file("$outputDir/qc/exemplar-001_qc.json"))
+
+            assertAll(
+                { assert workflow.success },
+
+                // Exactly the marker sheet, in channel_number order. The one assertion
+                // that cannot drift: if it fails, SET_CHANNEL_NAMES broke or was
+                // skipped, and every downstream column name is wrong.
+                { assert channels == [
+                    'DNA_6', 'ELANE', 'CD57', 'CD45',
+                    'DNA_7', 'CD11B', 'SMA', 'CD16',
+                    'DNA_8', 'ECAD', 'FOXP3', 'NCAM',
+                ] },
+                { assert imageShape[0] == 12 },
+
+                // Three cycles in, one stitched image out.
+                { assert names("ASHLAR").size() == 1 },
+                { assert names("BASICPY").size() == 3 },
+
+                // Segmentation genuinely tiled. One task would mean the image became a
+                // single patch and boundary resolution went untested.
+                { assert names("PATCH_SEGMENTATION_CELLPOSE").size() > 1 },
+
+                // The plain path: neither of these may run under this profile.
+                { assert names("BACKSUB").isEmpty() },
+                { assert names("COREOGRAPH").isEmpty() },
+                { assert names("MERGE_SPATIALDATA").isEmpty() },
+                { assert names("MERGE_REPORT").isEmpty() },
+
+                // The elements downstream analysis expects.
+                { assert file("${zarr}/images/exemplar-001").exists() },
+                { assert file("${zarr}/shapes/cellpose_boundaries").exists() },
+                { assert file("${zarr}/shapes/image_patches").exists() },
+                { assert file("${zarr}/tables/table").exists() },
+                { assert file("$outputDir/preprocessing/registration/exemplar-001.ome.tif").exists() },
+
+                // QC ran and reached its conclusions from the sheet rather than from a
+                // name guess. DNA_6/7/8 contain no "DAPI", so a run that reports a name
+                // pattern here has regressed to matching marker names.
+                { assert metrics.channels.roles.dna == ['DNA_6', 'DNA_7', 'DNA_8'] },
+                { assert metrics.cycle_ratio.available },
+                { assert metrics.cycle_ratio.nuclear_selected_by == "channel_role 'dna'" },
+                { assert metrics.cycle_ratio.first_channel == 'DNA_6' },
+                { assert metrics.cycle_ratio.last_channel == 'DNA_8' },
+                // No subtraction ran, so there is nothing to compare against and the
+                // block must be absent rather than empty.
+                { assert !metrics.containsKey('before') },
+                { assert file("$outputDir/qc/exemplar-001_qc_report.html").exists() },
+
+                // Provenance for every process that ran. A missing entry means a module
+                // lost its version capture, which is invisible until someone tries to
+                // trace a result back to the tools that produced it.
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('ASHLAR') },
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('BASICPY') },
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('SET_CHANNEL_NAMES') },
+                { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('AGGREGATE') },
+
+                // Sanity only, until a baseline exists: segmentation produced cells at
+                // all. Replace with the recorded window once a run has supplied one.
+                { assert cells > 0 },
+                // { assert cells > BASELINE * 0.98 && cells < BASELINE * 1.02 },
+            )
+        }
+    }
+}
