@@ -1,32 +1,8 @@
 #!/usr/bin/env python3
-"""Render the QC images and cluster the cells, writing PNGs and a JSON index.
+"""Render QC images from a SpatialData store and Leiden-cluster its cells.
 
-Separate from qc_metrics.py on purpose. That script is a 23-second pass over the
-pixels and imports only zarr, numpy and pyarrow. This one builds a nearest-neighbour
-graph over every cell and rasterises polygons, so it takes minutes and needs scanpy,
-shapely and PIL. Keeping them apart means the fast numbers do not wait on the slow
-pictures, and a failure here does not cost the metrics.
-
-Nothing new is needed in the container. scanpy and igraph are direct sopa
-dependencies, so Leiden runs through scanpy's igraph flavour with no leidenalg;
-geopandas brings shapely for the segmentation polygons, and spatialdata-plot brings
-matplotlib and therefore PIL.
-
-What it produces, and why each one is a check rather than a picture:
-
-Segmentation crops. Numbers cannot show whether a mask follows a cell. Windows are
-picked across the density range instead of at random, because segmentation fails
-differently where cells are packed than where they are sparse, and a random sample
-of a mostly-empty slide is mostly empty background.
-
-Cluster heatmap. Cells are grouped on their marker intensities alone, with no
-spatial input, so the clusters are a statement about the staining. A run whose
-markers did not work produces one undifferentiated blob, which is visible here and
-in nothing else the report shows.
-
-Representative cells. A cluster is only trustworthy if its cells look like what its
-marker profile claims, so each cluster shows two cells in its own top marker beside
-the nuclear stain, with the mask drawn on.
+Reads the store and optional marker sheet; writes segmentation crops, per-cluster cell
+snapshots and qc_images.json. Kept apart from qc_metrics.py because it takes minutes.
 """
 
 from __future__ import annotations
@@ -37,31 +13,17 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Marker in magenta, nuclear in green: the conventional two-colour microscopy pair,
-# and the one that stays distinguishable under the common colour-vision deficiencies,
-# unlike red and green. The mask goes on in white over both.
+# Magenta and green stay distinguishable under common colour-vision deficiencies.
 MARKER_RGB = (1.0, 0.0, 1.0)
 NUCLEAR_RGB = (0.0, 1.0, 0.0)
-# Red at 80% opacity over white nuclei on the crops. The base is grey, so r == g == b
-# at every pixel and a saturated hue cannot be produced by the data -- the mask can
-# never be mistaken for the structure it outlines, which is where that confusion would
-# cost most. The alpha lets the pixels under the line still read.
+# Saturated red cannot occur in the greyscale crop, so the mask never looks like data.
 CROP_MASK_RGBA = (208, 59, 59, 204)
-# White for the neighbouring cells on a snapshot, yellow for the one the cluster is
-# about: without that, a reader cannot tell which of a dozen outlined cells is the
-# subject.
 MASK_RGB = (255, 255, 255)
 TARGET_MASK_RGB = (255, 214, 0)
 
 
 def _qc_metrics():
-    """The sibling module, importable whether or not bin/ is on the path.
-
-    These scripts are executables rather than an installed package, so main() has
-    always had to put its own directory on sys.path. Guarding the insert keeps a
-    repeated call from growing the path, which matters now that module-level
-    functions reach for the sibling too.
-    """
+    """Import the sibling qc_metrics module, adding bin/ to sys.path once."""
     here = str(Path(__file__).resolve().parent)
     if here not in sys.path:
         sys.path.insert(0, here)
@@ -75,18 +37,11 @@ def select_nuclear_channels(
     marker_rows: list[dict[str, Any]] | None,
     pattern: str | None = None,
 ) -> tuple[list[str], str]:
-    """The store's nuclear channels, and how they were identified.
+    """Return the store's nuclear channels and a description of how they were found.
 
-    Two lists are in play and they are not the same: the marker sheet says what was
-    acquired, and `channel_names` says what survived to the table. A channel dropped
-    by `remove` or by background subtraction is in the first only, so the sheet's
-    answer is intersected with the store's and ordered by the store's.
-
-    Returns an empty list rather than raising, so the caller can name the route in
-    the error. That distinction is the bug this replaced: the old code matched
-    "DAPI" against the channel names and reported "no channel matching 'DAPI'",
-    which on a sheet whose stains are DNA_6, DNA_7 and DNA_8 read as a missing
-    channel rather than as a lookup that never opened the sheet.
+    The sheet's nuclear rows are intersected with `channel_names` (in store order),
+    since removed or subtracted channels are absent from the table. Returns an empty
+    list rather than raising so the caller can name the route in its error.
     """
     qc_metrics = _qc_metrics()
 
@@ -104,22 +59,7 @@ def select_nuclear_channels(
 
 
 def clustering_exclusions(nuclear: list[str], marker_rows: list[dict[str, Any]] | None) -> dict[str, str]:
-    """Channels held out of clustering, mapped to why.
-
-    Only biological readouts should define a cluster. Nuclear stain is in every cell
-    by construction, an autofluorescence channel is an instrument reading acquired to
-    be subtracted, and a blank channel is expected to be dark; none separates cell
-    types, and all three pull the graph toward staining intensity instead.
-
-    This used to key off the `background` column alone, which caught an
-    autofluorescence channel only when some other channel happened to point at it,
-    and never caught a blank channel at all -- so an all-but-empty channel could
-    define a cluster of its own. `channel_role` states both outright.
-
-    The reason is carried rather than just the name: a reader asking why a marker is
-    missing from the heatmap could not tell an autofluorescence channel from a
-    nuclear one from a typo in the sheet.
-    """
+    """Map channels held out of clustering (nuclear, autofluorescence, blank, background) to the reason."""
     channels_with_role = _qc_metrics().channels_with_role
 
     excluded = {c: "nuclear stain" for c in nuclear}
@@ -134,12 +74,7 @@ def clustering_exclusions(nuclear: list[str], marker_rows: list[dict[str, Any]] 
 
 
 def read_boundaries(sdata_path: Path, name: str = "cellpose_boundaries") -> Any:
-    """The segmentation polygons, as a GeoDataFrame indexed like the table's rows.
-
-    Read with geopandas rather than by decoding WKB here: the file is a GeoParquet
-    written by geopandas, and its own reader is the only thing guaranteed to agree
-    with it about geometry and index order.
-    """
+    """Read the segmentation polygons as a GeoDataFrame indexed like the table's rows."""
     import geopandas as gpd
 
     path = sdata_path / "shapes" / name / "shapes.parquet"
@@ -149,11 +84,9 @@ def read_boundaries(sdata_path: Path, name: str = "cellpose_boundaries") -> Any:
 
 
 def window_counts(centroids: Any, shape_yx: tuple[int, int], window: int) -> Any:
-    """Cells per non-overlapping window over the whole image.
+    """Count cells per non-overlapping window; returns a (ny, nx) array.
 
-    The grid used to choose what to show. Non-overlapping unlike the pipeline's
-    patches, because these windows are picture frames rather than work units and a
-    cell counted twice would distort the density ranking.
+    `centroids` is (n, 2) in x, y order; `shape_yx` is (height, width) in pixels.
     """
     import numpy as np
 
@@ -168,16 +101,10 @@ def window_counts(centroids: Any, shape_yx: tuple[int, int], window: int) -> Any
 
 
 def pick_windows(counts: Any, n: int = 6) -> list[dict[str, Any]]:
-    """Windows spanning the density range, labelled by where they sit in it.
+    """Pick n non-empty windows evenly across the density ranking, labelled dense/medium/sparse.
 
-    Deliberately not a random sample. Segmentation fails differently in packed
-    tissue, where masks merge, than at a sparse edge, where debris gets segmented as
-    cells, and a random draw from a slide that is mostly background returns mostly
-    background. Empty windows are excluded: there is nothing to inspect in them and
-    the count already reports how many there are.
-
-    Picks evenly across the ranking rather than taking the top n, so the set covers
-    dense, middling and sparse instead of six variations of crowded.
+    Not random: segmentation fails differently in packed and sparse tissue, and a
+    random draw from a mostly empty slide is mostly background.
     """
     import numpy as np
 
@@ -187,7 +114,6 @@ def pick_windows(counts: Any, n: int = 6) -> list[dict[str, Any]]:
     values = counts[ys, xs]
     order = np.argsort(values)[::-1]
     n = min(n, len(order))
-    # Evenly spaced positions in the sorted ranking, ends included.
     picks = np.linspace(0, len(order) - 1, n).round().astype(int)
 
     out = []
@@ -214,13 +140,7 @@ def pick_windows(counts: Any, n: int = 6) -> list[dict[str, Any]]:
 
 
 def stretch(plane: Any, lo: float, hi: float) -> Any:
-    """Map an intensity window onto 0..255 with a stated pair of bounds.
-
-    Linear between two explicit percentiles, not auto-levelled per crop. Every crop
-    in a set uses the same pair, so a dim region looks dim instead of being
-    brightened into looking like a dense one, and the bounds go into the JSON so the
-    picture states how it was made.
-    """
+    """Linearly map intensities between lo and hi onto uint8 0..255."""
     import numpy as np
 
     if hi <= lo:
@@ -250,14 +170,9 @@ def draw_outlines(
     colour: tuple[int, ...] = MASK_RGB,
     width: int = 1,
 ) -> int:
-    """Draw polygon boundaries, outline only, over a PIL image.
+    """Draw polygon outlines over a PIL image offset by (x0, y0); returns the number drawn.
 
-    Outline rather than fill, because the point is to see whether the mask follows
-    the cell it claims: a filled mask hides the pixels a reader is trying to judge.
-
-    Coordinates are shifted into the window rather than the polygons being clipped to
-    it. PIL discards what falls outside, and a cell straddling the edge should show
-    the part of its outline that is inside the frame.
+    Polygons are shifted, not clipped; PIL discards what falls outside the frame.
     """
     from PIL import ImageDraw
 
@@ -301,8 +216,7 @@ def render_crops(
     if not picks:
         return []
 
-    # One pair of display bounds for the whole set, taken from the windows actually
-    # shown, so the crops are comparable with each other.
+    # One pair of display bounds for the whole set so the crops are comparable.
     planes = []
     for pick in picks:
         x0, y0 = pick["grid_x"] * window, pick["grid_y"] * window
@@ -346,14 +260,7 @@ def _box(x0: float, y0: float, x1: float, y1: float) -> Any:
 
 
 def cluster_tree(labels_by_resolution: list[Any], resolutions: list[float]) -> dict[str, Any]:
-    """How clusters split as resolution rises, as nodes and the cells flowing between.
-
-    The clustree idea: one row per resolution, and an edge wherever cells from a
-    cluster at one resolution end up in a cluster at the next. A resolution that only
-    subdivides existing groups produces a clean branching tree; one that reshuffles
-    membership produces crossing edges, and that is the signal that the extra clusters
-    are not refining anything real.
-    """
+    """Build a clustree-style graph: one level per resolution, edges for cells moving between clusters."""
     import numpy as np
 
     levels = []
@@ -399,38 +306,24 @@ def cluster_cells(
     stability_floor: float = 0.9,
     seed: int = 0,
 ) -> dict[str, Any]:
-    """Leiden clusters on arcsinh-transformed mean intensities.
+    """Leiden-cluster cells on arcsinh-transformed, per-channel scaled mean intensities.
 
-    arcsinh rather than log: it is defined at zero, which matters because background
-    subtraction leaves a great many exact zeros, and log would need a pseudocount
-    chosen out of thin air. The cofactor sets where the curve stops being linear and
-    starts being logarithmic, so it belongs near the noise level and is an option
-    rather than a constant.
+    Args:
+        x: cells by channels matrix, columns ordered as `channel_names`.
+        cofactor: fixed arcsinh cofactor; 0 or less derives one per channel.
+        max_cells: subsample size; 0 clusters all cells.
+        requested_resolution: overrides the stability-based choice when not None.
 
-    Scaled per channel afterwards, because Leiden works on distances and an unscaled
-    matrix would let whichever marker happens to be brightest dominate the graph.
-
-    Subsamples above `max_cells`. The graph is quadratic in spirit and 142k cells
-    costs minutes; a QC view of cluster structure does not improve past a few tens of
-    thousands. The count is reported so the figure is not mistaken for all cells.
+    Returns:
+        A dict of results; keys starting with "_" hold arrays for later rendering.
     """
     import numpy as np
 
     keep = [channel_names.index(c) for c in use_channels]
     values = np.asarray(x, dtype=np.float64)[:, keep]
 
-    # A per-channel cofactor, taken from the channel, instead of one number for all of
-    # them. The cofactor is where arcsinh stops being linear and starts being
-    # logarithmic, so it belongs at the boundary between a channel's noise and its
-    # signal -- and on real data those boundaries differ by more than tenfold between
-    # channels, from CD38 peaking at 3,337 to 647_bg at 19,200. A single cofactor
-    # therefore compresses some channels almost not at all and others into a straight
-    # line, which biases the distances Leiden works on before it starts.
-    #
-    # The median of a channel's positive values estimates that boundary: most cells are
-    # negative for any given marker, so the middle of the positive values sits in the
-    # background rather than in the bright tail. A fixed --arcsinh-cofactor still wins
-    # if given, because a known instrument noise level beats an estimate.
+    # Per-channel cofactor (median of positive values) because noise floors differ
+    # over tenfold between channels (CD38 peaks at 3,337, 647_bg at 19,200).
     if cofactor > 0:
         cofactors = [float(cofactor)] * values.shape[1]
     else:
@@ -454,10 +347,7 @@ def cluster_cells(
     adata.var_names = list(use_channels)
     sc.pp.scale(adata, max_value=10)
     sc.pp.neighbors(adata, n_neighbors=15, use_rep="X", random_state=seed)
-    # The neighbour graph is built once and every resolution reuses it, which is what
-    # makes a sweep affordable: the graph is the expensive part, and Leiden over it is
-    # seconds. flavour="igraph" uses igraph's own implementation, a direct sopa
-    # dependency; the default flavour would need leidenalg, which is not.
+    # flavor="igraph" avoids leidenalg, which is not in the container.
     from sklearn.metrics import adjusted_rand_score, silhouette_score
 
     scaled_all = np.asarray(adata.X)
@@ -478,14 +368,8 @@ def cluster_cells(
         labels_by_resolution.append(lab)
         n_clusters = len({str(v) for v in lab})
 
-        # Stability: run the same resolution again from different seeds and measure how
-        # much the partitions agree, as adjusted Rand. This is the criterion that does
-        # not degenerate. Silhouette falls monotonically as resolution rises, so
-        # maximising it always returns the coarsest option on offer -- on this run it
-        # slid from 0.223 at five clusters to 0.079 at forty-three and picked five. A
-        # resolution that reflects real structure lands on the same partition whatever
-        # the seed; one that has gone too fine is cutting an arbitrary line through a
-        # continuum, and the line moves.
+        # Stability as adjusted Rand across seeds. Silhouette is not used to choose: it
+        # falls monotonically (0.223 at 5 clusters to 0.079 at 43), so it always picks the coarsest.
         agreements = []
         for extra in (seed + 101, seed + 202):
             sc.tl.leiden(
@@ -499,10 +383,7 @@ def cluster_cells(
             )
             agreements.append(float(adjusted_rand_score(lab, adata.obs["_stability"].to_numpy())))
         stability = float(np.mean(agreements)) if agreements else None
-        # Silhouette on a subsample: it is quadratic in the number of cells, and it is
-        # being used to rank resolutions against each other rather than to state an
-        # absolute quality, so a consistent subsample is enough. One cluster has no
-        # silhouette at all, which is why that case is None rather than zero.
+        # Subsampled because silhouette is quadratic; None when undefined (one cluster).
         score = None
         if 1 < n_clusters < len(lab):
             score = float(
@@ -522,26 +403,14 @@ def cluster_cells(
             }
         )
 
-    # The finest resolution that is still stable, rather than the best-scoring one.
-    #
-    # "Most variability explained" pulls towards more clusters and every separation
-    # score pulls towards fewer, so neither alone gives an answer worth having. This
-    # takes the most detailed partition that survives a change of seed: past that point
-    # the extra clusters are not reproducible, so whatever they are, they are not
-    # structure. Falls back to the most stable resolution when nothing clears the bar,
-    # and it remains a default rather than a verdict -- the tree is drawn so it can be
-    # overruled.
+    # Finest resolution that is stable across seeds; otherwise the most stable one.
     stable = [row for row in sweep if row["stability"] is not None and row["stability"] >= stability_floor]
     how = "stability"
     if stable:
         chosen = max(stable, key=lambda row: row["resolution"])["resolution"]
     else:
-        # Nothing cleared the bar, and that is itself the finding. On the published run
-        # the best agreement across seeds was 0.596 against a floor of 0.9, so no
-        # resolution gives a reproducible partition and the clusters are a summary of
-        # the staining rather than cell types. Reported as its own outcome instead of
-        # being folded into a silent fallback, because a reader has to know the bar was
-        # never met.
+        # Reported as its own outcome so a reader knows the floor was never met
+        # (published run: best agreement 0.596 against 0.9).
         how = "stability_fallback"
         scored = [row for row in sweep if row["stability"] is not None]
         chosen = max(scored, key=lambda row: row["stability"])["resolution"] if scored else resolutions[0]
@@ -555,8 +424,7 @@ def cluster_cells(
     order = sorted({str(v) for v in labels}, key=lambda s: int(s))
     tree = cluster_tree(labels_by_resolution, [float(r) for r in resolutions])
 
-    # Mean scaled value per cluster per marker: this is the z-scored matrix the
-    # heatmap shows, so a cell above or below the slide's average reads as such.
+    # Mean z-scored value per cluster per marker, as shown in the heatmap.
     scaled = np.asarray(adata.X)
     matrix = []
     sizes = []
@@ -565,12 +433,8 @@ def cluster_cells(
         sizes.append(int(mask.sum()))
         matrix.append([float(v) for v in scaled[mask].mean(axis=0)])
 
-    # The argmax of an all-negative row is the least-negative marker, not a positive
-    # one. Six clusters on the published run are below the slide average on every
-    # marker -- dim cells, largely ones background subtraction drove to exact zeros --
-    # and naming one of them "top marker" would read as "these are CD8 cells" when
-    # they are dim for everything. The channel is still needed to render a snapshot,
-    # so it is kept and flagged rather than dropped.
+    # An all-negative row's argmax is not a positive marker (six such clusters on the
+    # published run), so it is flagged rather than dropped; snapshots still need it.
     top_markers = [use_channels[int(np.argmax(row))] for row in matrix]
     top_above_average = [bool(max(row) > 0) for row in matrix]
     return {
@@ -600,12 +464,7 @@ def representative_cells(
     clustering: dict[str, Any],
     n_per_cluster: int = 2,
 ) -> dict[str, list[int]]:
-    """The cells nearest each cluster's centre, as row indices into the table.
-
-    Nearest the centroid rather than the brightest for its top marker: the brightest
-    cell in a cluster is usually its most extreme, and an extreme is exactly what
-    should not be shown as representative.
-    """
+    """Return the cells nearest each cluster's centroid, as row indices into the full table."""
     import numpy as np
 
     scaled = clustering["_scaled"]
@@ -638,12 +497,9 @@ def render_cell_snapshots(
     size: int = 128,
     compartments: dict[str, str] | None = None,
 ) -> list[dict[str, Any]]:
-    """Two cells per cluster, in the cluster's top marker and the nuclear stain.
+    """Render each picked cell in its cluster's top marker and the nuclear stain.
 
-    `compartments` is the marker sheet's channel_compartment, recorded against each
-    snapshot's marker. It changes no pixel: it is the expectation the picture should
-    be read against, since a membrane stain that renders as a nuclear dot has gone
-    wrong and nothing in the image itself says which was intended.
+    `compartments` (channel to expected compartment) is only recorded in the index.
     """
     import numpy as np
     import zarr
@@ -687,9 +543,7 @@ def render_cell_snapshots(
             )
             img = Image.fromarray(rgb, mode="RGB")
             hits = boundaries.sindex.query(_box(x0, y0, x1, y1))
-            # Neighbours in white, the subject in yellow and twice as thick. Without
-            # this every outlined cell in the frame looks equally like the one the
-            # cluster is about, and the picture cannot support the claim it is making.
+            # Subject cell in thicker yellow so it stands out from its neighbours.
             neighbours = [h for h in hits if int(h) != int(cell)]
             draw_outlines(img, boundaries.geometry.iloc[neighbours], x0, y0)
             draw_outlines(
@@ -808,9 +662,6 @@ def main() -> int:
         "sample": args.sdata.stem,
         "image_element": element,
         "nuclear_channel": nuclear_channel,
-        # Which of the three routes named the stain. Recorded because the picture is
-        # only as trustworthy as the channel it was drawn from, and a fallback that
-        # happened to match is not the same as the sheet saying so.
         "nuclear_selected_by": nuclear_how,
         "channel_compartments": compartments,
         "crop_mask_colour": "cyan",
@@ -890,9 +741,6 @@ def main() -> int:
         print(f"  snapshots  : {len(index['snapshots'])}")
         index["clustering"] = {k: v for k, v in clustering.items() if not k.startswith("_")}
         index["clustering"]["excluded_channels"] = sorted(excluded)
-        # Why each channel was held back, not just that it was. A reader asking why a
-        # marker is missing from the heatmap had no way to tell an autofluorescence
-        # channel from a nuclear one from a typo in the sheet.
         index["clustering"]["excluded_channels_why"] = dict(sorted(excluded.items()))
 
     out_json = args.out_dir / "qc_images.json"

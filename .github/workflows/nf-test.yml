@@ -27,12 +27,7 @@ env:
 jobs:
   nf-test-changes:
     name: nf-test-changes
-    # GitHub-hosted, not self-hosted. This workflow ran with runs-on.com labels
-    # inherited from the nf-core template, and nothing in this repository provides
-    # those runners, so every run sat queued forever and the test matrix was
-    # skipped -- the stub and validation tiers have never actually run in CI
-    # despite the docs saying they do. They need no containers, so an ordinary
-    # runner is enough.
+    # GitHub-hosted: no runs-on.com runners exist for this repository, and these tests need no containers.
     runs-on: ubuntu-latest
     outputs:
       shard: ${{ steps.set-shards.outputs.shard }}
@@ -49,14 +44,7 @@ jobs:
           NFT_VER: ${{ env.NFT_VER }}
         with:
           max_shards: 7
-          # stub and validation only. Neither needs a container and both finish in
-          # seconds: stub tests check channel topology, validation tests call the
-          # input-checking functions directly and assert on what they reject.
-          #
-          # The alternatives cannot run here: tests/fixture.nf.test needs a 43 MB
-          # fixture that is not in the repository and all seven container images, and
-          # the two inherited sopa tests still snapshot outputs this pipeline no longer
-          # produces. Both are run by hand; see tests/README.md.
+          # stub and validation only: no containers needed. Real-data tests run by hand (tests/README.md).
           tags: stub,validation
 
       - name: debug
@@ -68,10 +56,7 @@ jobs:
     name: "${{ matrix.profile }} | ${{ matrix.NXF_VER }} | ${{ matrix.shard }}/${{ needs.nf-test-changes.outputs.total_shards }}"
     needs: [nf-test-changes]
     if: ${{ needs.nf-test-changes.outputs.total_shards != '0' }}
-    # See the note on nf-test-changes. The 80 GB volume this used to request was
-    # for container images; with tags stub,validation no container is pulled, so a
-    # standard runner's disk is not a constraint. It would be again if a real-data
-    # tier were ever added here, which is why those run on the cluster instead.
+    # Fine while no container is pulled; real-data tiers would exceed a standard runner's disk.
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -109,8 +94,7 @@ jobs:
           profile: ${{ matrix.profile }}
           shard: ${{ matrix.shard }}
           total_shards: ${{ env.TOTAL_SHARDS }}
-          # Must match the tag given to get-shards above, or the shard count and the
-          # tests actually run will disagree.
+          # Must match the tags given to get-shards above.
           tags: stub,validation
 
       - name: Report test status
@@ -127,9 +111,7 @@ jobs:
             fi
           fi
 
-      # continue-on-error keeps latest-everything from failing the job, so it never shows up in
-      # `needs.nf-test.result` downstream and CI stays green. Surface it via a PR comment instead;
-      # other NXF_VER failures already fail the job/CI directly, so no comment is needed for those.
+      # latest-everything failures do not fail the job, so surface them as a PR comment.
       - name: Prepare PR comment fragment
         if: ${{ always() && steps.run_nf_test.outcome == 'failure' && matrix.NXF_VER == 'latest-everything' }}
         run: |
@@ -177,8 +159,7 @@ jobs:
           path: pr-comment-fragments
           merge-multiple: true
 
-      # Build a comment for the shared pr-comment.yml poster to publish on the PR.
-      # Based on the fragments above (not needs.*.result) so non-blocking failures are still reported.
+      # Built from the fragments, not needs.*.result, so non-blocking failures are still reported.
       - name: Prepare PR comment
         if: ${{ always() }}
         env:

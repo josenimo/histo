@@ -1,25 +1,8 @@
 #!/usr/bin/env python3
-"""One HTML summary for a dearrayed slide, from the per-core QC metrics.
+"""Render one slide-level HTML QC summary for a dearrayed TMA.
 
-A TMA run produces one report per core, which answers "is this core sound" N times
-and never answers "is this slide sound". Four cores mean four pages to open and a
-cross-core comparison a reader has to do in their head, which is exactly where a
-core that stained differently hides: each of its own numbers looks unremarkable
-until it sits next to the other three.
-
-So this reports the slide, and deliberately not the cores. Anything a reader can
-only act on by looking at one core -- crops, clusters, the per-channel histograms,
-the patch heatmap -- stays in that core's own report and is linked, not repeated.
-What is here is either a slide-level fact, or a per-core number worth comparing
-across cores. Cell count is both, which is why it leads.
-
-Reads the same `{core}_qc.json` files QC_METRICS already writes, so it measures
-nothing itself and cannot disagree with the core reports. Imports the rendering
-primitives from qc_report.py for the same reason: one stylesheet, one table, one
-status row, so a slide page and a core page are visibly the same artefact.
-
-Sets no thresholds and returns no exit code, which is the standing rule for QC here
-until there are enough slides behind a number to justify one.
+Reads every core's `{core}_qc.json` from qc_metrics.py and writes a single HTML file
+that compares cores side by side, reusing qc_report.py's rendering. Sets no thresholds.
 """
 
 from __future__ import annotations
@@ -47,21 +30,16 @@ from qc_report import (  # noqa: E402
 
 
 def core_label(metrics: dict[str, Any]) -> str:
-    """The core's own name, as its report and its merged elements use it."""
+    """Return the core name used by its report and merged elements."""
     return str(metrics.get("sample") or metrics.get("image_element") or "unknown")
 
 
 def read_cores(paths: list[Path]) -> list[dict[str, Any]]:
-    """Every core's metrics, ordered by core name.
-
-    Sorted rather than left in the order Nextflow staged them: a channel's order is
-    not guaranteed, and a table whose rows move between runs cannot be diffed.
-    """
+    """Load every core's metrics, sorted by core name so runs diff cleanly."""
     cores = []
     for p in paths:
         d = json.loads(p.read_text())
-        # A stub run writes {"sample": ..., "stub": true} and nothing else. Skipped
-        # rather than crashed on, so -stub exercises this module's wiring.
+        # Skip stub JSON so -stub still exercises the wiring.
         if d.get("stub"):
             continue
         cores.append(d)
@@ -75,7 +53,7 @@ def read_cores(paths: list[Path]) -> list[dict[str, Any]]:
 
 
 def slide_totals(cores: list[dict[str, Any]]) -> dict[str, Any]:
-    """The numbers that are only true of the whole slide."""
+    """Sum per-core counts into slide totals."""
     n_cells = sum(c["cells"]["n_cells"] for c in cores)
     degenerate = sum(c["cells"]["n_below_min_cell_area"] for c in cores)
     patched = [c for c in cores if c.get("patches")]
@@ -91,13 +69,7 @@ def slide_totals(cores: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def channel_sets(cores: list[dict[str, Any]]) -> dict[str, list[str]]:
-    """Each distinct channel list on the slide, mapped to the cores that have it.
-
-    A slide-level check with no per-core equivalent: every core is a cut of one
-    image, so they must all carry the same channels in the same order. If they do
-    not, the merged store's tables cannot be compared column for column and the
-    per-core reports have no way to notice, because each one only ever sees itself.
-    """
+    """Map each distinct channel list (joined with " | ") to the cores that carry it."""
     out: dict[str, list[str]] = {}
     for c in cores:
         key = " | ".join(c["channels"]["table_names"])
@@ -106,12 +78,7 @@ def channel_sets(cores: list[dict[str, Any]]) -> dict[str, list[str]]:
 
 
 def rollup(cores: list[dict[str, Any]], label: str, ok, detail_ok: str) -> str:
-    """One integrity row for the slide, from the same check on every core.
-
-    Passes only when every core passes, and names the cores that did not. A slide
-    is not partly sound: one core disagreeing about channel names is a fact about
-    the slide, and rolling it up to "3 of 4" would be the wrong summary of it.
-    """
+    """Render one status row that passes only if `ok` holds for every core."""
     failed = [core_label(c) for c in cores if not ok(c)]
     return status_row(
         label,
@@ -208,12 +175,7 @@ def integrity_section(cores: list[dict[str, Any]], totals: dict[str, Any]) -> st
 
 
 def cores_section(cores: list[dict[str, Any]], totals: dict[str, Any]) -> str:
-    """Cell count per core, which is the one per-core number a slide view needs.
-
-    A core that yielded a fraction of its neighbours either lost tissue or failed
-    segmentation, and neither is visible from inside that core's own report, where
-    its count is just a number with nothing to be small against.
-    """
+    """Render cell count per core as a chart and table."""
     chart = hbar_chart(
         [(core_label(c), float(c["cells"]["n_cells"])) for c in cores],
         "cells",
@@ -258,22 +220,9 @@ def cores_section(cores: list[dict[str, Any]], totals: dict[str, Any]) -> str:
 
 
 def channel_comparison_section(cores: list[dict[str, Any]]) -> str:
-    """Mean intensity per channel, one column per core.
-
-    The comparison the per-core reports structurally cannot make. Each core's page
-    shows its own channel against its own histogram, which says whether the channel
-    has signal but not whether it has the same signal as the rest of the slide --
-    and staining that failed on one core is a per-core failure with a slide-level
-    cause, so it is only diagnosable side by side.
-
-    The spread column is max over min, reported and not judged. A ratio near 1 means
-    the cores agree; a large one means they do not, and which of those is expected
-    depends on the biology of the array, which this file has no way to know.
-    """
+    """Render mean intensity per channel, one column per core, with max/min spread."""
     names = cores[0]["channels"]["table_names"]
-    # Only channels every core has. A slide whose cores disagree about channels has
-    # already failed the integrity check above; this section still renders, over the
-    # intersection, rather than raising on top of a failure already reported.
+    # Intersection only: a mismatch is already reported by the integrity check.
     shared = [n for n in names if all(n in c["channels"]["per_channel"] for c in cores)]
     if not shared:
         return ""
@@ -318,12 +267,7 @@ def channel_comparison_section(cores: list[dict[str, Any]]) -> str:
 
 
 def cycle_section(cores: list[dict[str, Any]]) -> str:
-    """The cross-cycle nuclear ratio, per core, on one axis.
-
-    Photobleaching is a property of the acquisition rather than of one core, so the
-    four numbers should agree. One core drifting away from the others points at that
-    core; all four drifting together points at the run.
-    """
+    """Render the cross-cycle nuclear stain ratio per core."""
     have = [c for c in cores if (c.get("cycle_ratio") or {}).get("available")]
     if not have:
         return ""
@@ -353,13 +297,9 @@ def cycle_section(cores: list[dict[str, Any]]) -> str:
 
 
 def backsub_section(cores: list[dict[str, Any]]) -> str:
-    """How far each channel moved under background subtraction, per core.
+    """Render zero-pixel fraction before and after background subtraction, per core.
 
-    Only renders when the pre-subtraction image reached QC, which on this path means
-    COREOGRAPH ran before BACKSUB so each core kept an unsubtracted twin of its own
-    shape. A channel driven almost entirely to zero has been subtracted away rather
-    than corrected, and seeing that on every core at once is what separates a wrong
-    exposure in the marker sheet from one bad core.
+    Returns an empty string unless the metrics carry a "before" block.
     """
     have = [c for c in cores if "before" in c]
     if not have:

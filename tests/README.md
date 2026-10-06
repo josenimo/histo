@@ -1,75 +1,52 @@
 # Tests
 
-Four tiers, cheapest first.
+Four tiers, cheapest first. CI runs unit tests and `--tag stub,validation`; neither needs a
+container. `tests/nextflow.config` caps tasks at 2 CPUs and 6 GB to fit the GitHub runner.
 
-## Unit tests — seconds, no containers
+## Unit tests (seconds)
 
-Pure Python over the logic in `bin/` and `tools/`: marker sheet parsing, core naming,
-table relinking, QC metrics and report rendering, container cache filenames.
+Python logic in `bin/` and `tools/`: marker sheets, core naming, table relinking, QC metrics
+and reports, container cache filenames.
 
 ```bash
 pytest tests/unit
 ```
 
-Runs in CI on every push (`.github/workflows/unit-tests.yml`).
+## Validation tests (seconds)
 
-## Validation tests — seconds, no containers, no Nextflow processes
-
-The functions that reject bad input, called directly as `nextflow_function` tests.
+The input-rejecting functions, as `nextflow_function` tests. Most assert both the rejection
+and the message wording; a check never watched to fail is not known to work.
 
 ```bash
 nf-test test --tag validation
 ```
 
-Most of these assert on a rejection and on the wording of the message. That is
-deliberate: a check nobody has watched fail is not known to work, and one that fires
-with an unreadable message is half a check. `docs/decisions.md` records why, under
-Recurring lessons.
+## Stub tests (seconds)
 
-## Stub tests — seconds, no containers, no real data
-
-Channel topology. No tool runs, so these say nothing about whether an image was
-stitched well — they catch cycles grouped wrongly, a TMA fan-out that loses core
-identity, a marker sheet that reaches one sample out of four, an emit nothing
-consumes.
+Channel topology only: wrong cycle grouping, lost core identity, a marker sheet reaching the
+wrong sample, an unconsumed emit. Nothing about image quality.
 
 ```bash
 nf-test test --tag stub
 ```
 
-`tests/stub_data/` holds a few hundred bytes of placeholder standing in for images.
-Stub runs stage their inputs and never read them, so existence is all that is needed,
-and this keeps tens of megabytes out of the repository's permanent history.
+- `tests/stub_data/` holds tiny placeholders; stub runs only need inputs to exist.
+- The tests use `-profile laptop`, which puts `tests/stub_bin` on `PATH`. `ashlar` and
+  `backsub` declare versions with `eval()`, which runs even under `-stub`.
+- `tests/default.nf.test` covers pre-stitched input (`-profile test`): `BASICPY`, `ASHLAR` and
+  `SET_CHANNEL_NAMES` must not run, segmentation tiles into two patches, all three QC steps
+  run. `nf-core pipelines lint` requires this file name.
 
-Requires `-profile laptop`, already set in the test file: `ashlar` and `backsub`
-declare versions with `eval()`, which Nextflow evaluates in the task environment even
-under `-stub`, so `tests/stub_bin` must be on PATH.
+## Pre-release tests (cluster, by hand)
 
-CI runs `--tag stub,validation`, which is both of the tiers above and nothing else.
-Neither needs a container, which is why they fit on an ordinary GitHub runner.
-
-Until 2026-08-26 that sentence was false. `nf-test.yml` requested self-hosted runners
-using labels inherited from the nf-core template, nothing in this repository provides
-them, and so every run sat queued indefinitely and the matrix was skipped. The tiers
-had never run in CI. `gh run list` showed it plainly once anyone looked: every "Run
-nf-test" with a blank conclusion, going back as far as the history goes.
-
-## Pre-release tests — the cluster, by hand, two of them
-
-Real pixels through the whole chain. Not in CI, and that is a decision with numbers
-behind it rather than a gap: the container images come to about 8.8 GB on disk for the
-mIF path and 14.7 GB with Coreograph, against roughly 14 GB free on a GitHub-hosted
-runner and a 10 GB cache quota, re-pulled every run. nf-core reaches the same
-conclusion and runs its full tests on AWS at release time; this does the same thing
-with a cluster and a person.
-
-Between them the two cover every path the pipeline has.
+Real pixels through the whole chain. Not in CI: images are 8.8 GB (mIF) to 14.7 GB (with
+Coreograph), against about 14 GB free on a GitHub runner.
 
 |                | exemplar-001                        | exemplar-002                                                    |
 | -------------- | ----------------------------------- | --------------------------------------------------------------- |
 | covers         | mIF slide, whole-slide              | TMA, dearrayed                                                  |
-| cycles         | 6, 7, 8 — 12 channels               | 1, 2, 3 — 12 acquired, 9 after subtraction                      |
-| backsub        | no                                  | **yes**, real autofluorescence channels                         |
+| cycles         | 6, 7, 8: 12 channels                | 1, 2, 3: 12 acquired, 9 after subtraction                       |
+| backsub        | no                                  | yes, real autofluorescence channels                             |
 | also exercises | BaSiCPy, Ashlar, tiled segmentation | Coreograph, per-core subtraction, `remove`, merge, slide report |
 | download       | 191 MB                              | 953 MB                                                          |
 
@@ -84,65 +61,23 @@ nf-test test tests/exemplar001.nf.test --profile test_exemplar001,singularity,si
 nf-test test tests/exemplar002.nf.test --profile test_exemplar002,singularity,size_small,slurm
 ```
 
-The profile name is repeated on the command line even though each test file declares
-it, because a bare `--profile` **replaces** that directive rather than adding to it.
-Omit it and the run fails with `Missing required parameter(s): input`, which does not
-mention profiles at all. Prefixing with `+` appends instead:
-`--profile=+singularity,size_small,slurm`.
+Gotchas:
 
-The temp variables are not optional on this cluster. `/tmp` on the login node is small
-and shared, and a run that overruns it fails with `No space left on device` pointing at
-a `/tmp/nxf-...` path, which reads like a quota problem and is not one.
+- `--profile` replaces the test file's profile, so repeat it. Omitting it fails with
+  `Missing required parameter(s): input`. `--profile=+...` appends instead.
+- The temp variables are required: the login node's `/tmp` is small and shared, and overrunning
+  it fails with `No space left on device`.
 
-### Where the data comes from
+Data:
 
-`tools/fetch_exemplars.sh` pulls the images from the public mcmicro S3 bucket — the same
-datasets mcmicro's own tutorial uses, no credentials — and takes only the cycles the
-tests need rather than all ten. It skips files already present at the right size, so an
-interrupted download resumes. Run it somewhere with internet and copy the directory
-across if the cluster has no outbound access.
+- `tools/fetch_exemplars.sh` pulls only the needed cycles from mcmicro's public S3 bucket and
+  resumes interrupted downloads. Run it elsewhere and copy if the cluster has no internet.
+- Marker sheets in `tests/exemplar_data/` are ours: mcmicro's lack `channel_role`, and
+  exemplar-002's lacks `exposure` and `background`. Names, cycles and wavelengths match.
+- Samplesheets are generated by the same script. nf-test gives each test a launch directory
+  named by hash, so relative paths break and absolute ones are machine-specific.
 
-**The marker sheets are ours and are committed**, in `tests/exemplar_data/`. mcmicro's
-published `markers.csv` cannot be used: it has no `channel_role`, which this pipeline
-requires, and exemplar-002's has no `exposure` or `background` columns at all, which
-backsub needs. The sheets here add those and nothing else — the channel names, cycles
-and wavelengths match the published ones.
-
-**The samplesheets are generated**, by the same script, because they cannot be
-committed. nf-schema resolves a samplesheet's path columns against `workflow.launchDir`,
-and nf-test gives every test its own launch directory under `.nf-test/tests/<hash>/`
-whose name changes whenever the test file is edited — so a relative path reaches nothing
-and an absolute one is machine-specific. Generating them is the only arrangement that
-works from a clone.
-
-### Baselines are not recorded yet
-
-Both tests assert only that segmentation produced cells. The cell-count windows are
-commented out, waiting for a real run to supply the numbers, because a baseline invented
-in advance is not a baseline — it is a guess the first run gets judged against. Fill them
-in from the first green run.
-
-What is asserted now: channel names exactly matching the sheet, core count on the TMA,
-which processes ran and how many times, the nuclear stain having been chosen by
-`channel_role` rather than by a name pattern, the before-and-after subtraction block
-being present on every core, background channels not having moved under subtraction, and
-`versions.yml` naming every process.
-
-Assertions are properties rather than checksums throughout. Cellpose output shifts with
-version and hardware, so a snapshot of segmentation results fails for reasons that have
-nothing to do with this pipeline.
-
-## The pre-stitched entry point — `nf-test test tests/default.nf.test`
-
-`-profile test` under `-stub`: images arriving already stitched, so `BASICPY`, `ASHLAR` and
-`SET_CHANNEL_NAMES` never run. Asserts that they do not, that segmentation still tiles into two
-patches, that neither slide-level step appears on a non-TMA run, and that all three QC steps do.
-
-This replaced an inherited nf-core/sopa snapshot that recorded `"nf-core/sopa": "v1.0.1"` and
-asserted on `explorer` and `sopa_software_versions`, outputs this pipeline does not produce. It
-could not pass and had not been run in a long time, which is worse than having no test: it
-occupied the place where a real one would go. `cellpose.nf.test` was the same and was deleted
-rather than rewritten, since `-profile test` already covers that wiring.
-
-The file has to keep its name: `nf-core pipelines lint` checks that `tests/default.nf.test`
-exists, and deleting it fails the release lint.
+Assertions are properties, not checksums: channel names, TMA core count, which processes ran
+and how often, nuclear stain chosen by `channel_role`, subtraction blocks on every core,
+background channels unchanged by subtraction, `versions.yml` complete. Cell-count windows are
+commented out until the first green run supplies baselines.

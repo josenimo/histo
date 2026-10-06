@@ -8,9 +8,7 @@ process MERGE_SPATIALDATA {
 :         'community.wave.seqera.io/library/python_sopa:54a97bc5a187152d' }"
 
     input:
-    // One entry per slide. `core_zarrs` are the finished per-core stores, staged
-    // under their own names on purpose: merge_spatialdata.py derives each core's
-    // ID from its directory name, so renaming them here would destroy the IDs.
+    // Do not rename core_zarrs: merge_spatialdata.py takes each core id from its directory name.
     tuple val(meta), path(core_zarrs)
 
     output:

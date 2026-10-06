@@ -1,28 +1,8 @@
 #!/usr/bin/env python3
-"""Give the image channels their marker names, in the SpatialData store.
+"""Write marker sheet names onto an image element's channels in a SpatialData store.
 
-Ashlar does not write marker names into the OME-XML it produces, and Coreograph
-discards them even when backsub has put them there. So by the time sopa reads the
-image it finds `Channel` elements with IDs and no names, and falls back to using
-the IDs: the expression matrix ends up with columns called `Channel:0:0`. The
-quantification is correct and nobody can read it.
-
-Repairing the OME-TIFF was considered and rejected. `tiffcomment -set` patches the
-header in place in constant time, which is ideal, but a Nextflow task must not
-mutate its staged input -- that input is a symlink into the upstream task's work
-directory, and modifying it breaks the immutability `-resume` depends on. Avoiding
-that means copying the whole image, which for a 100 GB slide costs more than the
-problem is worth. See ROADMAP section 6.
-
-Doing it here instead is free at any image size. Channel names live in exactly one
-place in the store: `images/<element>/zarr.json`, about 5 KB, under
-`attributes.ome.omero.channels[].label`. No pixel data is touched. The table
-inherits the names automatically, because AGGREGATE reads them from the image when
-it builds the feature matrix, so this must run before aggregation.
-
-nf-core/mcmicro solves the same problem differently: it never embeds names at all
-and passes markers.csv to mcquant as `--channel_names`. sopa has no equivalent
-hook, so the names have to be in the object.
+Ashlar and Coreograph drop channel names, so sopa would label columns `Channel:0:0`.
+Only `images/<element>/zarr.json` metadata changes; must run before aggregation.
 """
 
 from __future__ import annotations
@@ -32,20 +12,11 @@ import csv
 import sys
 from pathlib import Path
 
-# spatialdata is imported inside main() rather than here on purpose. It pulls in
-# dask, xarray and zarr and takes seconds to load, and none of it is needed to
-# parse a marker sheet -- which is the part with the interesting failure modes and
-# the part worth testing without a container.
+# spatialdata is imported inside main() so marker sheet parsing is testable without it.
 
 
 def read_marker_names(path: Path) -> list[str]:
-    """Marker names in channel order.
-
-    Sorted by channel_number rather than trusting file order. Gaps are tolerated:
-    when backsub removes background channels its rewritten sheet can leave
-    channel_number non-contiguous, and what matters is the relative order of what
-    remains, not the absolute values.
-    """
+    """Return marker names sorted by channel_number; gaps are allowed (backsub drops channels)."""
     with path.open(newline="") as fh:
         rows = list(csv.DictReader(fh))
 
@@ -74,21 +45,7 @@ def read_marker_names(path: Path) -> list[str]:
 
 
 def channel_labels(sdata_path: Path, element: str) -> list[str]:
-    """The channel names currently on an image element, read from the store.
-
-    `SpatialData.set_channel_names` is a method, but there is no matching getter on
-    the object -- the API is asymmetric, which cost a cluster round trip to discover.
-
-    This reads the store directly instead of going through the library. Channel
-    names live in exactly one place, `images/<element>/zarr.json` under
-    `attributes.ome.omero.channels[].label`, verified against real pipeline output.
-    Reading it is a few kilobytes and needs no spatialdata import.
-
-    Every failure raises with a specific message. An earlier version tried a library
-    call first and fell back to this on any exception, which meant a genuine bug in
-    the library path would have been silently swallowed -- the same failure mode as
-    the legacy merge script dropping unreadable cores with a warning.
-    """
+    """Read channel labels from `images/<element>/zarr.json` (spatialdata has no getter)."""
     import json
 
     meta = Path(sdata_path) / "images" / element / "zarr.json"
@@ -144,16 +101,8 @@ def main() -> int:
             f"not the original: backsub can remove background channels."
         )
 
-    # Renames unconditionally, including when the names are already correct.
-    #
-    # This step mutates the store in place, so its input hash changes the moment it
-    # runs and `-resume` can never cache it -- the same property every sopa module
-    # has. It therefore re-executes on every resumed run. Rewriting ~5 KB of metadata
-    # costs nothing, and doing it unconditionally means every run's log carries the
-    # full channel mapping, which is worth more than skipping a write that is free.
-    #
-    # write=True persists to the store. Only the group metadata changes; the arrays
-    # are untouched, which is what makes this cheap on a 100 GB image.
+    # Unconditional: in-place mutation defeats -resume anyway, and the log then always
+    # shows the full mapping. Only metadata is written, so cost is independent of image size.
     sdata.set_channel_names(element, names, write=True)
 
     after = channel_labels(args.sdata, element)

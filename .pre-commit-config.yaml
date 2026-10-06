@@ -1,16 +1,5 @@
-# Runner is `prek`, per the vendored nf-core AGENTS.md: stage changes, run prek,
-# resolve all errors and all solvable warnings, repeat.
-#
-# The first three repos are what sopa:dev ships, kept verbatim so this file
-# stays diffable against upstream. Everything marked ADDED is ours.
-#
-# Every custom hook maps to a defect found in the August 2026 review; the comment
-# says which. If a hook stops earning its keep, delete it and say why in the
-# commit message.
-#
-# Custom hooks use YAML folded scalars (>-), which collapse to a single line.
-# Multi-line block scalars (|) in `entry:` are fragile in pre-commit, which
-# shlex-splits the value. Hence the explicit `;` separators.
+# Run with `prek`. The first three repos follow sopa:dev verbatim; ADDED marks ours.
+# Custom entries use folded scalars (>-) with explicit `;`, because pre-commit shlex-splits `entry:`.
 
 repos:
   # ---------------------------------------------------------------------------
@@ -45,18 +34,14 @@ repos:
               .*\.snap$
           )$
 
-      # ADDED. Inputs are 5-100 GB. A stray fixture is painful to remove from
-      # history. nf-core/tools 4.1.0 added an equivalent hook to the template.
+      # ADDED. Inputs are 5-100 GB; a stray fixture is painful to remove from history.
       - id: check-added-large-files
         args: [--maxkb=1024]
       - id: check-merge-conflict
       - id: detect-private-key
       - id: check-executables-have-shebangs
       - id: check-shebang-scripts-are-executable
-        # main.nf carries `#!/usr/bin/env nextflow` but is not executable, and the
-        # pristine nf-core TEMPLATE ships it the same way (100644). It is run via
-        # `nextflow run`, never invoked directly. chmod +x would diverge from the
-        # template and conflict at every sync, so exclude it instead.
+        # main.nf is 100644 in the nf-core template; chmod +x would conflict at every sync.
         exclude: ^main\.nf$
 
   - repo: https://github.com/seqeralabs/nf-lint-pre-commit
@@ -67,10 +52,7 @@ repos:
         args: ["-output", "json"]
 
   # ---------------------------------------------------------------------------
-  # ADDED: Python. `bin/` is excluded by .prettierignore and had no linter at
-  # all, which is where four of the five P0 defects lived. Enable ruff's S
-  # (flake8-bandit) rules: S602/S604 flag subprocess with shell=True, which is
-  # the run_coreograph.py defect.
+  # ADDED: Python. Rule selection lives in ruff.toml.
   # ---------------------------------------------------------------------------
 
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -83,8 +65,7 @@ repos:
         files: ^(bin|tools|tests/unit)/.*\.py$
 
   # ---------------------------------------------------------------------------
-  # ADDED: shell. submit_slurm.sh, run_coreograph_single_cycle.sh and
-  # run_tests.sh were entirely unlinted.
+  # ADDED: shell.
   # ---------------------------------------------------------------------------
 
   - repo: https://github.com/koalaman/shellcheck-precommit
@@ -94,16 +75,11 @@ repos:
 
   # ---------------------------------------------------------------------------
   # ADDED: custom guards. Nothing off the shelf catches these.
-  # All five verified against the real repo; see the review notes.
   # ---------------------------------------------------------------------------
 
   - repo: local
     hooks:
-      # Caught 8 occurrences of /fast/AG_Coscia/.../python_sopa.sif hardcoded in
-      # sopa_spatial.nf module bodies, with the upstream directive commented out
-      # above each. Verified 0 false positives against registry URIs
-      # (docker.io/..., ghcr.io/...) and against sopa's singularity/docker ternary.
-      # Cluster paths belong in conf/mdc.config.
+      # Cluster image paths belong in config, not module bodies. Registry URIs do not match.
       - id: no-absolute-container-paths
         name: no absolute filesystem paths in container directives
         language: system
@@ -114,10 +90,7 @@ repos:
           echo "  ^ absolute container path in $f; put it in conf/mdc.config, not the module" >&2;
           fail=1; fi; done; exit $fail' --
 
-      # Caught bin/run_coreograph.py invoking `docker run` via subprocess from
-      # inside a Nextflow process, and bin/run_coreograph_single_cycle.sh.
-      # There is no Docker daemon on the cluster, so that path always failed and
-      # always reached a fallback that fabricated four corner crops as "cores".
+      # Nextflow manages containers, and the cluster has no Docker daemon.
       - id: no-nested-container-invocation
         name: no docker/podman/singularity invocation from inside the pipeline
         language: system
@@ -128,9 +101,7 @@ repos:
           echo "  ^ nested container invocation in $f; Nextflow manages containers, declare one" >&2;
           fail=1; fi; done; exit $fail' --
 
-      # Caught bin/convert_to_spatialdata.py using tifffile.imread on 5-100 GB
-      # images, which defeated the reason for choosing sopa. Reads must be lazy.
-      # test_* helpers are exempt: they work on tiny fixtures.
+      # Images are 5-100 GB, so reads must be lazy. test_* helpers use tiny fixtures and are exempt.
       - id: no-eager-image-reads
         name: no eager whole-image reads outside tests
         language: system
@@ -141,15 +112,8 @@ repos:
           echo "  ^ eager image read in $f; use dask or tifffile aszarr" >&2;
           fail=1; fi; done; exit $fail' --
 
-      # Revised 2026-08-06. Originally required a stub in every local module. That
-      # encoded a rule that turned out to be wrong: five of sopa's eleven modules
-      # mutate the SpatialData zarr in place and declare their input as their
-      # output, so an empty stub would be pure ceremony. See AGENT_CONTEXT.md §7.
-      #
-      # Now requires a stub only where the module declares an output path that is
-      # not also an input path, i.e. where it genuinely creates a file. Uses
-      # `path "..."` and `path("...")` with a quoted literal as the signal for a
-      # new file, since pass-through outputs are written as bare `path(var)`.
+      # Stub required only when output: has a quoted path literal (a new file); in-place
+      # zarr modules use bare path(var) and need none. See CLAUDE.md §6.
       - id: module-has-stub
         name: local modules that create files must have a stub block
         language: system
@@ -162,14 +126,8 @@ repos:
           { echo "$f: declares $creates new output file(s) but has no stub: block" >&2; fail=1; };
           done; exit $fail' --
 
-      # Caught: zero of twelve processes emitted versions.yml, so the pipeline had
-      # no provenance record at all.
-      #
-      # Accepts either a versions.yml output or a `topic: versions` declaration,
-      # because several vendored sopa modules use channel.topic("versions")
-      # instead of emitting a file. Modules with genuinely neither go in
-      # .lint-allow-no-versions, one path per line with a `#` reason above it.
-      # That file is a burn-down list, not a permanent exemption.
+      # Accepts versions.yml or `topic: versions`. Exemptions go in .lint-allow-no-versions
+      # (one path per line, `#` reason above), a burn-down list rather than a permanent one.
       - id: module-emits-versions
         name: every local module records tool versions
         language: system
@@ -181,23 +139,15 @@ repos:
           grep -qE "versions\.yml|topic:[[:space:]]*versions" "$f" ||
           { echo "$f: no versions.yml and no versions topic" >&2; fail=1; }; done; exit $fail' --
 
-      # The one hook targeting a failure mode where the test PASSES and the real
-      # run fails, which is worse than no test. If a module's output: block
-      # changes and its stub: block does not, the stub has rotted.
-      #
-      # Compares output and stub blocks between HEAD and the staged version.
-      # New files are skipped; module-has-stub covers those.
-      # Uses cksum, not md5sum: md5sum does not exist on macOS.
-      #
-      # Verified against five cases: no change (pass), output changed alone
-      # (fail), output and stub both changed (pass), script-only change
-      # (pass, no false positive), new untracked module (skipped).
+      # A changed output: block with an unchanged stub: block (vs HEAD) means the stub has rotted.
+      # Comment lines are ignored. New files are skipped (module-has-stub covers them).
+      # cksum because macOS lacks md5sum.
       - id: stub-drift
         name: stub block must change when outputs change
         language: system
         files: '^modules/local/.*/main\.nf$'
         entry: >-
-          bash -c 'ob() { awk "/^[[:space:]]*output:/{f=1;next}
+          bash -c 'ob() { awk "/^[[:space:]]*\/\//{next} /^[[:space:]]*output:/{f=1;next}
           /^[[:space:]]*(script|shell|exec|stub|when):/{f=0} f"; };
           sb() { awk "/^[[:space:]]*stub:/{f=1;next} f"; }; fail=0;
           for f in "$@"; do old=$(git show "HEAD:$f" 2>/dev/null) || continue;

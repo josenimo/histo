@@ -14,9 +14,8 @@ from basicpy import BaSiC
 import scyjava
 import tifffile
 
-# PATCH PROVENANCE docker.io-labsyspharm-basicpy-docker-mcmicro-1.2.0-patch5.img
-# Date: 09.08.2026
-# Changed Bioformats ingest parameters so that .czi does not stitch
+# Patched from labsyspharm/basicpy-docker-mcmicro 1.2.0 (patch5 image):
+# Bio-Formats reads .czi without stitching.
 
 
 logging.basicConfig(
@@ -30,15 +29,12 @@ logger.setLevel(logging.INFO)
 
 
 def get_args():
-    # Script description
     description = """Calculate the flatfield and darkfield of a RAW image using the BaSiC algorithm."""
 
-    # Add parser
     parser = AP(
         description=description, formatter_class=argparse.RawDescriptionHelpFormatter
     )
 
-    # Sections
     inputs = parser.add_argument_group(
         title="Required Input", description="Paths to required inputs"
     )
@@ -190,7 +186,6 @@ def get_args():
 
     arg = parser.parse_args()
 
-    # Convert input and output to Pathlib
     arg.input = Path(arg.input)
     arg.output_folder = Path(arg.output_folder)
 
@@ -204,11 +199,9 @@ def get_args():
 
 
 def main(args):
-    # Select device
     if args.device == "cpu":
         jax.config.update("jax_platforms", "cpu")
 
-    # Run BASIC
     basic = BaSiC(
         smoothness_flatfield=args.smoothness_flatfield,
         smoothness_darkfield=args.smoothness_darkfield,
@@ -220,30 +213,21 @@ def main(args):
         resize_mode='skimage_dask',
     )
 
-    # Initialize flatfields and darkfields
     flatfields = []
     darkfields = []
 
     if 'BASICPY_DOCKER_MCMICRO' in os.environ:
-        # If we're running inside our own container, configure scyjava to use
-        # our custom location for maven and jgo to stash their files. (jgo and
-        # maven should already be configured via environment variables)
-        # Otherwise leave the scyjava defaults alone so the script is usable
-        # outside the container as well.
+        # Container-only cache paths; outside the container keep scyjava defaults.
         container_scyjava_base = Path('/opt/scyjava')
         scyjava.config.set_cache_dir(container_scyjava_base / '.jgo')
         scyjava.config.set_m2_repo(container_scyjava_base / '.m2' / 'repository')
 
     dask.config.set(scheduler='synchronous')
 
-    # Check if input is a folder or a file
     if args.input.is_file():
         logger.info(f"opening image at {args.input}")
-        # PATCH: Bio-Formats defaults to zeissczi.autostitch=true, which merges a CZI
-        # tile mosaic into a single stitched image (plus pyramid levels, which
-        # drop_non_matching_scenes then discards) before the field count below.
-        # BaSiC is left with one field and either fails or, with -ie, fits a
-        # meaningless profile.
+        # PATCH: Bio-Formats autostitches CZI tiles into one field by default,
+        # leaving BaSiC nothing to fit.
         reader_kwargs = {}
         if args.input.suffix.lower() == ".czi":
             reader_kwargs["options"] = {
@@ -291,7 +275,6 @@ def main(args):
             darkfields.append(basic.darkfield)
             logger.info(f'End processing channel {c}')
 
-    # If input is a folder
     else:
         images_data = None
         channels = None
@@ -339,11 +322,9 @@ def main(args):
     flatfields = np.array(flatfields)
     darkfields = np.array(darkfields)
 
-    # Get output file names, splitext gets the file name without the extension
     flatfield_path = args.output_folder / f'{args.output_flatfield}-ffp.ome.tif'
     darkfield_path = args.output_folder / f'{args.output_darkfield}-dfp.ome.tif'
 
-    # Save flatfields and darkfields
     tf_kwargs = dict(
         photometric='minisblack',
         compression='adobe_deflate',
@@ -355,8 +336,5 @@ def main(args):
 
 
 if __name__ == "__main__":
-    # Import arguments
     args = get_args()
-
-    # Run main and check time
     main(args)

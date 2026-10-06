@@ -1,9 +1,4 @@
-"""Make the scripts in bin/ and tools/ importable by the unit tests.
-
-They are executables rather than an installed package, so there is no import path
-to them by default. Adding both directories here keeps the test files themselves
-free of sys.path manipulation.
-"""
+"""Put bin/ and tools/ on sys.path so the unit tests can import the scripts."""
 
 import sys
 from pathlib import Path

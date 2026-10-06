@@ -1,7 +1,4 @@
-"""Marker sheet parsing and channel-name reading.
-
-Every case here is one that has actually happened or is one step away from it.
-"""
+"""Tests for marker sheet parsing and channel label reading in set_channel_names.py."""
 
 import json
 
@@ -26,10 +23,7 @@ class TestReadMarkerNames:
         assert read_marker_names(p) == ["DNA_1", "CD45", "CD3"]
 
     def test_gaps_are_allowed(self, tmp_path):
-        """backsub removes background channels, leaving channel_number with holes.
-
-        Relative order is what matters, not contiguity.
-        """
+        """backsub removes background channels, leaving gaps in channel_number."""
         p = write(tmp_path, "channel_number,marker_name\n1,DNA_1\n4,CD45\n7,SMA\n")
         assert read_marker_names(p) == ["DNA_1", "CD45", "SMA"]
 
@@ -88,11 +82,7 @@ class TestChannelLabels:
             channel_labels(store, "nope")
 
     def test_unexpected_layout_refused(self, tmp_path):
-        """If spatialdata moves channel names, fail loudly rather than return nothing.
-
-        The earlier version of this function fell back silently on any exception,
-        which would have hidden exactly this.
-        """
+        """If spatialdata moves channel names, raise rather than return nothing."""
         store = make_store(tmp_path)
         (store / "images" / "img" / "zarr.json").write_text(json.dumps({"attributes": {}}))
         with pytest.raises(ValueError, match="layout has changed"):

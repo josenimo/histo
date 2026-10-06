@@ -1,10 +1,5 @@
-// `--use_qc false` enabled QC on a real run, and not for the reason it appears to.
-//
-// Nextflow reads `--use_qc` as a bare flag, sets it to boolean true, and discards the
-// `false` completely: it reaches neither params nor the positional args. So the value is
-// gone before any pipeline code runs, and workflow.commandLine is the only place it
-// survives. That is why this check reads a string, and why it is given the command line
-// as an argument rather than reading the global, so it can be tested at all.
+// `--use_qc false` sets use_qc to true and discards `false`; only workflow.commandLine keeps it.
+// The check takes the command line as an argument so it can be tested.
 
 nextflow_function {
 
@@ -30,9 +25,7 @@ nextflow_function {
     }
 
     test("the spaced form is rejected even when it would have produced the right answer") {
-        // `--use_qc true` happens to work, for exactly the reason `--use_qc false` does
-        // not. A form that is correct for one value and silently inverts the other is
-        // worse than one that never works.
+        // Rejected too: a form that works for one value and inverts the other is a trap.
         when {
             function {
                 """
@@ -73,8 +66,7 @@ nextflow_function {
     }
 
     test("-stub does not trip it") {
-        // -stub puts a bare `true` into the positional args, which is why this cannot be
-        // implemented as a check on positional arguments: every stub run would fail.
+        // -stub puts a bare `true` in the positional args, so a positional check would fail every stub run.
         when {
             function {
                 """

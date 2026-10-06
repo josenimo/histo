@@ -1,8 +1,5 @@
 process MERGE_REPORT {
-    // One page for a dearrayed slide, from the per-core metrics QC_METRICS already
-    // wrote. Like QC_REPORT it reads JSON and writes HTML, so it needs nothing from
-    // the container beyond a Python interpreter, and it measures nothing itself --
-    // a number here cannot disagree with the core report it came from.
+    // Slide-level page built only from per-core QC_METRICS JSON; it measures nothing itself.
     label 'process_single'
     tag "${meta.sample}"
 
@@ -12,8 +9,7 @@ process MERGE_REPORT {
 :         'community.wave.seqera.io/library/python_sopa:54a97bc5a187152d' }"
 
     input:
-    // Every core of one slide, grouped. meta is the slide rather than a core, which
-    // is what makes this one task per slide instead of one per core.
+    // meta is the slide; core_metrics holds every core of it.
     tuple val(meta), path(core_metrics)
 
     output:

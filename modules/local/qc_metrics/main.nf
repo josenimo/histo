@@ -8,13 +8,7 @@ process QC_METRICS {
 :         'community.wave.seqera.io/library/python_sopa:54a97bc5a187152d' }"
 
     input:
-    // `unsubtracted` is the pre-background-subtraction image, and it is optional: pass
-    // [] and the before-and-after comparison is simply absent from the JSON. It has to
-    // come in as an input rather than be read from the publish directory, because a
-    // task must not depend on another task's published output -- that is not staged,
-    // and with -resume it may not exist.
-    // markers is per sample, carried in the tuple so it is matched by key rather
-    // than broadcast.
+    // unsubtracted (pre-backsub image) and markers are optional; pass [] to omit.
     tuple val(meta), path(sdata_path), path(unsubtracted), path(markers)
 
     output:

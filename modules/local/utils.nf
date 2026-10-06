@@ -1,20 +1,5 @@
-//
-// Function library, not a process. Vendored from nf-core/sopa at c2b4e5f.
-//
-// argsCLI() maps the flat parameters in nextflow.config into command-line strings
-// for the sopa CLI, skipping nulls. extractSubArgs() defines which parameters
-// belong to which step. Adding a parameter to nextflow.config is not enough; it
-// must also be listed here or it will never reach the tool.
-//
-// ACCEPTED LINT WARNING: `local_component_structure` says this should live at
-// modules/local/utils/main.nf. It is deliberately left flat, because it contains
-// no process. Moving it would bring it into the scope of the module-has-stub and
-// module-emits-versions pre-commit hooks, which glob modules/local/*/main.nf, and
-// it would fail both: a function library has neither a stub block nor a version
-// to report. The flat file is more honest about what this is. The warning is
-// accepted rather than exempted, since exempting would disable the check for
-// every local module and hide a genuine violation later.
-//
+// Function library vendored from nf-core/sopa at c2b4e5f. New sopa params must also be added to extractSubArgs().
+// Kept flat despite lint (local_component_structure): as utils/main.nf it fails the stub/versions hooks.
 
 def stringifyItem(String key, value) {
     key = key.replace('_', '-')
@@ -110,23 +95,8 @@ def extractSubArgs(Map args, String group) {
     }
 }
 
-//
-// Channel names arrive as a string, but may legitimately be a number.
-//
-// The schema declares these parameters as ["string", "integer"], on nf-schema's own
-// recommendation for identifier-like fields: a value of `0` is inferred as an integer
-// somewhere between the params file and validation, and fails a plain "string" schema
-// with `Value is [integer] but should be [string]` before the pipeline even starts.
-//
-// This bites here specifically because channel names are currently integers. Ashlar
-// does not write marker names into the OME-XML, so sopa falls back to naming channels
-// 0..N and the only way to address one is by number. Once ROADMAP section 6 lands and
-// real marker names reach the zarr, the integer case becomes vestigial rather than the
-// normal one, but numeric channel names remain legal so this stays.
-//
-// The parameter is deliberately untyped. Declaring it `String` made Groovy coerce
-// silently, which hid what was happening.
-//
+// Channels may be a string or a number (schema type ["string", "integer"]); left untyped so
+// Groovy does not coerce silently.
 def getChannels(channels, Boolean allow_null = false) {
     if (channels == null) {
         if (allow_null) {

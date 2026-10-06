@@ -1,18 +1,5 @@
-// Channel topology of the preprocessing half, under -stub.
-//
-// These assert wiring, not correctness: no real tool runs, so nothing here says an
-// image was stitched well. What they do catch is the class of bug that has actually
-// happened -- cycles grouped wrongly, a TMA fan-out that loses core identity, an
-// emit that nothing consumes.
-//
-// Tested at subworkflow level rather than through the pipeline on purpose. The
-// pipeline entry point needs a samplesheet, whose relative paths resolve against a
-// working directory nf-test controls; here the inputs are built in Groovy and can
-// use ${projectDir} directly.
-//
-// -profile laptop is required: ASHLAR and BACKSUB declare their versions with
-// eval(), which Nextflow evaluates in the task environment even under -stub, so the
-// binaries must exist. The laptop profile puts tests/stub_bin on PATH.
+// Channel wiring of the preprocessing half under -stub; nothing here checks image quality.
+// -profile laptop is required: it puts tests/stub_bin on PATH for the eval() version shims.
 
 nextflow_workflow {
 
@@ -58,11 +45,9 @@ nextflow_workflow {
         then {
             assertAll(
                 { assert workflow.success },
-                // Two cycles in, one stitched image out. If grouping broke, this is 2.
+                // Two cycles in, one stitched image out.
                 { assert workflow.out.images.size() == 1 },
-                // The effective marker sheet must be emitted even without backsub;
-                // SET_CHANNEL_NAMES consumes it and a missing emit is a compile error
-                // that only shows up when the caller runs.
+                // The marker sheet must be emitted even without backsub; SET_CHANNEL_NAMES consumes it.
                 { assert workflow.out.markers.size() == 1 }
             )
         }
@@ -106,18 +91,12 @@ nextflow_workflow {
                 { assert workflow.success },
                 // The Coreograph stub emits two cores, so one slide becomes two samples.
                 { assert workflow.out.images.size() == 2 },
-                // Core IDs carry the slide name and a zero-padded index, and must not
-                // keep an extension. `.ome` survived here once, and that ID goes on to
-                // become the zarr directory name and every merged element prefix.
+                // No file extension in core IDs: they become zarr names and merged element prefixes.
                 { assert metas.every { it.id ==~ /testslide_core\d{3}/ } },
-                // meta.slide is what MERGE_SPATIALDATA groups on. Without it every core
-                // groups under a null key and unrelated slides merge together.
+                // MERGE_SPATIALDATA groups on meta.slide; without it unrelated slides merge together.
                 { assert metas.every { it.slide == 'testslide' } },
                 { assert metas.collect { it.id }.toSet().size() == 2 },
-                // Every core inherits its slide's marker sheet, keyed by the core
-                // rather than the slide. One entry per core, not one per slide: keyed
-                // by slide, the downstream join would match the first core and drop
-                // the rest, which is how a four-core slide once produced one report.
+                // One marker sheet per core, keyed by core: keyed by slide, the join keeps only one core.
                 { assert workflow.out.markers.size() == 2 },
                 { assert workflow.out.markers.collect { it[0].id }.sort() == ['testslide_core001', 'testslide_core002'] },
                 { assert workflow.out.markers.every { it[1].endsWith('markers.csv') } }
@@ -127,11 +106,7 @@ nextflow_workflow {
 
     test("backsub on a TMA subtracts each core and keeps its unsubtracted twin") {
 
-        // The combination that had no test, and the one the ordering change is for.
-        // Dearraying runs before subtraction, so `unsubtracted` is one entry per core
-        // keyed exactly like `images`. With the old order it was the whole slide, and
-        // QC's join produced nothing to compare a core against -- a backsub run whose
-        // report showed no subtraction and gave no reason.
+        // Dearray runs before subtraction, so `unsubtracted` must be keyed per core like `images`.
         when {
             params {
                 use_backsub = true
@@ -172,23 +147,18 @@ nextflow_workflow {
                 { assert workflow.out.images.size() == 2 },
                 { assert imageIds == ['testslide_core001', 'testslide_core002'] },
 
-                // The point of the reorder: one unsubtracted image per core, keyed
-                // the same way. Anything else and QC's join drops it.
+                // One unsubtracted image per core, keyed the same way, or QC's join drops it.
                 { assert workflow.out.unsubtracted.size() == 2 },
                 { assert unsubIds == imageIds },
 
                 // Cores still know their slide after passing through backsub.
                 { assert workflow.out.images.every { it[0].slide == 'testslide' } },
 
-                // backsub writes its own sheet, per core rather than per slide,
-                // because the sheet reached it already fanned out. Keyed by slide
-                // instead, the downstream join keeps one core and drops the rest.
+                // backsub's sheet is per core; keyed by slide, the join keeps only one core.
                 { assert workflow.out.markers.size() == 2 },
                 { assert workflow.out.markers.collect { it[0].id }.sort() == imageIds },
 
-                // The subtracted image is not the input file. The module errors when
-                // its prefix collides with the input name, and on this path the two
-                // are one rename apart.
+                // The output name must differ from the input, or the module errors.
                 { assert workflow.out.images.every { it[1].contains('backsub') } }
             )
         }
@@ -196,8 +166,6 @@ nextflow_workflow {
 
     test("backsub without a TMA still yields one image and one unsubtracted twin") {
 
-        // The path that already worked, asserted so the reorder cannot quietly
-        // change it while fixing the TMA one.
         when {
             params {
                 use_backsub = true
@@ -234,9 +202,7 @@ nextflow_workflow {
 
     test("no backsub emits no unsubtracted image at all") {
 
-        // Absent rather than a copy of the image: an empty channel is what tells QC
-        // there is nothing to compare, and a copy would render a before-and-after
-        // chart showing two identical series.
+        // Empty, not a copy: an empty channel tells QC there is nothing to compare.
         when {
             params {
                 use_backsub = false

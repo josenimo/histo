@@ -1,11 +1,4 @@
-// cycle_number identifies a cycle together with the sample name, so a repeat makes two
-// rows indistinguishable to the pipeline.
-//
-// The repeated case is not hypothetical: a real three-cycle run had its cycles numbered
-// 1, 2, 2, completed, and gave no indication that each cycle's illumination profile was
-// attached to whichever image happened to finish first.
-//
-// Rows arrive as [meta, image_tiles, dfp, ffp, marker_sheet]; only meta is read here.
+// cycle_number plus sample name identifies a cycle; a repeat silently mismatches illumination profiles.
 
 nextflow_function {
 
@@ -87,8 +80,7 @@ nextflow_function {
     }
 
     test("each sample is numbered independently") {
-        // Two samples both starting at 1 is normal, not a collision: meta carries the
-        // sample name as well.
+        // Two samples both starting at 1 is normal, not a collision.
         when {
             function {
                 """

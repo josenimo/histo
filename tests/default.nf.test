@@ -1,19 +1,5 @@
-// The pre-stitched entry point, end to end, under -stub.
-//
-// This file replaces an inherited nf-core/sopa snapshot test. That one recorded
-// `"nf-core/sopa": "v1.0.1"` and asserted on outputs this pipeline no longer
-// produces -- `explorer`, `sopa_software_versions` -- so it could not pass and had
-// not been run in a long time. A test that cannot pass is worse than no test: it
-// occupies the place where a real one would go. Rewritten as property assertions,
-// which is what tests/README.md asks for and what the fixture test already does.
-//
-// `-profile test` is the `use_preprocessing = false` path: images arrive already
-// stitched, so BASICPY and ASHLAR never run and the image is assumed to carry its
-// own channel names. ROADMAP listed that entry point as untested; this covers its
-// wiring, though not its numbers, because -stub runs no tool.
-//
-// Under -stub deliberately. The alternative needs seven containers and therefore
-// cannot run in CI, which is how the file it replaces came to rot.
+// The pre-stitched entry point (use_preprocessing = false) end to end.
+// Under -stub so it runs in CI without containers; it checks wiring, not numbers.
 
 nextflow_pipeline {
 
@@ -39,46 +25,33 @@ nextflow_pipeline {
             assertAll(
                 { assert workflow.success },
 
-                // The defining property of this path: nothing preprocesses. An image
-                // entering pre-stitched has no raw tiles to correct or register, and
-                // running either would mean the entry point is not the entry point.
+                // Pre-stitched input: nothing preprocesses.
                 { assert names("BASICPY").isEmpty() },
                 { assert names("ASHLAR").isEmpty() },
                 { assert names("COREOGRAPH").isEmpty() },
                 { assert names("BACKSUB").isEmpty() },
 
-                // SET_CHANNEL_NAMES is skipped for the same reason and one more: it
-                // reads the marker sheet, and on this path there is no marker sheet
-                // because nothing describes an image the pipeline did not build.
+                // No marker sheet on this path, so no channel renaming.
                 { assert names("SET_CHANNEL_NAMES").isEmpty() },
 
-                // Segmentation still tiles. The toy dataset gives two patches at
-                // patch_width_pixel = 5000; one would mean tiling silently collapsed
-                // and boundary resolution went unexercised, which has happened before.
+                // Two patches at 5000 px; one would mean tiling silently collapsed.
                 { assert names("PATCH_SEGMENTATION_CELLPOSE").size() == 2 },
                 { assert names("RESOLVE_CELLPOSE").size() == 1 },
                 { assert names("AGGREGATE").size() == 1 },
 
-                // Enabled by conf/test.config on purpose: a feature kept but never
-                // run rots silently, which is the lesson this whole file is.
+                // Enabled in conf/test.config so this path is exercised.
                 { assert names("FLUO_ANNOTATION").size() == 1 },
 
-                // Not a TMA, so neither slide-level step may appear. MERGE_REPORT
-                // guards on use_tma_dearray and use_qc together, and the cheapest
-                // way for that guard to break is to stop being a guard.
+                // Not a TMA, so no slide-level steps.
                 { assert names("MERGE_SPATIALDATA").isEmpty() },
                 { assert names("MERGE_REPORT").isEmpty() },
 
-                // The store is published by exactly one process, and QC reads it
-                // without writing, so all three QC steps run once.
                 { assert names("PUBLISH_SPATIALDATA").size() == 1 },
                 { assert names("QC_METRICS").size() == 1 },
                 { assert names("QC_IMAGES").size() == 1 },
                 { assert names("QC_REPORT").size() == 1 },
 
-                // Provenance for the processes that ran. A missing entry means a
-                // module lost its version capture, which is invisible until someone
-                // tries to trace a result.
+                // A missing entry means a module lost its version capture.
                 { assert path("$outputDir/pipeline_info/histo_software_versions.yml").exists() },
                 { assert path("$outputDir/pipeline_info/histo_software_versions.yml").text.contains('AGGREGATE') }
             )

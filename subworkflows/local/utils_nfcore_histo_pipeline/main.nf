@@ -83,10 +83,7 @@ workflow PIPELINE_INITIALISATION {
         before_text,
         after_text,
         command,
-        // cast_cli_params. Without this, --expand_radius_ratio 0.1 arrives as the
-        // string "0.1" and fails schema validation against a number, and likewise
-        // --use_cellpose true against a boolean. Anything set on the command line
-        // rather than in a profile or params file needs coercion.
+        // cast_cli_params: CLI values arrive as strings and would fail number/boolean validation
         true,
     )
 
@@ -99,28 +96,14 @@ workflow PIPELINE_INITIALISATION {
 
     //
     // Create channel from input file provided through params.input
-    //
-    // The samplesheet has two shapes, chosen by params.use_preprocessing:
-    //
-    //   true  (default) one row per acquisition cycle. Raw tiles go through
-    //                   illumination correction and stitching first.
-    //   false           one row per sample, pointing at data already in a form
-    //                   sopa can read. Used for pre-stitched images, for dearrayed
-    //                   TMA cores re-entering the pipeline, and for toy_dataset.
-    //
-    // Declared out here because the marker sheet block further down needs it as well,
-    // and a `def` inside an if block is scoped to that block.
+    // use_preprocessing: one row per acquisition cycle; otherwise one row per sample, already sopa-readable.
+    // cycle_rows is declared here because the marker sheet block below also needs it.
     def cycle_rows = null
 
     if (params.use_preprocessing) {
-        // Rows arrive as [meta, image_tiles, dfp, ffp, marker_sheet], in schema
-        // property order. Read once and used twice: for the cycles themselves, and
-        // for the per-sample marker sheets below.
+        // Rows are [meta, image_tiles, dfp, ffp, marker_sheet], in schema property order.
         cycle_rows = samplesheetToList(params.input, "${projectDir}/assets/schema_input_cycle.json")
 
-        // Called for their assertions rather than their return value, which is the rows
-        // unchanged. Sequential rather than nested so that adding a fourth check does not
-        // mean another layer of brackets.
         validateIlluminationColumns(cycle_rows)
         validateCycleNumbers(cycle_rows)
         validateMarkerSheetColumn(cycle_rows)
@@ -128,14 +111,8 @@ workflow PIPELINE_INITIALISATION {
         Channel
             .fromList(cycle_rows)
             .map { meta, image_tiles, dfp, ffp, _marker_sheet ->
-                // sdata_dir is deliberately not set here. It is per-sample, and at
-                // this point a row is one cycle of a sample. It is added after
-                // cycles are grouped and stitched.
-                //
-                // marker_sheet is dropped here rather than carried through
-                // stitching. It is per-sample and every cycle of a sample repeats
-                // the same value, so carrying it per cycle would mean grouping it
-                // back again and choosing which copy to trust.
+                // sdata_dir and marker_sheet are per sample, so both are attached after stitching
+                // (marker_sheet via ch_markersheet).
                 [meta, image_tiles, dfp, ffp]
             }
             .set { ch_samplesheet }
@@ -160,41 +137,18 @@ workflow PIPELINE_INITIALISATION {
             .set { ch_samplesheet }
     }
 
-    //
-    // Sopa params validation
-    //
+    // Params validation
     rejectSpacedBooleans(workflow.commandLine)
     rejectStringBooleans(params)
     rejectUnknownParams(params)
     validateParams(params)
 
-    //
-    // Marker sheets, one per sample. One row per channel across all cycles.
-    //
-    // The sheet is a samplesheet column rather than a parameter because it
-    // describes a sample, and two samples in one run may have different channel
-    // layouts. A parameter could only ever say one thing for all of them.
-    //
-    // Checked once per sample, so a sheet shared by several samples is parsed once for
-    // each of them. That is deliberate rather than merely tolerable: the checks are
-    // cheap on a file this size, and validating per sample is what lets the error
-    // message name the sample whose sheet is wrong.
-    //
-    // The channel carries the path rather than the parsed rows. Every consumer reads
-    // the CSV itself: set_channel_names.py and qc_metrics.py both parse with
-    // csv.DictReader and require only the columns they use, and backsub reads it with
-    // pd.read_csv and passes unknown columns through to its own marker output. So
-    // nothing needs the sheet rewritten, and a path joins onto an image by key while
-    // a list of rows would have to be broadcast.
-    //
-    // Validated synchronously, before any channel exists. An assert thrown inside a
-    // channel operator is swallowed and the run dies with no message; called here it
-    // surfaces the way validateIlluminationColumns does.
+    // Marker sheets, one per sample, emitted as paths (each consumer parses the CSV itself).
+    // Validated here, not in a channel operator, where a failed assert dies without a message.
     if (params.use_preprocessing) {
         def sheets_by_sample = markerSheetsBySample(cycle_rows)
 
-        // Every column of the marker sheet is declared as meta, so each row arrives
-        // as a single-element list holding the meta map, hence it[0].
+        // Every marker sheet column is declared as meta, so each row is [meta], hence it[0].
         sheets_by_sample.each { sample, sheet ->
             validateMarkersheet(
                 samplesheetToList(sheet, "${projectDir}/assets/schema_marker.json").collect { it[0] },
@@ -207,9 +161,7 @@ workflow PIPELINE_INITIALISATION {
         )
     }
     else {
-        // No marker sheet on this path, and none needed. An image entering the
-        // pipeline pre-stitched is assumed to carry its own channel names, so nothing
-        // downstream renames them.
+        // Pre-stitched images are assumed to carry their own channel names.
         ch_markersheet = channel.empty()
     }
 
@@ -335,16 +287,8 @@ def methodsDescriptionText(mqc_methods_yaml) {
     return description_html.toString()
 }
 
-//
-// Illumination profiles are all-or-nothing per sample.
-//
-// Whether BaSiCPy runs is inferred from the samplesheet rather than set by a
-// parameter, which is only safe if the columns are consistent. A samplesheet
-// giving dfp and ffp for some cycles of a sample but not others would send half
-// the cycles down each path, and Ashlar would receive profiles that do not line
-// up with its images. That is silent misregistration, the same failure mode as
-// unsorted cycles. JSON Schema cannot express this, so it is checked here.
-//
+// dfp/ffp must be given for every cycle of a sample or none; a mix silently misaligns
+// profiles against images in Ashlar. JSON Schema cannot check across rows.
 def validateIlluminationColumns(rows) {
     rows.groupBy { it[0].id }.each { sample, cycles ->
         def withProfiles = cycles.count { it[2] && it[3] }
@@ -357,28 +301,8 @@ def validateIlluminationColumns(rows) {
     return rows
 }
 
-//
-// cycle_number must run 1..N per sample, without repeats and without gaps.
-//
-// A repeat is the dangerous case and it has happened: a real three-cycle run whose sheet
-// numbered the cycles 1, 2, 2. meta is built from sample and cycle_number alone, so two
-// rows sharing both produce identical meta maps, and meta is the join key that attaches
-// each cycle's BaSiCPy profile to its image in preprocess_images/main.nf. Which cycle
-// receives which profile then depends on task completion order, and the groupTuple sort
-// beside it ties the same way. The run succeeds with no guarantee that the profiles match
-// their images, which is silent misregistration.
-//
-// assets/schema_input_cycle.json has always promised "sequential and without gaps" in its
-// errorMessage, but JSON Schema validates each row on its own and cannot see across rows,
-// so that message described a check nobody had written. This is that check.
-//
-// Gaps have no known failure mode, unlike repeats. They are rejected anyway because the
-// schema says they are, because cycle_number is an index and an index with a hole in it
-// usually means a cycle went missing on the way to the samplesheet, and because a run
-// that quietly processes two of three cycles is the kind of thing this pipeline exists to
-// make visible. If that ever blocks something legitimate, this is the paragraph to argue
-// with.
-//
+// cycle_number must run 1..N per sample. Repeats give two cycles the same meta (the BaSiCPy
+// join key), so profiles attach by completion order. Gaps usually mean a missing cycle.
 def validateCycleNumbers(rows) {
     rows.groupBy { it[0].id }.each { sample, cycles ->
         def numbers = cycles.collect { it[0].cycle_number }.sort()
@@ -401,15 +325,7 @@ def validateCycleNumbers(rows) {
     return rows
 }
 
-//
-// The marker sheet is per sample, but the samplesheet has one row per cycle, so the
-// column repeats. All copies must agree.
-//
-// A sample whose cycles name different sheets is asking for one image to be described
-// two ways, and whichever copy happened to be read first would win silently. JSON
-// Schema validates rows independently and cannot see across them, so this is checked
-// here, the same category and the same reason as validateIlluminationColumns.
-//
+// marker_sheet repeats on every cycle row of a sample; all copies must agree.
 def validateMarkerSheetColumn(rows) {
     rows.groupBy { it[0].id }.each { sample, cycles ->
         def sheets = cycles.collect { it[4] as String }.unique()
@@ -422,25 +338,15 @@ def validateMarkerSheetColumn(rows) {
     return rows
 }
 
-//
-// Sample name to marker sheet, one entry per sample.
-//
-// Distinct by construction, because validateMarkerSheetColumn has already established
-// that a sample's cycles agree. Two samples may share a sheet, and then it is parsed
-// once per sample; the sheets are small and the checks are cheap.
-//
+// Sample name to marker sheet. Relies on validateMarkerSheetColumn having run.
 def markerSheetsBySample(rows) {
     return rows.collectEntries { row -> [(row[0].id): row[4]] }
 }
 
-//
 // Marker sheet checks that JSON Schema cannot express.
-//
 def validateMarkersheet(rows, sample = null) {
     def where = sample ? "marker_sheet for sample '${sample}'" : "marker_sheet"
-    // channel_number is a continuous index across all cycles, not per-cycle. If it
-    // restarts each cycle, every channel after cycle 1 is mislabelled and the
-    // feature table silently carries the wrong marker names.
+    // channel_number is continuous across cycles; restarting per cycle mislabels later channels.
     def numbers = rows.collect { it.channel_number }
     def expected = (1..rows.size()).toList()
     assert numbers == expected : (
@@ -448,15 +354,8 @@ def validateMarkersheet(rows, sample = null) {
         "without restarting per cycle. Got ${numbers}."
     )
 
-    // Marker names must be unique. They become the column names of the feature matrix,
-    // so duplicates make it ambiguous, and backsub requires uniqueness too.
-    //
-    // set_channel_names.py already rejects them, but it runs after Ashlar and backsub,
-    // so a duplicate costs a full stitch before anything complains. Checked here it
-    // costs nothing. The role lookup below is the more immediate reason: it is built
-    // with collectEntries, which keeps the last value for a repeated key, so a name
-    // appearing twice with different roles would silently resolve to one of them and
-    // the background check would then pass or fail for a reason nobody could see.
+    // Unique marker names: they become feature columns, and roleByName below (collectEntries)
+    // would silently keep only the last role of a duplicate. Also saves a full stitch.
     def duplicateNames = rows
         .groupBy { it.marker_name }
         .findAll { _name, group -> group.size() > 1 }
@@ -467,10 +366,7 @@ def validateMarkersheet(rows, sample = null) {
         "become the feature matrix column names, so a duplicate makes a column ambiguous."
     )
 
-    // Every cycle needs a nuclear stain. Ashlar registers cycles against one another
-    // through it, segmentation reads it, and the cross-cycle photobleaching metric
-    // compares it from cycle to cycle. A cycle without one is either a sheet that
-    // forgot to label it or an acquisition that nothing downstream can align.
+    // Every cycle needs a dna channel: registration, segmentation and the photobleaching metric use it.
     def cyclesWithoutDna = rows
         .groupBy { it.cycle_number }
         .findAll { _cycle, channels -> !channels.any { it.channel_role == 'dna' } }
@@ -482,15 +378,8 @@ def validateMarkersheet(rows, sample = null) {
         "cross-cycle photobleaching check all read the nuclear stain."
     )
 
-    // The background column names the channel to subtract, so whatever it names is by
-    // definition an autofluorescence channel. Two columns describing one fact would
-    // otherwise be free to disagree, and the disagreement would be invisible.
-    //
-    // Checked whether or not backsub runs. A sheet that labels its background channel
-    // as a marker is describing the acquisition wrongly, and that description is what
-    // QC and every later feature reads, not just backsub. This also catches a
-    // background naming a channel that does not exist when backsub is off, which the
-    // check below only catches when it is on.
+    // A background channel must have role autofluorescence. Checked even without backsub,
+    // since QC reads channel_role too.
     def roleByName = rows.collectEntries { [(it.marker_name): it.channel_role] }
     def wrongRole = rows
         .findAll { it.background && roleByName[it.background] != 'autofluorescence' }
@@ -500,9 +389,7 @@ def validateMarkersheet(rows, sample = null) {
         "'autofluorescence'. Offending rows: ${wrongRole}"
     )
 
-    // Background subtraction scales by exposure and looks up a background channel
-    // by marker_name. Both are optional columns in general but mandatory here, and
-    // a missing one produces a confusing failure inside the tool.
+    // backsub needs exposure and a valid background; otherwise it fails confusingly inside the tool.
     if (params.use_backsub) {
         def noExposure = rows.findAll { !it.exposure }.collect { it.marker_name }
         assert !noExposure : (
@@ -521,13 +408,7 @@ def validateMarkersheet(rows, sample = null) {
     return rows
 }
 
-//
-// Every parameter the schema declares, as name to definition.
-//
-// Read from nextflow_schema.json so the schema stays the single source of truth: a new
-// parameter is declared once and every check here picks it up without a second edit.
-// Parameters live in the $defs groups, with a handful at the top level.
-//
+// Every parameter in nextflow_schema.json (top level and $defs groups), as name to definition.
 def schemaParams() {
     def schema = new groovy.json.JsonSlurper().parseText(
         file("${projectDir}/nextflow_schema.json").text
@@ -540,23 +421,8 @@ def schemaParams() {
     return declared
 }
 
-//
-// A boolean written with a space is destroyed before the pipeline can see the value.
-//
-// `--use_qc false` does not leave QC enabled through string truthiness, which is what it
-// looks like. Nextflow reads `--use_qc` as a bare flag, sets it to boolean true, and
-// discards the `false` entirely: it is not in params, and it is not in the positional
-// args either. So the run explicitly enables the step the user asked to switch off, and
-// by the time any code runs, `params.use_qc` is indistinguishable from the default.
-//
-// workflow.commandLine is the only place the value survives, which is why this reads a
-// string rather than inspecting params. Taken as an argument rather than read from the
-// global so the check can be tested.
-//
-// `--use_qc true` is rejected too. It happens to produce the right answer, for the same
-// reason `--use_qc false` produces the wrong one, and a form that works for one value
-// and silently inverts the other is worse than one that never works.
-//
+// Rejects `--flag false` for booleans: Nextflow sets the bare flag to true and drops the value,
+// which survives only in workflow.commandLine. `--flag true` is rejected too, for consistency.
 def rejectSpacedBooleans(command_line) {
     if (!command_line) {
         return command_line
@@ -564,10 +430,8 @@ def rejectSpacedBooleans(command_line) {
 
     def booleans = schemaParams().findAll { _name, definition -> definition.type == 'boolean' }.keySet()
 
-    // Tokenised rather than matched with a regex, because the command line arrives with
-    // the offending pair quoted as `'--use_qc false'` and because an interpolated slashy
-    // pattern does not survive the Nextflow 26 parser. Quotes become separators, and
-    // tokenize discards the empties that leaves behind.
+    // Tokenised, not regex: the pair arrives quoted (`'--use_qc false'`) and interpolated
+    // slashy patterns fail under the Nextflow 26 parser.
     def tokens = command_line.replace("'", " ").replace('"', " ").tokenize(" ")
 
     def offenders = []
@@ -576,9 +440,7 @@ def rejectSpacedBooleans(command_line) {
             return
         }
         def name = token.substring(2)
-        // A following token starting with `-` is the next option, so the flag was bare
-        // and nothing was swallowed. `--use_qc=false` is a single token and is not
-        // matched here; rejectStringBooleans catches that form.
+        // Next token starting with `-` means a bare flag. `--x=false` is left to rejectStringBooleans.
         if (name in booleans && i + 1 < tokens.size() && !tokens[i + 1].startsWith("-")) {
             offenders << "  --${name} ${tokens[i + 1]}"
         }
@@ -600,23 +462,8 @@ def rejectSpacedBooleans(command_line) {
     )
 }
 
-//
-// A boolean given as a string is a boolean that will be read the wrong way round.
-//
-// `--use_qc=false` reaches the pipeline as the string "false", and every non-empty
-// string is true in Groovy, so `if (params.use_qc)` takes the enabled branch. This
-// affects every boolean the pipeline declares, not one of them.
-//
-// It cannot be fixed by coercing the value. params is a ScriptBinding$ParamsMap, which
-// ignores writes to a key that is already set: both `params.use_qc = false` and
-// `params.putAll([use_qc: false])` return without error and change nothing. Verified on
-// Nextflow 26.04.6. So the only honest options are to fail or to read the value through
-// a helper at every use site, and failing once at startup beats a helper that someone
-// eventually forgets.
-//
-// A bare `--use_qc` also arrives as a string, "true", and that one is both idiomatic and
-// correct, so only strings that do not mean true are rejected.
-//
+// Rejects `--flag=false`: the string "false" is truthy in Groovy, and params ignores writes to
+// keys already set, so it cannot be coerced. A bare flag arrives as "true" and is allowed.
 def rejectStringBooleans(params) {
     def declared = schemaParams()
     def offenders = declared
@@ -645,42 +492,15 @@ def rejectStringBooleans(params) {
     )
 }
 
-//
-// Reject parameters the schema does not declare.
-//
-// `use_use_tma_dearray = true` reached a real run: pipeline_info/params_*.json from
-// the published WSI run records both the typo and the real parameter, with
-// validate_params true. The typo was accepted, silently ignored, and the run did the
-// opposite of what it asked for while reporting success.
-//
-// nf-schema is supposed to do this. `validation.failUnrecognisedParams` is documented
-// and its value is read, but the field it assigns to is never declared on
-// ValidationConfig, so setting the option aborts the run with
-// `MissingPropertyException: No such property: failUnrecognisedParams`. Checked
-// against the source at tags 2.7.2, 2.7.3 and 2.8.0, which is every release at the
-// time of writing, and there is no upstream issue for it. Delete this function and
-// set the option once that is fixed.
-//
-// Unknown samplesheet columns need nothing here: `additionalProperties: false` in the
-// sheet schemas already rejects them, which is what `validation.failUnrecognisedHeaders`
-// would otherwise have been for.
-//
+// Rejects params the schema does not declare, which would otherwise be silently ignored.
+// TODO: replace with nf-schema's validation.failUnrecognisedParams once it stops throwing (broken up to 2.8.0).
 def rejectUnknownParams(params) {
     def declared = schemaParams().keySet()
 
-    // Set by the tooling rather than by a user, so absent from the schema by design.
-    //
-    // Getting this list wrong is not a small failure. Any nextflow_pipeline test
-    // loads tests/nextflow.config, so a tooling param missing from here aborts the
-    // run before a single process starts -- which is what happened to
-    // modules_testdata_base_path, and is one of the two independent reasons the
-    // fixture test in Phase 8's release checklist could not run.
+    // Set by tooling, not users. A missing entry aborts every nf-test pipeline run.
     def injected = [
-        'nf_test_output',  // nf-test, which is also in nf-schema's own default ignore list
-        // Set in tests/nextflow.config for the nf-core module tests, which address
-        // it directly (modules/nf-core/ashlar/tests/main.nf.test among others). Not
-        // a pipeline parameter and deliberately not in the schema, but present on
-        // every nf-test run of the pipeline itself.
+        'nf_test_output',  // nf-test
+        // tests/nextflow.config, for the nf-core module tests
         'modules_testdata_base_path',
     ] as Set
 
@@ -689,9 +509,7 @@ def rejectUnknownParams(params) {
         return params
     }
 
-    // A doubled prefix is the typo that got through, and `use_use_tma_dearray`
-    // contains `use_tma_dearray`, so plain containment finds it. Cheap, and it never
-    // claims a match it cannot show.
+    // Substring match catches doubled prefixes such as `use_use_tma_dearray`.
     def hints = unknown.collectEntries { name ->
         def near = declared.findAll { d -> d != name && (d.contains(name) || name.contains(d)) }.sort()
         [(name): near]
@@ -718,17 +536,13 @@ def validateParams(params) {
     def STAINING_BASED_METHODS = ['use_stardist', 'use_cellpose']
     def enabled = STAINING_BASED_METHODS.count { params[it] }
 
-    // Exactly one segmentation backend must be enabled. Both default to false, so
-    // running without a profile would otherwise leave ch_resolved unassigned and
-    // fail deep inside AGGREGATE with an unhelpful Groovy error.
+    // Exactly one backend: with none, ch_resolved is unassigned and AGGREGATE fails obscurely.
     assert enabled <= 1 : "Only one of ${STAINING_BASED_METHODS} may be used, but ${enabled} are enabled"
     assert enabled >= 1 : "A segmentation backend is required: set one of ${STAINING_BASED_METHODS} to true, " +
         "or use a profile that does (for example -profile test)"
 
-    // TMA dearray happens inside the preprocessing half, and it is what stamps
-    // meta.slide onto each core. MERGE_SPATIALDATA groups on meta.slide, so
-    // without preprocessing every core would group under a null key and silently
-    // merge unrelated slides into one object.
+    // Dearraying (preprocessing only) sets meta.slide, which MERGE_SPATIALDATA groups on;
+    // without it every core shares a null key and unrelated slides merge.
     assert !(params.use_tma_dearray && !params.use_preprocessing) :
         "use_tma_dearray requires use_preprocessing. Dearraying is part of the preprocessing " +
         "half; to re-enter already-dearrayed cores, list them in the samplesheet with " +

@@ -1,9 +1,5 @@
-// `--use_qc=false` arrives as the string "false", and every non-empty string is true in
-// Groovy, so `if (params.use_qc)` takes the enabled branch.
-//
-// It cannot be corrected in place. params is a ScriptBinding$ParamsMap and ignores writes
-// to a key that is already set, so `params.use_qc = false` and `params.putAll(...)` both
-// return without error and change nothing. Failing at startup is the alternative.
+// `--use_qc=false` arrives as the string "false", which Groovy treats as true.
+// params ignores writes to keys already set, so it cannot be corrected in place; fail at startup.
 
 nextflow_function {
 

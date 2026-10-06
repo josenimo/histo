@@ -1,7 +1,5 @@
 process QC_REPORT {
-    // The cheapest process in the pipeline: it reads a JSON, base64s some PNGs and
-    // writes HTML. bin/qc_report.py imports only the standard library, so this needs
-    // nothing from the container beyond a Python interpreter.
+    // bin/qc_report.py uses only the standard library.
     label "process_single"
     tag "${meta.sample}"
 
@@ -11,8 +9,7 @@ process QC_REPORT {
 :         'community.wave.seqera.io/library/python_sopa:54a97bc5a187152d' }"
 
     input:
-    // `image_dir` is optional: without it the report is charts and tables only, which
-    // is what a run with --use_qc_images false produces.
+    // image_dir is optional ([] when use_qc_images is false).
     tuple val(meta), path(metrics), path(image_dir)
 
     output:

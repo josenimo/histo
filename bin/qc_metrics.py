@@ -1,27 +1,8 @@
 #!/usr/bin/env python3
-"""Compute QC metrics for one sample and write them as JSON.
+"""Compute QC metrics for one sample's SpatialData store and write them as JSON.
 
-This produces numbers, not a verdict and not a page. Rendering lives in a separate
-script that takes this JSON as its only input, so the metrics can be tested without
-parsing HTML and the layout can change without touching a measurement.
-
-What this covers that `sopa report` does not. sopa draws cell count, an area
-histogram, channel names, per-cell intensity distributions and a UMAP. All of that
-is useful and none of it is machine-readable, so an unattended run cannot act on
-it. The metrics here are the ones a run needs in order to fail loudly: degenerate
-cells, per-channel dynamic range at full resolution, and patches that produced no
-cells at all.
-
-Read directly from the store rather than through spatialdata. Same reasoning as
-set_channel_names.py: the library pulls in dask and xarray and takes seconds to
-import, and everything needed here is a few small arrays plus one streamed pass
-over the pixels. zarr, numpy and pyarrow are all already in the sopa image as
-spatialdata's own dependencies.
-
-On thresholds. This script deliberately does not decide pass or fail. Every
-threshold worth having needs several real datasets behind it, and inventing one
-here would bake a guess into the pipeline's exit code. `--min-cell-area` is the
-exception: it only classifies, and the count it produces is reported either way.
+Reads the store with zarr directly (no spatialdata import). Optional inputs: marker
+sheet, pre-subtraction OME-TIFF. Reports numbers only; it never decides pass or fail.
 """
 
 from __future__ import annotations
@@ -33,26 +14,14 @@ import sys
 from pathlib import Path
 from typing import Any
 
-# Percentiles reported for every channel and for cell area. p99.9 and p99.99 are
-# here because clipping shows up in the extreme tail long before it moves p99: a
-# channel with 0.05% of its pixels pinned to the ceiling is already unusable for
-# quantification and p99 will not have budged.
+# p99.9 and p99.99 catch clipping in the extreme tail long before it moves p99.
 PERCENTILES = (1.0, 25.0, 50.0, 75.0, 99.0, 99.9, 99.99)
 
 
 def percentiles_from_histogram(hist: Any, percentiles: tuple[float, ...] = PERCENTILES) -> dict[str, float]:
-    """Exact percentiles of integer data, from a full-range bin count.
+    """Exact percentiles from a full-range histogram where `hist[v]` counts pixels of value `v`.
 
-    Integer images have few enough distinct values to count every one, so there is
-    no reason to approximate or to hold a channel in memory to call np.percentile.
-    `hist[v]` is the number of pixels with value `v`, which makes this exact rather
-    than interpolated -- and it lets the caller accumulate the histogram over
-    streamed row bands.
-
-    Returns the lowest value whose cumulative count reaches the requested fraction,
-    which is the "lower" convention rather than numpy's default interpolation. For
-    QC that is the honest choice: every number reported is a value that genuinely
-    occurs in the image.
+    Uses the "lower" convention, so every reported value occurs in the image.
     """
     import numpy as np
 
@@ -64,8 +33,6 @@ def percentiles_from_histogram(hist: Any, percentiles: tuple[float, ...] = PERCE
     cumulative = np.cumsum(hist)
     out = {}
     for p in percentiles:
-        # searchsorted on the cumulative count finds the first bin where at least
-        # this fraction of the data has been accounted for.
         target = p / 100.0 * total
         out[_pct_key(p)] = float(np.searchsorted(cumulative, target, side="left"))
     return out
@@ -78,18 +45,9 @@ def _pct_key(p: float) -> str:
 
 
 def effective_bit_depth(max_value: int) -> int:
-    """Bits actually used by the data, as opposed to the bits the dtype provides.
+    """Bits actually used by the data, rounded up, floored at 8 (0 for an empty channel).
 
-    A 12-bit camera writing into uint16 leaves the top four bits permanently zero.
-    Reporting this is the difference between a saturation check that works and one
-    that is decorative: on real pipeline output the per-channel maxima came in at
-    920 to 13572 against a uint16 ceiling of 65535, so a "fraction of pixels at
-    65535" check reads 0.0 on every channel and looks like a pass. The headroom is
-    what a human needs to see.
-
-    Rounds up to a whole bit and never reports less than 8, since no imaging
-    detector produces less and a smaller number means the channel is nearly empty
-    rather than genuinely 4-bit.
+    Real channel maxima were 920 to 13572 in uint16, so a ceiling check alone reads 0.
     """
     if max_value < 0:
         raise ValueError(f"max_value must be non-negative, got {max_value}")
@@ -99,17 +57,9 @@ def effective_bit_depth(max_value: int) -> int:
 
 
 def rebin(hist: Any, n_bins: int, upper: int) -> tuple[list[int], float]:
-    """Reduce a full-range histogram to `n_bins` counts over `[0, upper]`.
+    """Reduce a full-range histogram to `n_bins` counts over `[0, upper]`, for drawing only.
 
-    For drawing, not for measuring: every number the report states comes from the
-    exact histogram, and this only decides the shape of a sparkline. Kept in the
-    metrics script rather than the renderer so the renderer never needs the pixels.
-
-    `upper` is the caller's choice of where the drawn range ends, and it matters:
-    binning to the dtype's ceiling squeezes every real channel into the left fifth
-    of its axis, because channels peak between 3337 and 19200 out of 65535. The bin
-    width is returned because it differs per channel, and a chart that does not
-    label its axis from it would be lying about the scale.
+    Returns the counts and the bin width in intensity units.
     """
     import numpy as np
 
@@ -121,7 +71,6 @@ def rebin(hist: Any, n_bins: int, upper: int) -> tuple[list[int], float]:
 
     width = (upper + 1) / n_bins
     counts = np.zeros(n_bins, dtype=np.int64)
-    # Sum whole bins with reduceat, which needs the start index of each bin.
     edges = np.minimum((np.arange(n_bins) * width).astype(np.int64), len(hist) - 1)
     summed = np.add.reduceat(hist[: min(len(hist), int(upper) + 1)], edges[edges <= upper])
     counts[: len(summed)] = summed
@@ -133,15 +82,8 @@ def channel_metrics(
 ) -> dict[str, Any]:
     """Per-channel intensity metrics from one channel's full-range histogram.
 
-    `fraction_at_dtype_ceiling` is true saturation: pixels the detector could not
-    represent. It is the metric that matters and it is usually zero.
-    `headroom_stops` is how many bits of the dtype went unused, and is the metric
-    that is usually interesting -- a channel using 14 of 16 bits is fine, one using
-    9 is throwing away three quarters of its precision.
-
-    `fraction_zero` earns its place on this pipeline specifically. Background
-    subtraction clips at zero, so a channel that comes out of backsub mostly zero
-    has had its signal subtracted away, and that is invisible in a mean intensity.
+    `fraction_zero` matters because background subtraction clips at zero.
+    `histogram_upper` defaults to `dtype_max`.
     """
     import numpy as np
 
@@ -170,17 +112,7 @@ def channel_metrics(
         "headroom_stops": round(math.log2((dtype_max + 1) / (max_value + 1)), 2) if max_value else None,
     }
     metrics.update(percentiles_from_histogram(hist))
-    # One absolute axis shared by every channel, so the drawings are comparable: two
-    # channels with the same-looking curve really do have the same intensities. An
-    # earlier version binned each channel to its own p99.9, which was readable per row
-    # and meaningless across rows.
-    #
-    # The shared bound is the brightest channel's maximum, not the dtype's ceiling. The
-    # ceiling is the honest limit of what the detector could record, but real channels
-    # reach a fifth of it at most, so binning there puts every distribution in the
-    # leftmost few percent of the axis and all fifteen rows become the same spike --
-    # comparable and unreadable. The caller passes the bound; the ceiling is still
-    # reported separately as dtype_ceiling.
+    # The caller passes one bound shared by all channels so the drawings are comparable.
     upper = dtype_max if histogram_upper is None else histogram_upper
     counts, width = rebin(hist, n_bins, upper)
     metrics["histogram"] = counts
@@ -190,13 +122,7 @@ def channel_metrics(
 
 
 def area_metrics(areas: Any, min_cell_area: float) -> dict[str, Any]:
-    """Cell area distribution, and how many cells are too small to be cells.
-
-    Real pipeline output had a minimum area of 4.3 px squared against a median of
-    1009, which is segmentation debris rather than biology. A count of those is a
-    far better signal than the histogram sopa already draws, because it is one
-    number that can be compared between runs.
-    """
+    """Cell area distribution (square pixels) and the count below `min_cell_area`."""
     import numpy as np
 
     areas = np.asarray(areas, dtype=np.float64)
@@ -216,10 +142,7 @@ def area_metrics(areas: Any, min_cell_area: float) -> dict[str, Any]:
     for p in PERCENTILES:
         out[_pct_key(p)] = float(np.percentile(areas, p))
 
-    # Binned to p99 rather than to the maximum. Cell area is heavy-tailed -- a 12688
-    # px2 outlier against a 1009 median -- so binning to the max puts every real cell
-    # in the first two bins. The overflow count keeps the tail honest rather than
-    # cropping it silently.
+    # Binned to p99: area is heavy-tailed (a 12688 px2 outlier against a 1009 median).
     upper = out[_pct_key(99.0)]
     counts, edges = np.histogram(areas, bins=48, range=(0.0, upper))
     out["histogram"] = [int(c) for c in counts]
@@ -230,18 +153,9 @@ def area_metrics(areas: Any, min_cell_area: float) -> dict[str, Any]:
 
 
 def cells_per_patch(centroids: Any, bboxes: Any) -> Any:
-    """How many cell centroids fall inside each patch bounding box.
+    """Count cell centroids `(n, 2)` inside each patch bbox `(n, 4)` as x0, y0, x1, y1.
 
-    Counts centroids rather than intersecting boundaries, because a centroid is one
-    point and gives each cell exactly one home. Patches overlap by design
-    (`patch_overlap_pixel`), so a cell in an overlap region is counted by both
-    patches it lands in and the counts sum to more than the cell total. That is
-    correct for the question being asked -- "did this patch produce cells" -- and
-    the caller reports the overlap rather than hiding it.
-
-    A patch with zero cells is the signal worth having. It means either genuinely
-    empty background, which is fine and common at a slide's edges, or a segmentation
-    task that silently produced nothing, which is not.
+    Patches overlap, so the counts can sum to more than the cell total.
     """
     import numpy as np
 
@@ -255,8 +169,7 @@ def cells_per_patch(centroids: Any, bboxes: Any) -> Any:
     x, y = centroids[:, 0], centroids[:, 1]
     counts = np.empty(len(bboxes), dtype=np.int64)
     for i, (x0, y0, x1, y1) in enumerate(bboxes):
-        # Half-open on the upper edge so a centroid on a shared boundary belongs to
-        # one patch rather than being counted twice on top of the overlap.
+        # Half-open so a centroid on a shared edge is not counted twice.
         counts[i] = int(((x >= x0) & (x < x1) & (y >= y0) & (y < y1)).sum())
     return counts
 
@@ -278,31 +191,17 @@ def patch_metrics(counts: Any, n_cells: int) -> dict[str, Any]:
         "cells_per_patch_max": int(counts.max()),
         "cells_per_patch_mean": float(counts.mean()),
         "cells_per_patch_median": float(np.median(counts)),
-        # Sums past the cell total because patches overlap. Reported so the excess
-        # is visible rather than looking like a counting bug.
+        # Exceeds n_cells because patches overlap.
         "centroid_assignments": int(counts.sum()),
         "n_cells": n_cells,
     }
 
 
-# --------------------------------------------------------------------------------
 # Reading the store.
-#
-# AnnData encodes a dataframe column three different ways depending on its dtype,
-# and the group attributes say which. Handling all three in one place keeps that
-# detail out of the metric functions, which then only ever see plain arrays.
-# --------------------------------------------------------------------------------
 
 
 def read_column(node: Any) -> Any:
-    """One AnnData obs/var column, whatever encoding it uses.
-
-    Verified against real pipeline output: `obs/area` is a plain array, `obs/region`
-    and `obs/slide` are categorical (`categories` plus integer `codes`), and
-    `var/_index` and `obs/cell_id` are nullable strings (`values` plus a `mask`).
-    Guessing from the group's contents instead of its `encoding-type` would work
-    today and break on the first column that adds a key.
-    """
+    """Read one AnnData obs/var column as a plain array, dispatching on `encoding-type`."""
     import numpy as np
     import zarr
 
@@ -323,13 +222,7 @@ def read_column(node: Any) -> Any:
 
 
 def image_channel_labels(sdata_path: Path, element: str) -> list[str]:
-    """Channel names as written on the image element, from `omero.channels[].label`.
-
-    The same few kilobytes of metadata `set_channel_names.py` writes. Read here
-    rather than imported from that script: both are standalone executables on PATH
-    inside a container, and importing one from the other would make this one fail
-    for a reason that has nothing to do with QC.
-    """
+    """Channel names on the image element, from `omero.channels[].label`."""
     meta = sdata_path / "images" / element / "zarr.json"
     if not meta.exists():
         raise FileNotFoundError(f"{meta} does not exist, so '{element}' is not an image element")
@@ -341,21 +234,10 @@ def image_channel_labels(sdata_path: Path, element: str) -> list[str]:
 
 
 def channel_histograms(array: Any, band_rows: int = 2048) -> tuple[list[Any], int]:
-    """Exact per-channel value histograms, streamed a row band at a time.
+    """Exact per-channel histograms of a `(c, y, x)` unsigned image, streamed in row bands.
 
-    Full resolution is not a compromise here, it is a requirement. Saturation and
-    clipping are per-pixel extremes, and every pyramid level below s0 averages
-    neighbours, so a clipped pixel stops being clipped the moment it is
-    downsampled. Measuring on s1 would produce a plausible number that is wrong in
-    the safe direction.
-
-    Streaming keeps this affordable. A real 15-channel 11295x21798 uint16 image is
-    7.4 GB in full, but read as row bands and reduced to a bin count immediately it
-    never holds more than one band, and a complete pass measured about 6 seconds on
-    a laptop against the published store.
-
-    Returns the histograms and the dtype's maximum representable value, which is
-    what `channel_metrics` needs to tell true saturation from unused headroom.
+    Must be full resolution: downsampling hides clipped pixels. A 7.4 GB image took
+    about 6 seconds. Returns the histograms and the dtype's maximum value.
     """
     import numpy as np
 
@@ -376,25 +258,14 @@ def channel_histograms(array: Any, band_rows: int = 2048) -> tuple[list[Any], in
     return hists, int(info.max)
 
 
-# The nuclear-stain fallback, used only when the marker sheet predates
-# `channel_role`. Named rather than inlined because two scripts share it and the
-# report quotes it when explaining how a channel was chosen.
+# Nuclear-stain fallback for marker sheets without `channel_role`.
 DEFAULT_NUCLEAR_PATTERN = "DAPI"
 
 
 def read_marker_cycles(path: Path) -> list[dict[str, Any]]:
-    """The marker sheet as rows carrying cycle, role and compartment, in channel order.
+    """Marker sheet rows with cycle, role, compartment and background, in channel order.
 
-    `read_marker_names` in set_channel_names.py deliberately returns names only,
-    because that is all a rename needs. Cycle membership is what tells the first
-    imaging round from the last, which is the whole point of the photobleaching
-    check, so it is parsed here rather than by widening that function's contract.
-
-    `channel_role` and `channel_compartment` are carried for the same reason: they
-    are what the sheet says a channel *is*, and QC has no other source for it.
-    Both are optional here even though schema_marker.json requires `channel_role`,
-    because a sheet written before that column existed must still parse -- the
-    callers fall back to name-matching and say that they did.
+    Role and compartment are optional so sheets predating `channel_role` still parse.
     """
     import csv
 
@@ -413,12 +284,10 @@ def read_marker_cycles(path: Path) -> list[dict[str, Any]]:
                 "channel_number": int(r["channel_number"]),
                 "cycle_number": int(r["cycle_number"]),
                 "marker_name": r["marker_name"].strip(),
-                # Lowercased to match the schema's enum, and None rather than "" so
-                # that "the sheet does not say" is distinguishable from a blank cell.
+                # None, not "", so "the sheet does not say" stays distinguishable.
                 "channel_role": (r.get("channel_role") or "").strip().lower() or None,
                 "channel_compartment": (r.get("channel_compartment") or "").strip().lower() or None,
-                # Not lowercased: this names another channel, and channel names are
-                # matched exactly everywhere else.
+                # Not lowercased: channel names are matched exactly.
                 "background": (r.get("background") or "").strip() or None,
             }
         )
@@ -427,56 +296,23 @@ def read_marker_cycles(path: Path) -> list[dict[str, Any]]:
 
 
 def channels_with_role(rows: list[dict[str, Any]], *roles: str) -> list[str]:
-    """Marker names whose `channel_role` is one of `roles`, in channel order.
-
-    Empty when the sheet carries no role column at all, which is the signal the
-    callers use to fall back to name-matching rather than to conclude that a slide
-    genuinely has no nuclear stain.
-    """
+    """Marker names whose `channel_role` is one of `roles`, in channel order."""
     wanted = {r.lower() for r in roles}
     return [r["marker_name"] for r in rows if r.get("channel_role") in wanted]
 
 
 def compartments_by_channel(rows: list[dict[str, Any]]) -> dict[str, str]:
-    """Marker name to `channel_compartment`, for the channels that declare one.
-
-    Where a marker is expected to sit within a cell is the only thing that makes a
-    marker image judgeable: a membrane stain that looks like a nuclear one has gone
-    wrong, and nothing in the pixels says which was intended. Carried into the QC
-    output so a reader sees the expectation next to the result. No threshold is
-    derived from it -- the sheet's claim is reported, not scored.
-    """
+    """Marker name to `channel_compartment`, for the channels that declare one."""
     return {r["marker_name"]: r["channel_compartment"] for r in rows if r.get("channel_compartment")}
 
 
 def resolve_nuclear_rows(
     rows: list[dict[str, Any]], pattern: str | None = None
 ) -> tuple[list[dict[str, Any]], str]:
-    """The nuclear-stain rows, and how they were identified.
+    """The nuclear-stain rows and a label for how they were identified.
 
-    Precedence, most trustworthy first:
-
-    1. an explicit `pattern`, because a caller naming the channel outranks both the
-       sheet and any guess -- it is the escape hatch for a mislabelled sheet;
-    2. `channel_role`, whenever the sheet carries that column at all;
-    3. matching DEFAULT_NUCLEAR_PATTERN against the marker name.
-
-    Step 3 is the historical behaviour and the reason this function exists. Name
-    matching is a guess that fails silently on any slide whose stain is not called
-    DAPI: a sheet naming its stains DNA_6, DNA_7, DNA_8 has three nuclear channels
-    and matches none of them. `channel_role` was added to schema_marker.json to end
-    that guess, and this is where the QC layer stops making it.
-
-    The test is whether the sheet carries roles, not whether it happens to contain a
-    `dna` row. A sheet that declares roles and names none of them nuclear has said
-    something definite, and falling back to a name match there would reintroduce the
-    guess on the one input that explicitly ruled it out -- picking a channel the
-    sheet declined to call nuclear. So that case returns empty, and the caller
-    reports it. Only a sheet with no role column at all -- one written before the
-    column existed -- reaches step 3.
-
-    Returns the rows and a label for the route taken, so callers can record which of
-    the three answered rather than presenting all three as equally sound.
+    Precedence: explicit `pattern`, then `channel_role == "dna"` if any row has a role
+    (empty if none is dna, no fallback), then DEFAULT_NUCLEAR_PATTERN by name.
     """
     if pattern:
         needle = pattern.lower()
@@ -493,18 +329,7 @@ def resolve_nuclear_rows(
 
 
 def nuclear_cycle_pair(rows: list[dict[str, Any]], pattern: str | None = None) -> tuple[str, str] | None:
-    """The nuclear stain of the first and last imaging cycle.
-
-    Every cycle re-images a nuclear stain, which is what makes cross-cycle
-    comparison possible at all: the same structure is present in every round, so a
-    change in its intensity is a change in the sample or the optics rather than in
-    the biology being stained.
-
-    Which channels those are comes from `resolve_nuclear_rows`, so the sheet's
-    `channel_role` decides it when the sheet says. Returns None when there is
-    nothing to compare -- a single-cycle run, or no nuclear channel identified --
-    and the caller reports the absence rather than inventing a pair.
-    """
+    """Nuclear-stain marker names of the first and last cycle, or None if fewer than two cycles."""
     nuclear, _how = resolve_nuclear_rows(rows, pattern)
     if not nuclear:
         return None
@@ -517,23 +342,10 @@ def nuclear_cycle_pair(rows: list[dict[str, Any]], pattern: str | None = None) -
 
 
 def cycle_ratio_metrics(first: Any, last: Any, n_bins: int = 64, clip: float = 2.0) -> dict[str, Any]:
-    """Per-cell log2 ratio of last-cycle to first-cycle nuclear stain.
+    """Per-cell log2 ratio of last-cycle to first-cycle nuclear stain, a tissue-loss signal.
 
-    A cell that detached, or that sits under tissue lost during a wash, keeps its
-    first-cycle signal and loses its last-cycle signal, so its ratio collapses. A
-    healthy slide gives a single peak near zero; a slide that shed tissue gives a
-    second population to the left of it. Counting cells on that left shoulder is a
-    measure of how much of the sample survived processing, which nothing else in
-    this pipeline reports.
-
-    log2 rather than a raw quotient so that "half" and "double" sit the same
-    distance either side of zero, which a histogram of a raw ratio cannot show. The
-    range is clipped rather than trimmed, and the counts at each end are reported
-    separately, so a long tail is visible instead of quietly rescaling the axis.
-
-    Cells with no first-cycle signal are excluded and counted: their ratio is not
-    large, it is undefined, and averaging them in as a big number would invent
-    photobleaching that did not happen.
+    The histogram is clipped to `[-clip, clip]`, with out-of-range counts reported.
+    Cells with zero signal in either cycle are excluded and counted as undefined.
     """
     import numpy as np
 
@@ -558,13 +370,11 @@ def cycle_ratio_metrics(first: Any, last: Any, n_bins: int = 64, clip: float = 2
     return {
         "n_cells": int(first.size),
         "n_usable": int(usable.sum()),
-        # Undefined rather than infinite: no first-cycle signal means no baseline.
         "n_undefined": n_undefined,
         "median_log2_ratio": float(np.median(ratio)),
         "mean_log2_ratio": float(ratio.mean()),
         "p1_log2_ratio": float(np.percentile(ratio, 1)),
         "p99_log2_ratio": float(np.percentile(ratio, 99)),
-        # A cell at least halved between the first and last cycle.
         "n_below_half": int((ratio < -1).sum()),
         "fraction_below_half": float((ratio < -1).mean()),
         "histogram": [int(c) for c in counts],
@@ -579,20 +389,8 @@ def cycle_ratio_metrics(first: Any, last: Any, n_bins: int = 64, clip: float = 2
 def tiff_channel_histograms(path: Path) -> tuple[list[Any], int, list[int]]:
     """Exact per-channel histograms of a pyramidal OME-TIFF's full-resolution level.
 
-    For the image as it was before background subtraction, which exists only as the
-    published OME-TIFF -- the zarr store holds the subtracted version, so a
-    before-and-after comparison cannot be made from the store alone.
-
-    Opened through `aszarr`, which exposes the TIFF as a zarr array without decoding
-    anything until a slice is asked for. That means the same streamed row-band pass
-    `channel_histograms` already does for the store, so this holds one band rather
-    than one 500 MB channel, and the whole read reuses tested code instead of a
-    second implementation of the same loop. Measured at about 0.03 seconds per band
-    on the published 6 GB registration output.
-
-    Ashlar writes no channel names into its OME-XML -- verified on that same file,
-    which has no `Name` attribute on any `Channel` -- so this returns histograms in
-    file order and the caller is responsible for deciding what they line up with.
+    Returns histograms in file order (Ashlar writes no channel names), the dtype's
+    maximum value, and the `(c, y, x)` shape.
     """
     import tifffile
     import zarr
@@ -600,8 +398,6 @@ def tiff_channel_histograms(path: Path) -> tuple[list[Any], int, list[int]]:
     with tifffile.TiffFile(path) as tf:
         if not tf.series:
             raise ValueError(f"{path} has no image series")
-        # level=0 is full resolution. Ashlar writes a pyramid, and a QC number taken
-        # from a downsampled level would be quietly wrong rather than absent.
         array = zarr.open(tf.series[0].aszarr(level=0), mode="r")
         if array.ndim != 3:
             raise ValueError(f"expected a (c, y, x) OME-TIFF, got shape {array.shape} in {path}")
@@ -610,13 +406,7 @@ def tiff_channel_histograms(path: Path) -> tuple[list[Any], int, list[int]]:
 
 
 def sole_image_element(sdata_path: Path) -> str:
-    """The store's only image element.
-
-    Same guard as `set_channel_names.py` and for the same reason: after conversion
-    there is exactly one, and on the TMA path each core is its own store. "Exactly
-    one image" is the property this pipeline actually maintains, so depending on it
-    is safer than naming an element after something upstream might rename.
-    """
+    """Name of the store's only image element; raises if there is not exactly one."""
     images = sdata_path / "images"
     if not images.is_dir():
         raise FileNotFoundError(f"{images} does not exist; {sdata_path} is not a SpatialData store")
@@ -635,13 +425,7 @@ def collect(
     before_image: Path | None = None,
     histogram_range: str = "channels-max",
 ) -> dict[str, Any]:
-    """Every metric for one sample.
-
-    Store-derived by default. `before_image` adds the pre-subtraction OME-TIFF,
-    which is the only place the unsubtracted pixels still exist, and `marker_rows`
-    adds the cross-cycle nuclear comparison, which needs cycle membership that the
-    store does not record.
-    """
+    """Every metric for one sample; `before_image` and `marker_rows` add optional sections."""
     import numpy as np
     import pyarrow.parquet as pq
     import zarr
@@ -674,10 +458,6 @@ def collect(
             "n_channels": len(channel_names),
             "table_names": channel_names,
             "image_names": image_labels,
-            # A mismatch here means the table and the image disagree about what was
-            # measured, which makes every per-cell intensity ambiguous. It has never
-            # happened, and it is exactly the kind of thing that stays never-happened
-            # only while something checks.
             "table_matches_image": channel_names == image_labels,
             "per_channel": {},
         },
@@ -687,8 +467,7 @@ def collect(
         out["channels"]["marker_sheet_names"] = markers
         out["channels"]["matches_marker_sheet"] = image_labels == markers
 
-    # Two passes: the shared histogram bound cannot be known until every channel's
-    # maximum is, and every channel has to be binned to the same one.
+    # Two passes: the shared bound needs every channel's maximum first.
     shared_upper = dtype_max
     if histogram_range == "channels-max":
         maxima = []
@@ -701,12 +480,6 @@ def collect(
     for name, hist in zip(channel_names, hists, strict=True):
         out["channels"]["per_channel"][name] = channel_metrics(hist, dtype_max, histogram_upper=shared_upper)
 
-    # What the sheet says each channel *is*, recorded next to what it measured.
-    # `role` is load-bearing -- it decides the nuclear stain here and the clustering
-    # exclusions in qc_images.py. `compartment` decides nothing: it is where the
-    # signal is expected to sit, which is the only thing that makes a marker image
-    # judgeable by eye, so it is reported beside the numbers rather than scored.
-    # Neither is invented when the sheet is silent; a channel simply has no entry.
     if marker_rows is not None:
         roles = {r["marker_name"]: r["channel_role"] for r in marker_rows if r.get("channel_role")}
         compartments = compartments_by_channel(marker_rows)
@@ -724,9 +497,6 @@ def collect(
             out["channels"]["roles"] = by_role
         if compartments:
             out["channels"]["compartments"] = compartments
-        # A channel in the sheet with no role at all is the case that used to be
-        # invisible: it still clusters and still gets plotted, but nothing knows
-        # what it is. Named here so the report can say so.
         unroled = [r["marker_name"] for r in marker_rows if not r.get("channel_role")]
         if unroled:
             out["channels"]["channels_without_role"] = unroled
@@ -737,10 +507,7 @@ def collect(
             "image": str(before_image),
             "shape_cyx": before_shape,
             "n_channels": len(before_hists),
-            # Matched by position, and the report says so. Ashlar writes no channel
-            # names, so there is nothing to match on -- and if background subtraction
-            # dropped channels the two images no longer correspond position for
-            # position, which is why a count mismatch refuses rather than guesses.
+            # Ashlar writes no channel names, so a count mismatch cannot be paired.
             "matched_by": "position",
         }
         if len(before_hists) != len(channel_names):
@@ -758,9 +525,7 @@ def collect(
         pair = nuclear_cycle_pair(marker_rows, nuclear_pattern)
         cycles = sorted({r["cycle_number"] for r in marker_rows})
         if pair is None:
-            # Two different absences, and conflating them sent the last run looking
-            # for a marker sheet problem it did not have: either nothing was
-            # identified as nuclear, or one thing was but only in a single cycle.
+            # Distinguish "no nuclear channel" from "nuclear channel in one cycle only".
             reason = (
                 f"no nuclear channel identified by {nuclear_how}"
                 if not nuclear_rows
@@ -782,8 +547,7 @@ def collect(
                 "nuclear_pattern": nuclear_pattern,
             }
         else:
-            # X is the mean intensity per cell per channel, which is what sopa's
-            # aggregation writes. Reading it whole is 17 MB for 142k cells.
+            # X is sopa's per-cell mean intensity; 17 MB for 142k cells.
             x = np.asarray(table["X"][:])
             first_i = channel_names.index(pair[0])
             last_i = channel_names.index(pair[1])
@@ -805,15 +569,12 @@ def collect(
         counts = cells_per_patch(centroids, bboxes)
         out["patches"] = patch_metrics(counts, n_cells=int(len(areas)))
         out["patches"]["cells_per_patch"] = [int(c) for c in counts]
-        # ilocs is the patch's (x, y) position in the tiling grid, which is what lets
-        # a report lay the counts out as the slide rather than as a list of 72
-        # numbers. An empty patch means much more when its neighbours are visible.
+        # ilocs: the patch's (x, y) grid position, so the report can draw the slide layout.
         if "ilocs" in patches.column_names:
             out["patches"]["ilocs"] = [[int(v) for v in i] for i in patches.column("ilocs").to_pylist()]
         out["patches"]["bboxes"] = [[int(v) for v in b] for b in bboxes.tolist()]
     else:
-        # Segmentation without tiling leaves no patch element. Absent rather than
-        # zero, so a reader can tell "not tiled" from "tiled and empty".
+        # None, not zero, so "not tiled" differs from "tiled and empty".
         out["patches"] = None
 
     return out
@@ -859,8 +620,6 @@ def main() -> int:
     markers = None
     marker_rows = None
     if args.markers:
-        # Reuse the sheet parser rather than reimplementing the sort-by-channel_number
-        # and blank/duplicate rules, which are load-bearing and already tested.
         sys.path.insert(0, str(Path(__file__).resolve().parent))
         from set_channel_names import read_marker_names
 

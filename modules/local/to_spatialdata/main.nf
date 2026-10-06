@@ -17,19 +17,6 @@ process TO_SPATIALDATA {
     path "versions.yml"
 
     script:
-    // A guard used to live here: it grepped sopa's log for "Channel names couldn't
-    // be read" and, with require_channel_names, made that fatal. It was removed
-    // because it never fired and could not.
-    //
-    // sopa only logs that message when it finds no names at all. What Ashlar
-    // actually produces is Channel elements carrying `id` and no `Name`, so sopa
-    // reads the IDs and reports success while naming every channel `Channel:0:N`.
-    // The guard tested a log message that merely correlated with the property we
-    // cared about, and the correlation did not hold.
-    //
-    // SET_CHANNEL_NAMES now sets the names from the marker sheet immediately after
-    // this step, and fails loudly if the sheet and the image disagree on channel
-    // count. That checks the thing itself rather than a proxy for it.
     """
     sopa convert ${data_dir} --sdata-path ${meta.sdata_dir} ${argsToSpatialData(meta, fullres_image_file.toString())}
 

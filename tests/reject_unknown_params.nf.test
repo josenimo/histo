@@ -1,11 +1,5 @@
-// Parameters the schema does not declare must stop the run.
-//
-// nf-schema is supposed to do this through `validation.failUnrecognisedParams`, but that
-// option aborts the run with a MissingPropertyException in every released version, so the
-// check is ours. These tests are what says it works.
-//
-// The typo in the second case is not invented: pipeline_info/params_*.json from the
-// published WSI run records both `use_use_tma_dearray` and `use_tma_dearray`.
+// Undeclared parameters must stop the run. Our own check, because nf-schema's
+// failUnrecognisedParams throws MissingPropertyException in every released version.
 
 nextflow_function {
 
