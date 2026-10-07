@@ -60,6 +60,10 @@ background subtraction produces cores with matching names.
 
 The `{sample}.zarr` directory contains a [SpatialData](https://spatialdata.scverse.org/en/stable/) object, where the `sample` name is either (i) specified by the samplesheet, or (ii) based on the name of the corresponding input directory.
 
+Each cell table's `obs` says where its cells came from, so tables can be concatenated safely:
+`slide` is the sample name from the samplesheet, and on a dearrayed TMA `core_id` is the core
+(e.g. `TMA01_core001`). Runs without dearraying have no `core_id` column.
+
 Refer to the [SpatialData docs](https://spatialdata.scverse.org/en/stable/) for usage details, or to the [documentation of `sopa` as a Python package](https://prism-oncology.github.io/sopa/). If you are not familiar with `SpatialData`, you can also use directly the extracted `AnnData` object (see below).
 
 `PUBLISH_SPATIALDATA` is what copies the store here, and it exists only for that. Aggregation

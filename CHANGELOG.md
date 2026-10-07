@@ -10,6 +10,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Marker sheet `remove` is checked at startup: with backsub, at least one `dna` channel must stay
   and segmentation channels must not be removed; without backsub, `remove` warns that it is ignored.
 
+### Fixed
+
+- `obs/slide` is the samplesheet sample, not sopa's image element name, which carried
+  `_backsub` and went stale after the TMA merge. TMA cells also get `obs/core_id`.
+
 ## v1.0.0 - [2026-10-06]
 
 First release. Both halves run end to end on real data: raw cycles through illumination

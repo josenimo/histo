@@ -16,7 +16,7 @@ time, estimated before the release; treat them as rough.
 | 3. TMA path            | Done: per-core processing, per-slide merge and QC page         |
 | 4. Resource profiles   | Done: `size_tiny`/`small`/`medium`/`huge`, `slurm`             |
 | 5. Containers          | Done: 7 images, manifest, pre-staging documented               |
-| 6. Testing             | Done, except the exemplar nf-tests have not run (v1.1 item 5)  |
+| 6. Testing             | Done, except the exemplar nf-tests have not run (v1.1 item 4)  |
 | 7. QC report           | Metrics, images and reports in; thresholds need more slides    |
 | 8. Release 1.0.0       | Lint `--release` clean, baselines recorded; merge and tag left |
 
@@ -50,14 +50,10 @@ unmeasured.
 3. **Run-level resource QC.** A post-run script reading `pipeline_info/execution_trace_*.txt`:
    retries, failures, `peak_rss` near the memory request. Not in `onComplete`, which may run
    before the trace is flushed. Also the input for rewriting the resource profiles. ~1 day.
-4. **Set `obs/slide` ourselves.** sopa's aggregation writes it as the image element name
-   (`sopa/aggregation/table.py:35`); nothing reads it. After backsub on the TMA path it is stale
-   (`{core}_backsub` against an image named `{core}__{core}_backsub`). Set it from `meta.slide`
-   or the sample in `MERGE_SPATIALDATA`, and document it. 1–2 h.
-5. **Run the exemplar nf-tests.** Blocked by cluster issues. The pipeline ran green by hand,
+4. **Run the exemplar nf-tests.** Blocked by cluster issues. The pipeline ran green by hand,
    but the `.nf.test` files never have. exemplar-002's `remove` and before/after assertions are
    exercised by nothing on real data until they do.
-6. **Small fixes**, about a day together:
+5. **Small fixes**, about a day together:
    - `FLUO_ANNOTATION` in the larger size tiers (`conf/sizes.config:34`).
    - `PATCH_SEGMENTATION_CELLPOSE` is `process_single` but used 133% CPU; set it in
      `base.config`.
