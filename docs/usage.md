@@ -63,6 +63,10 @@ it blank costs a check rather than breaking a run.
 `marker_name` of the channel to subtract, and that channel must itself have `channel_role` set to
 `autofluorescence`. The two columns describe one fact, so they are checked against each other.
 
+`remove` set to `true` drops a channel after backsub; without `--use_backsub` it is ignored with a
+warning. Keep at least one `dna` channel, and do not name a removed channel in `cellpose_channels`
+or `stardist_channels`; both are rejected at startup.
+
 Paths must be absolute.
 
 ## Parameters
