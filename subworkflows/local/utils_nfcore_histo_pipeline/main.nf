@@ -403,6 +403,36 @@ def validateMarkersheet(rows, sample = null) {
         assert !unknown : (
             "${where}: background must name another channel's marker_name. Unknown: ${unknown}"
         )
+
+        // Removing extra dna channels is common; removing all of them fails late, in QC_IMAGES.
+        assert rows.any { it.channel_role == 'dna' && !it.remove } : (
+            "${where}: use_backsub is enabled, so remove drops channels, and every 'dna' " +
+            "channel is marked remove. Keep at least one 'dna' channel without remove: " +
+            "segmentation and QC read the nuclear stain after removal."
+        )
+
+        // Segmentation runs after backsub, so a removed channel is no longer in the image.
+        def removed = rows.findAll { it.remove }.collect { it.marker_name } as Set
+        ['cellpose_channels', 'stardist_channels'].each { param ->
+            def value = params[param]
+            if (!(value instanceof CharSequence)) {
+                return
+            }
+            // Same split as getChannels (modules/local/utils.nf).
+            def gone = value.toString().split(/[ ,|]+/).findAll { it in removed }
+            assert !gone : (
+                "${where}: ${param} names channel(s) marked remove: ${gone}. With use_backsub, " +
+                "removed channels are dropped before segmentation."
+            )
+        }
+    }
+    else {
+        def ignored = rows.findAll { it.remove }.collect { it.marker_name }
+        if (ignored) {
+            log.warn(
+                "${where}: remove has no effect without use_backsub; these channels are kept: ${ignored}"
+            )
+        }
     }
 
     return rows

@@ -155,4 +155,87 @@ nextflow_function {
             assert function.stdout.any { it.contains("continuously across all cycles") }
         }
     }
+
+    test("with backsub, removing the only dna channel is rejected") {
+        when {
+            params {
+                use_backsub = true
+            }
+            function {
+                """
+                input[0] = [
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DAPI', channel_role: 'dna',    exposure: 100, remove: true ],
+                    [ channel_number: 2, cycle_number: 1, marker_name: 'CD3',  channel_role: 'marker', exposure: 100 ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains("at least one 'dna' channel without remove") }
+        }
+    }
+
+    test("with backsub, removing a later-cycle dna channel is accepted") {
+        when {
+            params {
+                use_backsub = true
+            }
+            function {
+                """
+                input[0] = [
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DAPI',   channel_role: 'dna', exposure: 100 ],
+                    [ channel_number: 2, cycle_number: 2, marker_name: 'DAPI_2', channel_role: 'dna', exposure: 100, remove: true ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.success
+        }
+    }
+
+    test("with backsub, a segmentation channel that is removed is rejected") {
+        when {
+            params {
+                use_backsub = true
+                cellpose_channels = 'DAPI_2 DAPI'
+            }
+            function {
+                """
+                input[0] = [
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DAPI',   channel_role: 'dna', exposure: 100 ],
+                    [ channel_number: 2, cycle_number: 2, marker_name: 'DAPI_2', channel_role: 'dna', exposure: 100, remove: true ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.failed
+            assert function.stdout.any { it.contains("cellpose_channels") }
+            assert function.stdout.any { it.contains("[DAPI_2]") }
+        }
+    }
+
+    test("without backsub, remove is accepted with a warning that it does nothing") {
+        when {
+            params {
+                use_backsub = false
+            }
+            function {
+                """
+                input[0] = [
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DAPI', channel_role: 'dna' ],
+                    [ channel_number: 2, cycle_number: 1, marker_name: 'AF',   channel_role: 'autofluorescence', remove: true ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.success
+            // log.warn reaches nextflow.log but not stdout under the Nextflow 26 console.
+            def warning = file("${metaDir}/nextflow.log").readLines().find { it.contains("remove has no effect without use_backsub") }
+            assert warning?.contains("[AF]")
+        }
+    }
 }
