@@ -3,6 +3,8 @@
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/)
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## v1.1.0dev
+
 ## v1.0.0 - [2026-10-06]
 
 First release. Both halves run end to end on real data: raw cycles through illumination
