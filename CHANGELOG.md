@@ -5,6 +5,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## v1.1.0dev
 
+### Added
+
+- Marker sheet `remove` is checked at startup: with backsub, at least one `dna` channel must stay
+  and segmentation channels must not be removed; without backsub, `remove` warns that it is ignored.
+
 ## v1.0.0 - [2026-10-06]
 
 First release. Both halves run end to end on real data: raw cycles through illumination

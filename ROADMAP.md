@@ -16,7 +16,7 @@ time, estimated before the release; treat them as rough.
 | 3. TMA path            | Done: per-core processing, per-slide merge and QC page         |
 | 4. Resource profiles   | Done: `size_tiny`/`small`/`medium`/`huge`, `slurm`             |
 | 5. Containers          | Done: 7 images, manifest, pre-staging documented               |
-| 6. Testing             | Done, except the exemplar nf-tests have not run (v1.1 item 6)  |
+| 6. Testing             | Done, except the exemplar nf-tests have not run (v1.1 item 5)  |
 | 7. QC report           | Metrics, images and reports in; thresholds need more slides    |
 | 8. Release 1.0.0       | Lint `--release` clean, baselines recorded; merge and tag left |
 
@@ -42,27 +42,22 @@ unmeasured.
    Coreograph is hard-coded to `--channel 0` (`nextflow.config:27`); neither reads the sheet. A
    sheet that does not list DNA first gives a silently wrong result. Add one optional column,
    `reference_dna`, defaulting to the first `dna` channel. 1–2 days.
-2. **Stricter `remove` check on `dna` channels.** With backsub on, require at least one `dna`
-   row without `remove`; today a sheet removing its only one fails late, in `QC_IMAGES`. Do not
-   reject every removed `dna` row: dropping extra later-cycle DAPIs is common. Also warn that
-   `remove` does nothing without backsub, and reject `cellpose_channels` naming a removed
-   channel. In `validateMarkersheet`. ~1 h.
-3. **Soft QC gate.** A `QC_GATE` step reads every `{sample}_qc.json` and a thresholds file in
+2. **Soft QC gate.** A `QC_GATE` step reads every `{sample}_qc.json` and a thresholds file in
    `assets/`, and writes `qc/qc_summary.tsv`: one row per sample and check, `pass`/`warn`/`fail`.
    It never stops the run. Structural checks (name mismatch, empty patches, no `dna`) can `fail`
    now; numeric thresholds `warn`, marked uncalibrated, until more slides exist. A
    `fail_on_qc` switch can come later. 2–3 days.
-4. **Run-level resource QC.** A post-run script reading `pipeline_info/execution_trace_*.txt`:
+3. **Run-level resource QC.** A post-run script reading `pipeline_info/execution_trace_*.txt`:
    retries, failures, `peak_rss` near the memory request. Not in `onComplete`, which may run
    before the trace is flushed. Also the input for rewriting the resource profiles. ~1 day.
-5. **Set `obs/slide` ourselves.** sopa's aggregation writes it as the image element name
+4. **Set `obs/slide` ourselves.** sopa's aggregation writes it as the image element name
    (`sopa/aggregation/table.py:35`); nothing reads it. After backsub on the TMA path it is stale
    (`{core}_backsub` against an image named `{core}__{core}_backsub`). Set it from `meta.slide`
    or the sample in `MERGE_SPATIALDATA`, and document it. 1–2 h.
-6. **Run the exemplar nf-tests.** Blocked by cluster issues. The pipeline ran green by hand,
+5. **Run the exemplar nf-tests.** Blocked by cluster issues. The pipeline ran green by hand,
    but the `.nf.test` files never have. exemplar-002's `remove` and before/after assertions are
    exercised by nothing on real data until they do.
-7. **Small fixes**, about a day together:
+6. **Small fixes**, about a day together:
    - `FLUO_ANNOTATION` in the larger size tiers (`conf/sizes.config:34`).
    - `PATCH_SEGMENTATION_CELLPOSE` is `process_single` but used 133% CPU; set it in
      `base.config`.
@@ -158,7 +153,7 @@ the columns these need (`channel_role`, `exposure`, `background`, `filter`), apa
   sopa's CLI uses 0. Filtering belongs after aggregation (v1.2 item 2). Note:
   `sopa/cli/resolve.py` takes `min_area` in µm², the segmentation CLI in px².
 - **Resource profiles are estimates** apart from `size_tiny`. Rewrite from a large-slide trace
-  (v1.1 item 4).
+  (v1.1 item 3).
 - **H&E is not supported**; only `ome_tif` mIF input.
 
 ### Tooling
