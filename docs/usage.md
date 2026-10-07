@@ -67,6 +67,11 @@ it blank costs a check rather than breaking a run.
 warning. Keep at least one `dna` channel, and do not name a removed channel in `cellpose_channels`
 or `stardist_channels`; both are rejected at startup.
 
+Ashlar registers every cycle on the same within-cycle channel (`-c` in `ashlar_args`, default
+0), and Coreograph dearrays on one channel of the stitched image (`--channel` in
+`coreograph_args`). Put the nuclear stain first in every cycle; a startup warning says when either
+index lands on a channel that is not `dna`.
+
 Paths must be absolute.
 
 ## Parameters
