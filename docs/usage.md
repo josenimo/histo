@@ -69,8 +69,8 @@ or `stardist_channels`; both are rejected at startup.
 
 Ashlar registers every cycle on the same within-cycle channel (`-c` in `ashlar_args`, default
 0), and Coreograph dearrays on one channel of the stitched image (`--channel` in
-`coreograph_args`). Put the nuclear stain first in every cycle; a startup warning says when either
-index lands on a channel that is not `dna`.
+`coreograph_args`). Both may be `-1` for the last channel. The run stops at startup when either
+index lands on a channel that is not `dna`; set `skip_reference_dna_check: true` to run anyway.
 
 Paths must be absolute.
 
@@ -90,6 +90,7 @@ pipeline stops at startup rather than letting that happen, for every boolean it 
 | `use_preprocessing`           | `true`               | Your image is already stitched. Then the samplesheet is one row per sample with a `data_path` column.  |
 | `ashlar_args`                 | `--maximum-shift 30` | Stitching misaligns.                                                                                   |
 | `use_backsub`                 | `false`              | You have background channels to subtract.                                                              |
+| `skip_reference_dna_check`    | `false`              | Ashlar or Coreograph should deliberately use a channel that is not `dna`.                              |
 | `use_tma_dearray`             | `false`              | Your slide is a tissue microarray. Each core is then processed alone and the results merged per slide. |
 | `use_cellpose`                | `false`              | Exactly one of `use_cellpose` or `use_stardist` must be true.                                          |
 | `cellpose_channels`           | none                 | Always. Use a marker name, e.g. `"DNA_1"`.                                                             |

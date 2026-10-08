@@ -159,8 +159,8 @@ the columns these need (`channel_role`, `exposure`, `background`, `filter`).
 - **Pixel size in the Zarr.** Would silently reinterpret `patch_width_pixel` as microns.
 - **A cropped TMA fixture.** Coreograph may miss cores on a crop, giving a misleading red test.
 - **`groupKey` for the cycle regroup.**
-- **A `reference_dna` marker sheet column.** The sheet is already wide. A startup warning flags
-  an Ashlar or Coreograph channel index that is not `dna` instead.
+- **A `reference_dna` marker sheet column.** The sheet is already wide. Instead, the run stops
+  when the Ashlar or Coreograph channel index is not `dna` (`skip_reference_dna_check` overrides).
 - **A soft QC gate** (`qc_summary.tsv`). Few samples; each user reads their own QC report.
 - **A run-level resource QC script.** Seqera Platform (`-with-tower`) shows retries and memory.
 - **Running the exemplar nf-tests on the cluster.** Releases are checked by hand; revisit with
