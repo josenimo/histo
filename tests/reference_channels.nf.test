@@ -1,15 +1,15 @@
 // Ashlar and Coreograph take their nuclear channel by index from *_args, not from the marker
-// sheet. A non-dna channel there warns but does not fail. Warnings are read from nextflow.log.
+// sheet. A non-dna channel there stops the run unless skip_reference_dna_check is set.
 
 nextflow_function {
 
-    name "warnReferenceChannels"
+    name "checkReferenceChannels"
     script "../subworkflows/local/utils_nfcore_histo_pipeline/main.nf"
-    function "warnReferenceChannels"
+    function "checkReferenceChannels"
     tag "unit"
     tag "validation"
 
-    test("dna first in every cycle, default args: no warning") {
+    test("dna first in every cycle, default args: accepted") {
         when {
             params {
                 ashlar_args = '--maximum-shift 30'
@@ -33,7 +33,7 @@ nextflow_function {
         }
     }
 
-    test("dna in a different slot in one cycle warns and names that cycle") {
+    test("dna in a different slot in one cycle is rejected, naming that cycle") {
         when {
             params {
                 ashlar_args = '--maximum-shift 30'
@@ -51,8 +51,8 @@ nextflow_function {
             }
         }
         then {
-            assert function.success
-            def warning = file("${metaDir}/nextflow.log").readLines().find { it.contains("Ashlar") && it.contains("not a dna channel") }
+            assert function.failed
+            def warning = function.stdout.find { it.contains("Ashlar") && it.contains("not a dna channel") }
             assert warning?.contains("cycle 2: CD8")
             assert !warning.contains("cycle 1")
         }
@@ -81,7 +81,7 @@ nextflow_function {
         }
     }
 
-    test("coreograph --channel on a marker warns on a TMA") {
+    test("coreograph --channel on a marker is rejected on a TMA") {
         when {
             params {
                 ashlar_args = '-c 0'
@@ -98,8 +98,8 @@ nextflow_function {
             }
         }
         then {
-            assert function.success
-            def warning = file("${metaDir}/nextflow.log").readLines().find { it.contains("Coreograph") && it.contains("not a dna channel") }
+            assert function.failed
+            def warning = function.stdout.find { it.contains("Coreograph") && it.contains("not a dna channel") }
             assert warning?.contains("CD3")
         }
     }
@@ -126,7 +126,7 @@ nextflow_function {
         }
     }
 
-    test("dna last in every cycle with -c -1 and --channel -1: no warning, even with uneven cycles") {
+    test("dna last in every cycle with -c -1 and --channel -1: accepted, even with uneven cycles") {
         when {
             params {
                 ashlar_args = '-c -1'
@@ -151,7 +151,7 @@ nextflow_function {
         }
     }
 
-    test("-c -1 warns for a cycle whose last channel is not dna") {
+    test("-c -1 is rejected for a cycle whose last channel is not dna") {
         when {
             params {
                 ashlar_args = '-c -1'
@@ -169,10 +169,34 @@ nextflow_function {
             }
         }
         then {
-            assert function.success
-            def warning = file("${metaDir}/nextflow.log").readLines().find { it.contains("Ashlar") && it.contains("not a dna channel") }
+            assert function.failed
+            def warning = function.stdout.find { it.contains("Ashlar") && it.contains("not a dna channel") }
             assert warning?.contains("index -1")
             assert warning.contains("cycle 2: CD8")
+        }
+    }
+
+    test("skip_reference_dna_check runs anyway, with a warning") {
+        when {
+            params {
+                ashlar_args = ''
+                coreograph_args = '--channel 1'
+                use_tma_dearray = true
+                skip_reference_dna_check = true
+            }
+            function {
+                """
+                input[0] = [
+                    [ channel_number: 1, cycle_number: 1, marker_name: 'DAPI', channel_role: 'dna' ],
+                    [ channel_number: 2, cycle_number: 1, marker_name: 'CD3',  channel_role: 'marker' ]
+                ]
+                """
+            }
+        }
+        then {
+            assert function.success
+            def warning = file("${metaDir}/nextflow.log").readLines().find { it.contains("Coreograph") && it.contains("not a dna channel") }
+            assert warning?.contains("skip_reference_dna_check")
         }
     }
 }

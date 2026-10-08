@@ -496,5 +496,10 @@
         {
             "$ref": "#/$defs/qc_report"
         }
-    ]
+    ],
+    "properties": {
+        "skip_reference_dna_check": {
+            "type": "boolean"
+        }
+    }
 }

@@ -152,7 +152,7 @@ workflow PIPELINE_INITIALISATION {
         sheets_by_sample.each { sample, sheet ->
             def rows = samplesheetToList(sheet, "${projectDir}/assets/schema_marker.json").collect { it[0] }
             validateMarkersheet(rows, sample)
-            warnReferenceChannels(rows, sample)
+            checkReferenceChannels(rows, sample)
         }
 
         ch_markersheet = channel.fromList(
@@ -459,9 +459,10 @@ def flagValue(args, flags) {
 }
 
 // Ashlar and Coreograph take the nuclear channel by index from *_args, not from the sheet.
-// A non-dna channel there registers or dearrays on a marker without any error, so warn.
-def warnReferenceChannels(rows, sample = null) {
+// A non-dna channel there registers or dearrays on a marker without any error, so stop.
+def checkReferenceChannels(rows, sample = null) {
     def where = sample ? "Sample '${sample}'" : "marker_sheet"
+    def problems = []
 
     // Ashlar applies one within-cycle index (default 0, -1 for the last) to every cycle.
     def align = flagValue(params.ashlar_args, ['-c', '--align-channel']) ?: 0
@@ -470,10 +471,10 @@ def warnReferenceChannels(rows, sample = null) {
         ch?.channel_role == 'dna' ? null : "cycle ${cycle}: ${ch ? "${ch.marker_name} (${ch.channel_role})" : 'no such channel'}"
     }
     if (offCycles) {
-        log.warn(
-            "${where}: Ashlar aligns every cycle on within-cycle channel index ${align} " +
-            "(ashlar_args -c, default 0), which is not a dna channel in ${offCycles.join('; ')}. " +
-            "Put the nuclear stain at the same position in every cycle, or set -c."
+        problems << (
+            "Ashlar aligns every cycle on within-cycle channel index ${align} (ashlar_args -c, " +
+            "default 0), which is not a dna channel in ${offCycles.join('; ')}. Put the nuclear " +
+            "stain at the same position in every cycle, or set -c."
         )
     }
 
@@ -482,13 +483,24 @@ def warnReferenceChannels(rows, sample = null) {
         def index = flagValue(params.coreograph_args, ['--channel']) ?: 0
         def ch = atIndex(rows.sort(false) { it.channel_number }, index)
         if (ch?.channel_role != 'dna') {
-            log.warn(
-                "${where}: Coreograph dearrays on channel index ${index} (coreograph_args --channel, " +
-                "default 0), which is ${ch ? "${ch.marker_name} (${ch.channel_role})" : 'not in the sheet'}, " +
-                "not a dna channel. Set --channel to a dna channel_number minus 1."
+            problems << (
+                "Coreograph dearrays on channel index ${index} (coreograph_args --channel, default 0), " +
+                "which is ${ch ? "${ch.marker_name} (${ch.channel_role})" : 'not in the sheet'}, not a " +
+                "dna channel. Set --channel to a dna channel_number minus 1."
             )
         }
     }
+
+    problems.each { problem ->
+        if (params.skip_reference_dna_check) {
+            log.warn("${where}: ${problem} Continuing because skip_reference_dna_check is set.")
+        }
+    }
+    // A plain boolean, so the assert does not repeat the message in its value dump.
+    def ok = params.skip_reference_dna_check || !problems
+    assert ok : (
+        "${where}: ${problems.join(' ')} If this is intended, set skip_reference_dna_check: true."
+    )
     return rows
 }
 
