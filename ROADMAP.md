@@ -16,7 +16,7 @@ time, estimated before the release; treat them as rough.
 | 3. TMA path            | Done: per-core processing, per-slide merge and QC page         |
 | 4. Resource profiles   | Done: `size_tiny`/`small`/`medium`/`huge`, `slurm`             |
 | 5. Containers          | Done: 7 images, manifest, pre-staging documented               |
-| 6. Testing             | Done, except the exemplar nf-tests have not run (v1.1 item 4)  |
+| 6. Testing             | Done; exemplar releases checked by hand on the cluster         |
 | 7. QC report           | Metrics, images and reports in; thresholds need more slides    |
 | 8. Release 1.0.0       | Lint `--release` clean, baselines recorded; merge and tag left |
 
@@ -38,22 +38,7 @@ unmeasured.
 
 ## v1.1: robustness
 
-1. **Nuclear channel from the marker sheet.** Ashlar aligns on channel 0 by default and
-   Coreograph is hard-coded to `--channel 0` (`nextflow.config:27`); neither reads the sheet. A
-   sheet that does not list DNA first gives a silently wrong result. Add one optional column,
-   `reference_dna`, defaulting to the first `dna` channel. 1–2 days.
-2. **Soft QC gate.** A `QC_GATE` step reads every `{sample}_qc.json` and a thresholds file in
-   `assets/`, and writes `qc/qc_summary.tsv`: one row per sample and check, `pass`/`warn`/`fail`.
-   It never stops the run. Structural checks (name mismatch, empty patches, no `dna`) can `fail`
-   now; numeric thresholds `warn`, marked uncalibrated, until more slides exist. A
-   `fail_on_qc` switch can come later. 2–3 days.
-3. **Run-level resource QC.** A post-run script reading `pipeline_info/execution_trace_*.txt`:
-   retries, failures, `peak_rss` near the memory request. Not in `onComplete`, which may run
-   before the trace is flushed. Also the input for rewriting the resource profiles. ~1 day.
-4. **Run the exemplar nf-tests.** Blocked by cluster issues. The pipeline ran green by hand,
-   but the `.nf.test` files never have. exemplar-002's `remove` and before/after assertions are
-   exercised by nothing on real data until they do.
-5. **Small fixes**, about a day together:
+1. **Small fixes**, about a day together:
    - `FLUO_ANNOTATION` in the larger size tiers (`conf/sizes.config:34`).
    - `PATCH_SEGMENTATION_CELLPOSE` is `process_single` but used 133% CPU; set it in
      `base.config`.
@@ -99,15 +84,15 @@ nf-test test tests/exemplar002.nf.test --profile test_exemplar002,singularity,si
 uvx --from nf-core nf-core pipelines lint --release
 ```
 
-What each covers is in [tests/README.md](tests/README.md). Cell counts must stay within ±2% of
-the baselines above. Nothing checks `use_preprocessing = false` on real data (stub only) or
-StarDist.
+What each covers is in [tests/README.md](tests/README.md). If nf-test is blocked on the
+cluster, `nextflow run` with the same profiles and an `--outdir` is enough. Cell counts must stay
+within ±2% of the baselines above. Nothing checks `use_preprocessing = false` on real data (stub
+only) or StarDist.
 
 ## Longer term
 
 Costs and risks in [docs/future-ideas.md](docs/future-ideas.md). The marker sheet already has
-the columns these need (`channel_role`, `exposure`, `background`, `filter`), apart from
-`reference_dna` (v1.1 item 1).
+the columns these need (`channel_role`, `exposure`, `background`, `filter`).
 
 1. **Ashlar registration QC.** The residual is only in Ashlar's stderr. First check whether a
    real Ashlar 1.19 `.command.err` contains it. If so, ~1 day: extend the existing patch to keep
@@ -148,8 +133,8 @@ the columns these need (`channel_role`, `exposure`, `background`, `filter`), apa
 - **Segmentation-time area filtering is off by decision.** `min_area_pixels2 = null` means
   sopa's CLI uses 0. Filtering belongs after aggregation (v1.2 item 2). Note:
   `sopa/cli/resolve.py` takes `min_area` in µm², the segmentation CLI in px².
-- **Resource profiles are estimates** apart from `size_tiny`. Rewrite from a large-slide trace
-  (v1.1 item 3).
+- **Resource profiles are estimates** apart from `size_tiny`. Rewrite from large-slide runs, read
+  in Seqera Platform (`-with-tower`).
 - **H&E is not supported**; only `ome_tif` mIF input.
 
 ### Tooling
@@ -174,5 +159,11 @@ the columns these need (`channel_role`, `exposure`, `background`, `filter`), apa
 - **Pixel size in the Zarr.** Would silently reinterpret `patch_width_pixel` as microns.
 - **A cropped TMA fixture.** Coreograph may miss cores on a crop, giving a misleading red test.
 - **`groupKey` for the cycle regroup.**
+- **A `reference_dna` marker sheet column.** The sheet is already wide. Instead, the run stops
+  when the Ashlar or Coreograph channel index is not `dna` (`skip_reference_dna_check` overrides).
+- **A soft QC gate** (`qc_summary.tsv`). Few samples; each user reads their own QC report.
+- **A run-level resource QC script.** Seqera Platform (`-with-tower`) shows retries and memory.
+- **Running the exemplar nf-tests on the cluster.** Releases are checked by hand; revisit with
+  more contributors.
 - **Template 4.0.3 → 4.1.0.** `TEMPLATE` was merged into `dev` with `-s ours`, so
   `nf-core pipelines sync` will not bring it; port about 10 small hunks by hand. 1–2 h.

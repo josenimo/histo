@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - Marker sheet `remove` is checked at startup: with backsub, at least one `dna` channel must stay
   and segmentation channels must not be removed; without backsub, `remove` warns that it is ignored.
+- The run stops at startup when Ashlar's alignment channel or Coreograph's dearray channel is not
+  a `dna` channel in the marker sheet. `skip_reference_dna_check` runs anyway, with a warning.
 
 ### Fixed
 

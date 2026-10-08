@@ -150,10 +150,9 @@ workflow PIPELINE_INITIALISATION {
 
         // Every marker sheet column is declared as meta, so each row is [meta], hence it[0].
         sheets_by_sample.each { sample, sheet ->
-            validateMarkersheet(
-                samplesheetToList(sheet, "${projectDir}/assets/schema_marker.json").collect { it[0] },
-                sample,
-            )
+            def rows = samplesheetToList(sheet, "${projectDir}/assets/schema_marker.json").collect { it[0] }
+            validateMarkersheet(rows, sample)
+            checkReferenceChannels(rows, sample)
         }
 
         ch_markersheet = channel.fromList(
@@ -435,6 +434,73 @@ def validateMarkersheet(rows, sample = null) {
         }
     }
 
+    return rows
+}
+
+// Element at a Python-style index (-1 is the last), or null when out of range.
+def atIndex(list, index) {
+    return index < list.size() && index >= -list.size() ? list[index] : null
+}
+
+// Integer value of the first matching flag in a CLI string (`-c 1`, `-c1`, `--channel=1`), else null.
+def flagValue(args, flags) {
+    def tokens = (args ?: '').tokenize(' ')
+    return tokens.indexed().findResult { i, t ->
+        def value = null
+        if (t in flags) {
+            value = i + 1 < tokens.size() ? tokens[i + 1] : null
+        }
+        else {
+            def flag = flags.find { f -> t.startsWith("${f}=") || (f.size() == 2 && t.startsWith(f) && t.size() > 2) }
+            value = flag ? t.substring(flag.size()).replaceFirst('^=', '') : null
+        }
+        value?.isInteger() ? value.toInteger() : null
+    }
+}
+
+// Ashlar and Coreograph take the nuclear channel by index from *_args, not from the sheet.
+// A non-dna channel there registers or dearrays on a marker without any error, so stop.
+def checkReferenceChannels(rows, sample = null) {
+    def where = sample ? "Sample '${sample}'" : "marker_sheet"
+    def problems = []
+
+    // Ashlar applies one within-cycle index (default 0, -1 for the last) to every cycle.
+    def align = flagValue(params.ashlar_args, ['-c', '--align-channel']) ?: 0
+    def offCycles = rows.groupBy { it.cycle_number }.sort().findResults { cycle, channels ->
+        def ch = atIndex(channels.sort(false) { it.channel_number }, align)
+        ch?.channel_role == 'dna' ? null : "cycle ${cycle}: ${ch ? "${ch.marker_name} (${ch.channel_role})" : 'no such channel'}"
+    }
+    if (offCycles) {
+        problems << (
+            "Ashlar aligns every cycle on within-cycle channel index ${align} (ashlar_args -c, " +
+            "default 0), which is not a dna channel in ${offCycles.join('; ')}. Put the nuclear " +
+            "stain at the same position in every cycle, or set -c."
+        )
+    }
+
+    // Coreograph reads one index (default 0, -1 for the last) of the stitched image, all channels.
+    if (params.use_tma_dearray) {
+        def index = flagValue(params.coreograph_args, ['--channel']) ?: 0
+        def ch = atIndex(rows.sort(false) { it.channel_number }, index)
+        if (ch?.channel_role != 'dna') {
+            problems << (
+                "Coreograph dearrays on channel index ${index} (coreograph_args --channel, default 0), " +
+                "which is ${ch ? "${ch.marker_name} (${ch.channel_role})" : 'not in the sheet'}, not a " +
+                "dna channel. Set --channel to a dna channel_number minus 1."
+            )
+        }
+    }
+
+    problems.each { problem ->
+        if (params.skip_reference_dna_check) {
+            log.warn("${where}: ${problem} Continuing because skip_reference_dna_check is set.")
+        }
+    }
+    // A plain boolean, so the assert does not repeat the message in its value dump.
+    def ok = params.skip_reference_dna_check || !problems
+    assert ok : (
+        "${where}: ${problems.join(' ')} If this is intended, set skip_reference_dna_check: true."
+    )
     return rows
 }
 
