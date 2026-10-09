@@ -63,6 +63,15 @@ it blank costs a check rather than breaking a run.
 `marker_name` of the channel to subtract, and that channel must itself have `channel_role` set to
 `autofluorescence`. The two columns describe one fact, so they are checked against each other.
 
+`remove` set to `true` drops a channel after backsub; without `--use_backsub` it is ignored with a
+warning. Keep at least one `dna` channel, and do not name a removed channel in `cellpose_channels`
+or `stardist_channels`; both are rejected at startup.
+
+Ashlar registers every cycle on the same within-cycle channel (`-c` in `ashlar_args`, default
+0), and Coreograph dearrays on one channel of the stitched image (`--channel` in
+`coreograph_args`). Both may be `-1` for the last channel. The run stops at startup when either
+index lands on a channel that is not `dna`; set `skip_reference_dna_check: true` to run anyway.
+
 Paths must be absolute.
 
 ## Parameters
@@ -81,6 +90,7 @@ pipeline stops at startup rather than letting that happen, for every boolean it 
 | `use_preprocessing`           | `true`               | Your image is already stitched. Then the samplesheet is one row per sample with a `data_path` column.  |
 | `ashlar_args`                 | `--maximum-shift 30` | Stitching misaligns.                                                                                   |
 | `use_backsub`                 | `false`              | You have background channels to subtract.                                                              |
+| `skip_reference_dna_check`    | `false`              | Ashlar or Coreograph should deliberately use a channel that is not `dna`.                              |
 | `use_tma_dearray`             | `false`              | Your slide is a tissue microarray. Each core is then processed alone and the results merged per slide. |
 | `use_cellpose`                | `false`              | Exactly one of `use_cellpose` or `use_stardist` must be true.                                          |
 | `cellpose_channels`           | none                 | Always. Use a marker name, e.g. `"DNA_1"`.                                                             |

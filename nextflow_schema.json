@@ -50,6 +50,10 @@
                     "description": "Run the preprocessing half: illumination correction, stitching and registration, and the optional steps below. When false the samplesheet must point at images sopa can already read, which covers pre-stitched images and dearrayed cores re-entering the pipeline.",
                     "fa_icon": "fas fa-toggle-on"
                 },
+                "skip_reference_dna_check": {
+                    "type": "boolean",
+                    "fa_icon": "fas fa-toggle-off"
+                },
                 "ashlar_args": {
                     "type": "string",
                     "default": "--maximum-shift 30",
@@ -216,7 +220,6 @@
                     "default": "ome_tif"
                 }
             },
-            "required": ["technology"],
             "fa_icon": "fas fa-arrows-alt-h"
         },
         "patches": {
